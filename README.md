@@ -1,4 +1,4 @@
-# Bemby v0.8.0
+# Bemby v0.8.5
 
 [English](#english) | **简体中文**
 

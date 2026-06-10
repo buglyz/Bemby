@@ -301,7 +301,9 @@ function openEdit(j: Job) {
     });
     if (j.config) {
       try {
-        const c = JSON.parse(j.config) as EmbywatchConfig;
+        let c = JSON.parse(j.config) as EmbywatchConfig | string;
+        // Migrate legacy double-encoded records
+        if (typeof c === 'string') c = JSON.parse(c) as EmbywatchConfig;
         Object.assign(embyCfg, {
           username: c.username ?? '',
           password: c.password ?? '',
@@ -347,7 +349,7 @@ async function saveJob() {
   saving.value = true;
   try {
     const rawCfg = buildConfig();
-    const payload = { ...form, config: rawCfg ? JSON.stringify(rawCfg) : null };
+    const payload = { ...form, config: rawCfg ?? null };
     if (editTarget.value) {
       await jobsApi.update(editTarget.value.id, payload);
     } else {

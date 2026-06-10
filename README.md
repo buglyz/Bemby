@@ -71,7 +71,7 @@ docker run -d \
   -e DB_PATH=/app/data/bemby.db \
   -e ADMIN_USERNAME=admin \
   -e ADMIN_PASSWORD=changeme \
-  -e JWT_SECRET=请替换为随机字符串 \
+  -e JWT_SECRET=change-me-in-production \
   -e TZ=Australia/Sydney \
   liveinaus/bemby:latest
 ```
@@ -314,7 +314,7 @@ docker run -d \
   -e DB_PATH=/app/data/bemby.db \
   -e ADMIN_USERNAME=admin \
   -e ADMIN_PASSWORD=changeme \
-  -e JWT_SECRET=replace-with-a-random-string \
+  -e JWT_SECRET=change-me-in-production \
   -e TZ=Australia/Sydney \
   liveinaus/bemby:latest
 ```

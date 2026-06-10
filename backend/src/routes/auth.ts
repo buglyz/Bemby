@@ -8,8 +8,11 @@ const router = Router();
 
 type SettingRow = { key: string; value: string };
 
+// Fixed key so stored hashes are not invalidated when JWT_SECRET rotates
+const PWD_HMAC_KEY = 'bemby-pwd-v1';
+
 function hashPassword(password: string): string {
-  return crypto.createHmac('sha256', getJwtSecret()).update(password).digest('hex');
+  return crypto.createHmac('sha256', PWD_HMAC_KEY).update(password).digest('hex');
 }
 
 function getStoredCredentials(): { username: string; passwordHash: string | null } {

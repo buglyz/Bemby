@@ -1,5 +1,11 @@
 import 'dotenv/config';
 import express from 'express';
+
+// GramJS throws TIMEOUT from its background _updateLoop after disconnect — suppress it
+process.on('unhandledRejection', (reason: any) => {
+  if (reason?.message === 'TIMEOUT') return;
+  console.error('Unhandled rejection:', reason);
+});
 import cors from 'cors';
 import path from 'path';
 

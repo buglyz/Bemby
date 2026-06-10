@@ -17,7 +17,9 @@ export async function runJob(job: Job, account: TgAccount | null): Promise<void>
           break;
         }
         case 'embywatch': {
-          const config: EmbywatchConfig = JSON.parse(job.config ?? '{}');
+          let config: EmbywatchConfig = JSON.parse(job.config ?? '{}');
+          // Migrate legacy double-encoded records
+          if (typeof config === 'string') config = JSON.parse(config) as EmbywatchConfig;
           if (!config.username || !config.password) throw new Error('Emby username and password are required');
           // botUsername holds the server URL for embywatch jobs
           await runEmbywatch(job.botUsername, config);

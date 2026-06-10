@@ -2,7 +2,7 @@ import type { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 
 export function getJwtSecret(): string {
-  return process.env.JWT_SECRET ?? 'change-me-in-production';
+  return process.env.JWT_SECRET || 'change-me-in-production';
 }
 
 export function requireAuth(req: Request, res: Response, next: NextFunction): void {

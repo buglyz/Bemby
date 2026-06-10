@@ -20,19 +20,12 @@ RUN npm run build && npm prune --omit=dev
 FROM node:20-alpine AS production
 WORKDIR /app
 
-# Non-root user for security
-RUN addgroup -S app && adduser -S app -G app
+COPY --from=backend-builder /app/node_modules ./node_modules
+COPY --from=backend-builder /app/dist        ./dist
+COPY --from=backend-builder /app/package.json ./package.json
+COPY --from=frontend-builder /frontend/dist  ./public
 
-# Copy pruned node_modules (native addons already compiled — no build tools needed)
-COPY --from=backend-builder --chown=app:app /app/node_modules ./node_modules
-COPY --from=backend-builder --chown=app:app /app/dist        ./dist
-COPY --from=backend-builder --chown=app:app /app/package.json ./package.json
-COPY --from=frontend-builder --chown=app:app /frontend/dist  ./public
-
-# Persistent data directory
-RUN mkdir -p /app/data && chown app:app /app/data
-
-USER app
+RUN mkdir -p /app/data
 
 EXPOSE 3000
 

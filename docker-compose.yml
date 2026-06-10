@@ -1,17 +1,19 @@
 services:
   bemby:
-    build: .
+    image: liveinaus/bemby:latest
     restart: unless-stopped
     ports:
-      - "${PORT:-3000}:3000"
+      - "${PORT:-3000}:3000" # set PORT in .env to change the host-side port
     volumes:
-      - bemby-data:/app/data
-    # Loads ADMIN_USERNAME, ADMIN_PASSWORD, JWT_SECRET, TZ from .env
-    env_file: .env
+      - /docker/bemby-data:/app/data
     environment:
-      # Internal port is always 3000; host-side port is controlled by PORT in .env
       PORT: 3000
       DB_PATH: /app/data/bemby.db
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}    # change this
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-changeme} # change this
+      # Secret used to sign login tokens — set to any long random string, e.g. openssl rand -hex 32
+      JWT_SECRET: ${JWT_SECRET}
+      TZ: ${TZ:-Australia/Sydney}
     healthcheck:
       test: ["CMD", "wget", "-qO", "/dev/null", "http://localhost:3000/"]
       interval: 30s
@@ -23,6 +25,3 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-
-volumes:
-  bemby-data:

@@ -22,39 +22,18 @@
 
 ## 环境要求
 
-- Node.js 20+（本地/开发环境）
-- Docker + Docker Compose（生产环境）
-- 来自 [my.telegram.org/apps](https://my.telegram.org/apps) 的 Telegram API 凭证（签到任务需要）
+- Docker + Docker Compose
 
 ---
 
-## 快速开始（本地开发）
+## 快速开始
 
 ```bash
-# 克隆仓库
-git clone <repo-url>
-cd bemby
+# 下载配置文件
+curl -O https://raw.githubusercontent.com/liveinaus/Bemby/main/docker-compose.yml
+curl -O https://raw.githubusercontent.com/liveinaus/Bemby/main/env.example
 
-# 以热重载模式同时启动后端和前端
-./dev.sh
-```
-
-首次运行时，`dev.sh` 会将 `env.example` 复制为 `backend/.env`，并在占位符值未修改时发出警告。
-
-| 服务     | 默认地址                      |
-|----------|-------------------------------|
-| 前端     | http://localhost:5173         |
-| 后端     | http://localhost:3000         |
-
-使用 `backend/.env` 中配置的账号登录（默认 `admin` / `changeme`）。
-
----
-
-## 生产部署（Docker）
-
-### 1. 配置环境变量
-
-```bash
+# 配置环境变量
 cp env.example .env
 ```
 
@@ -68,17 +47,15 @@ cp env.example .env
 | `JWT_SECRET`       | JWT 签名密钥 — **请使用长随机字符串**              |
 | `TZ`               | 主机时区（默认 `Australia/Sydney`）                |
 
-### 2. 构建并运行
-
 ```bash
-docker compose up --build -d
+# 拉取镜像并启动
+docker compose up -d
 ```
 
-应用运行在 `http://<主机>:3000`。SQLite 数据库存储在 Docker 命名卷（`bemby-data`）中，重新构建后数据依然保留。
-
-### 3. 停止服务
+应用运行在 `http://<主机>:3000`。SQLite 数据库存储在 Docker 命名卷（`bemby-data`）中，重新部署后数据依然保留。
 
 ```bash
+# 停止服务
 docker compose down
 ```
 
@@ -121,6 +98,27 @@ docker compose down
 - **每日只执行一次** — 测试时可关闭此选项，使任务当日可重复执行
 - **Emby 观看默认值** — 播放时长、设备名称和 User Agent（已预配置 SenPlayer/Mac 默认值）
 - **管理员凭证** — 修改管理员用户名或密码
+
+---
+
+## 本地开发
+
+**所需工具：** Node.js 20+、Git
+
+```bash
+git clone https://github.com/liveinaus/Bemby.git
+cd Bemby
+./dev.sh
+```
+
+首次运行时，`dev.sh` 会将 `env.example` 复制为 `backend/.env`，并在占位符值未修改时发出警告。
+
+| 服务     | 默认地址                      |
+|----------|-------------------------------|
+| 前端     | http://localhost:5173         |
+| 后端     | http://localhost:3000         |
+
+使用 `backend/.env` 中配置的账号登录（默认 `admin` / `changeme`）。
 
 ---
 
@@ -250,39 +248,18 @@ A self-hosted automation tool for managing daily Telegram bot check-ins (签到)
 
 ### Requirements
 
-- Node.js 20+ (for local/dev use)
-- Docker + Docker Compose (for production)
-- Telegram API credentials from [my.telegram.org/apps](https://my.telegram.org/apps) (for check-in jobs)
+- Docker + Docker Compose
 
 ---
 
-### Quick Start (local development)
+### Quick Start
 
 ```bash
-# Clone the repo
-git clone <repo-url>
-cd bemby
+# Download config files
+curl -O https://raw.githubusercontent.com/liveinaus/Bemby/main/docker-compose.yml
+curl -O https://raw.githubusercontent.com/liveinaus/Bemby/main/env.example
 
-# Start both backend and frontend in watch mode
-./dev.sh
-```
-
-On first run `dev.sh` copies `env.example` to `backend/.env` and warns if placeholder values are still set.
-
-| Service  | Default URL                  |
-|----------|------------------------------|
-| Frontend | http://localhost:5173        |
-| Backend  | http://localhost:3000        |
-
-Log in with the credentials configured in `backend/.env` (default `admin` / `changeme`).
-
----
-
-### Production (Docker)
-
-#### 1. Configure environment
-
-```bash
+# Configure environment
 cp env.example .env
 ```
 
@@ -296,17 +273,15 @@ Edit `.env`:
 | `JWT_SECRET`     | Secret for signing JWTs — **use a long random string** |
 | `TZ`             | Host timezone (default `Australia/Sydney`)           |
 
-#### 2. Build and run
-
 ```bash
-docker compose up --build -d
+# Pull image and start
+docker compose up -d
 ```
 
-The app is served on `http://<host>:3000`. The SQLite database is stored in a named Docker volume (`bemby-data`) so it persists across rebuilds.
-
-#### 3. Stop
+The app is served on `http://<host>:3000`. The SQLite database is stored in a named Docker volume (`bemby-data`) so it persists across redeployments.
 
 ```bash
+# Stop
 docker compose down
 ```
 
@@ -349,6 +324,27 @@ Go to **Settings** to configure:
 - **Enforce one run per day** — disable this when testing so jobs can re-run even if they already ran today
 - **Emby Watch defaults** — play duration, device name, and user agent (SenPlayer/Mac defaults pre-configured)
 - **Admin credentials** — change the admin username or password
+
+---
+
+### Local development
+
+**Requirements:** Node.js 20+, Git
+
+```bash
+git clone https://github.com/liveinaus/Bemby.git
+cd Bemby
+./dev.sh
+```
+
+On first run `dev.sh` copies `env.example` to `backend/.env` and warns if placeholder values are still set.
+
+| Service  | Default URL                  |
+|----------|------------------------------|
+| Frontend | http://localhost:5173        |
+| Backend  | http://localhost:3000        |
+
+Log in with the credentials configured in `backend/.env` (default `admin` / `changeme`).
 
 ---
 

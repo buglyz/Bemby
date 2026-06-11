@@ -9,6 +9,7 @@ type SettingRow = { key: string; value: string };
 const ALLOWED_KEYS = [
   'default_timezone', 'default_max_retry', 'check_daily_run',
   'default_ua', 'default_play_duration', 'default_device_name',
+  'ai_base_url', 'ai_api_key', 'ai_model', 'ai_timeout_ms',
 ];
 
 router.get('/', (_req, res) => {

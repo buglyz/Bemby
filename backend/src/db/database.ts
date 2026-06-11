@@ -60,7 +60,11 @@ db.exec(`
     ('check_daily_run',      'true'),
     ('default_ua',           'SenPlayer/6.1.0 CFNetwork/1490.0.4 Darwin/23.2.0'),
     ('default_play_duration','300'),
-    ('default_device_name',  'Mac');
+    ('default_device_name',  'Mac'),
+    ('ai_base_url',          'https://dashscope.aliyuncs.com/compatible-mode/v1'),
+    ('ai_api_key',           ''),
+    ('ai_model',             'qwen-vl-max-latest'),
+    ('ai_timeout_ms',        '25000');
 `);
 
 // Migrations for columns added after initial schema

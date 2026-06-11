@@ -1,4 +1,5 @@
 import { TelegramClient, Api, Logger } from 'telegram';
+import { db } from '../db/database';
 import { LogLevel } from 'telegram/extensions/Logger';
 import { StringSession } from 'telegram/sessions';
 import { NewMessage, NewMessageEvent, Raw } from 'telegram/events';
@@ -78,12 +79,17 @@ function htmlToText(html: string): string {
   return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-async function selectButtonWithAI(buttons: string[][], html: string, image: string | undefined): Promise<string> {
-  const apiKey = process.env.QWEN_API_KEY;
-  if (!apiKey) throw new Error('{aiBtn} requires QWEN_API_KEY environment variable');
+function getAiSetting(key: string, fallbackEnv: string, defaultVal: string): string {
+  const rows = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;
+  return rows?.value || process.env[fallbackEnv] || defaultVal;
+}
 
-  const baseUrl = (process.env.QWEN_BASE_URL ?? 'https://dashscope.aliyuncs.com/compatible-mode/v1').replace(/\/$/, '');
-  const model = process.env.QWEN_MODEL ?? 'qwen-vl-max-latest';
+async function selectButtonWithAI(buttons: string[][], html: string, image: string | undefined): Promise<string> {
+  const apiKey = getAiSetting('ai_api_key', 'QWEN_API_KEY', '');
+  if (!apiKey) throw new Error('{aiBtn} requires an AI API key — configure it in Settings');
+
+  const baseUrl = getAiSetting('ai_base_url', 'QWEN_BASE_URL', 'https://dashscope.aliyuncs.com/compatible-mode/v1').replace(/\/$/, '');
+  const model = getAiSetting('ai_model', 'QWEN_MODEL', 'qwen-vl-max-latest');
 
   const flat = buttons.flat();
   const text = htmlToText(html);
@@ -93,10 +99,12 @@ async function selectButtonWithAI(buttons: string[][], html: string, image: stri
   if (image) content.push({ type: 'image_url', image_url: { url: image } });
   content.push({ type: 'text', text: prompt });
 
+  const AI_TIMEOUT_MS = Number(getAiSetting('ai_timeout_ms', 'QWEN_TIMEOUT_MS', '25000'));
   const res = await fetch(`${baseUrl}/chat/completions`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ model, messages: [{ role: 'user', content }], max_tokens: 50 }),
+    signal: AbortSignal.timeout(AI_TIMEOUT_MS),
   });
 
   if (!res.ok) {

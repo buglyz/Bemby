@@ -153,6 +153,10 @@ export type Settings = {
   default_ua: string;
   default_play_duration: string;
   default_device_name: string;
+  ai_base_url: string;
+  ai_api_key: string;
+  ai_model: string;
+  ai_timeout_ms: string;
 };
 
 export const settingsApi = {

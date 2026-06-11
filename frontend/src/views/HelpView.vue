@@ -88,8 +88,9 @@
             </p>
             <table class="help-table">
               <tbody><tr><td>启动命令</td><td>发送给机器人的命令，默认 <code>/start</code>。支持模板占位符，留空则使用默认值。</td></tr>
-              <tr><td>签到按钮文字</td><td>用于在机器人回复的内联键盘中匹配按钮的文字，默认 <code>签到</code>。</td></tr>
+              <tr><td>签到按钮文字</td><td>用于在机器人回复的内联键盘中匹配按钮的文字，默认 <code>签到</code>。设为 <code>{aiBtn}</code> 可启用 AI 自动识别（见下文）。</td></tr>
             </tbody></table>
+            <p class="help-para"><strong>AI 按钮识别（<code>{aiBtn}</code>）</strong> — 当机器人以图片提问并展示按钮选项时（如图片验证码签到），将签到按钮文字设为 <code>{aiBtn}</code>，系统将调用视觉大模型自动识别正确按钮。需在<strong>设置</strong>页面的"AI 按钮识别"板块配置 API 地址和密钥，支持 OpenRouter、阿里云百炼等兼容 OpenAI 格式的服务。</p>
             <p class="help-para"><strong>命令模板占位符</strong>——可在启动命令中嵌入动态内容，每次执行时随机生成：</p>
             <table class="help-table">
               <tbody><tr><td><code>{word}</code> / <code>{word:N}</code></td><td>N 位随机小写字母（默认 6 位）</td></tr>
@@ -138,8 +139,9 @@
             </p>
             <table class="help-table">
               <tbody><tr><td>Start Command</td><td>Command sent to the bot, default <code>/start</code>. Supports template placeholders. Leave blank to use the default.</td></tr>
-              <tr><td>Check-in Button</td><td>Text used to match the inline keyboard button, default <code>签到</code>.</td></tr>
+              <tr><td>Check-in Button</td><td>Text used to match the inline keyboard button, default <code>签到</code>. Set to <code>{aiBtn}</code> to enable AI auto-detection (see below).</td></tr>
             </tbody></table>
+            <p class="help-para"><strong>AI button detection (<code>{aiBtn}</code>)</strong> — when a bot presents an image alongside button choices (e.g. a CAPTCHA-style check-in), set the check-in button to <code>{aiBtn}</code> and a vision model will automatically identify the correct button. Configure the API endpoint and key in the <strong>Settings</strong> page under "AI Button Detection". Any OpenAI-compatible provider works (e.g. OpenRouter, Aliyun DashScope).</p>
             <p class="help-para"><strong>Command template placeholders</strong> — embed dynamic content that is randomly generated each run:</p>
             <table class="help-table">
               <tbody><tr><td><code>{word}</code> / <code>{word:N}</code></td><td>N random lowercase letters (default 6)</td></tr>
@@ -195,6 +197,7 @@
               <tr><td>默认播放时长</td><td>未在任务中单独设置时，Emby 观看会话的默认时长（秒）。</td></tr>
               <tr><td>设备名称</td><td>发送给 Emby API 的设备标识（如 <code>Mac</code>），Emby 会在客户端旁显示该名称。</td></tr>
               <tr><td>默认用户代理</td><td>未在任务中单独设置时，Emby 观看请求使用的默认 UA 字符串。</td></tr>
+              <tr><td>AI 按钮识别</td><td>配置用于 <code>{aiBtn}</code> 功能的 API 地址、密钥、模型和超时。支持任意 OpenAI 兼容接口（如 OpenRouter）。</td></tr>
             </tbody></table>
             <p class="help-para" style="margin-top:14px">
               <strong>管理员凭据</strong> -- 随时更改管理员用户名或密码，确认更改时需输入当前密码。
@@ -209,6 +212,7 @@
               <tr><td>Default Play Duration</td><td>Fallback Emby Watch session length in seconds when not set per-job.</td></tr>
               <tr><td>Device Name</td><td>Device identifier sent to the Emby API (e.g. <code>Mac</code>). Emby displays this alongside the client name.</td></tr>
               <tr><td>Default User Agent</td><td>Fallback UA string for Emby Watch requests when not set per-job.</td></tr>
+              <tr><td>AI Button Detection</td><td>Configure the API base URL, key, model, and timeout for the <code>{aiBtn}</code> feature. Any OpenAI-compatible provider works (e.g. OpenRouter).</td></tr>
             </tbody></table>
             <p class="help-para" style="margin-top:14px">
               <strong>Admin Credentials</strong> -- change the admin username or password at any time.

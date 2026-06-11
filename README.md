@@ -1,4 +1,4 @@
-# Bemby v0.9.5
+# Bemby v0.9.6
 
 [English](#english) | **简体中文**
 
@@ -17,6 +17,7 @@
   - **签到** — 在随机的每日时间向 Telegram 机器人发送可配置命令并点击回复按钮
   - **Emby 观看** — 模拟 SenPlayer 在 Emby 服务器上的会话，定期上报播放进度
 - **命令模板** — 支持在启动命令中嵌入随机占位符（`{word:N}`、`{num:N}`、`{alpha:N}`、`{uuid}`）
+- **AI 按钮识别** — 签到按钮文字设为 `{aiBtn}` 时，自动通过视觉大模型识别应点击的按钮（支持图片验证码类场景）；可在设置页面配置 API 地址、密钥和模型
 - **调度器** — 在每个任务可配置的每日时间窗口内随机选取执行时间；失败时自动重试
 - **详细日志** — 点击签到日志行可展开对话详情，以仿 Telegram 气泡样式呈现发送命令、机器人回复（含图片、内联键盘）及按钮点击后的消息变化
 - **停止运行中的任务** — 可在日志列表中随时中止正在执行的签到任务
@@ -88,6 +89,7 @@ docker run -d \
 - **默认最大重试次数**
 - **每日只执行一次** — 测试时可关闭此选项，使任务当日可重复执行
 - **Emby 观看默认值** — 播放时长、设备名称和 User Agent（已预配置 SenPlayer/Mac 默认值）
+- **AI 按钮识别** — 配置用于 `{aiBtn}` 功能的 API 地址、API 密钥、模型和超时时长（兼容所有 OpenAI 兼容接口，如 OpenRouter）
 - **管理员凭证** — 修改管理员用户名或密码
 
 ---
@@ -234,6 +236,7 @@ A self-hosted automation tool for managing daily Telegram bot check-ins (签到)
   - **Check-in (签到)** — sends a configurable command to a Telegram bot and clicks the reply button on a randomised daily schedule
   - **Emby Watch** — simulates a SenPlayer session on an Emby server, reporting playback progress at regular intervals
 - **Command templates** — embed random placeholders in the start command (`{word:N}`, `{num:N}`, `{alpha:N}`, `{uuid}`)
+- **AI button detection** — set the check-in button to `{aiBtn}` and a vision model automatically identifies which button to click, including image-based CAPTCHA-style challenges; configure the API endpoint, key, and model in Settings
 - **Scheduler** — picks a random time within a configurable daily window per job; handles retry on failure
 - **Rich log detail** — click any check-in log row to expand a Telegram-style chat view showing the command sent, bot reply (photo + text + inline keyboard), button click, and the bot's edited follow-up message
 - **Stop running jobs** — cancel an in-progress check-in directly from the log list
@@ -305,6 +308,7 @@ Go to **Settings** to configure:
 - **Default max retries**
 - **Enforce one run per day** — disable this when testing so jobs can re-run even if they already ran today
 - **Emby Watch defaults** — play duration, device name, and user agent (SenPlayer/Mac defaults pre-configured)
+- **AI button detection** — configure the API base URL, API key, model, and timeout for the `{aiBtn}` feature (any OpenAI-compatible endpoint, e.g. OpenRouter)
 - **Admin credentials** — change the admin username or password
 
 ---

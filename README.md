@@ -59,14 +59,44 @@ docker run -d \
   --restart unless-stopped \
   -p 3000:3000 \
   -v /docker/bemby-data:/app/data \
-  -e PORT=3000 \
-  -e DB_PATH=/app/data/bemby.db \
   -e ADMIN_USERNAME=admin \
   -e ADMIN_PASSWORD=changeme \
   -e JWT_SECRET=change-me-in-production \
-  -e TZ=Australia/Sydney \
   liveinaus/bemby:latest
 ```
+
+默认值：端口 `3000`，数据库 `/app/data/bemby.db`，时区 UTC。如需指定时区，追加 `-e TZ=Asia/Shanghai`。
+
+---
+
+## 一键部署
+
+不熟悉命令行或 Docker 的用户可通过以下云平台快速部署 Bemby，无需在本地安装任何工具。
+
+> Bemby 使用 SQLite 存储数据。请确认所选平台支持**持久化存储卷**，否则服务重启后数据会丢失。
+
+### Railway（推荐）
+
+Railway 会自动识别项目中的 Dockerfile 并完成构建。新账户每月赠送 **$5 免费额度**，无需绑定信用卡。
+
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new/template?template=https://github.com/liveinaus/Bemby)
+
+部署完成后需完成以下配置：
+
+1. 进入服务的 **Variables** 标签页，设置以下变量：
+   - `ADMIN_USERNAME` — 管理员用户名
+   - `ADMIN_PASSWORD` — 管理员密码
+   - `JWT_SECRET` — 随机长字符串，可用 `openssl rand -hex 32` 生成
+2. 进入服务的 **Volumes** 标签页，添加一个持久化卷，挂载路径设为 `/app/data`，防止重启后数据丢失。
+3. 可选：添加 `TZ=Asia/Shanghai` 等时区变量。
+
+### Render
+
+Render 提供免费套餐，但免费 Web 服务在 **15 分钟无请求后会自动休眠**（导致定时任务中断），且需要付费套餐（约 $7/月）才能使用持久化磁盘。**适合短期体验，不建议正式使用。**
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/liveinaus/Bemby)
+
+部署后进入服务的 **Environment** 标签页，手动设置 `ADMIN_USERNAME`、`ADMIN_PASSWORD` 和 `JWT_SECRET`。
 
 ---
 
@@ -301,14 +331,44 @@ docker run -d \
   --restart unless-stopped \
   -p 3000:3000 \
   -v /docker/bemby-data:/app/data \
-  -e PORT=3000 \
-  -e DB_PATH=/app/data/bemby.db \
   -e ADMIN_USERNAME=admin \
   -e ADMIN_PASSWORD=changeme \
   -e JWT_SECRET=change-me-in-production \
-  -e TZ=Australia/Sydney \
   liveinaus/bemby:latest
 ```
+
+Defaults: port `3000`, database at `/app/data/bemby.db`, timezone UTC. To set a timezone add `-e TZ=Australia/Sydney`.
+
+---
+
+### One-click Deploy
+
+Not comfortable with the command line or Docker? Deploy Bemby to a cloud platform in a few clicks — no local tooling required.
+
+> Bemby uses SQLite for storage. Make sure your chosen platform supports a **persistent volume**, otherwise data is lost on every restart.
+
+#### Railway *(recommended)*
+
+Railway auto-detects the Dockerfile and builds the image for you. New accounts get **$5 free credit per month** with no credit card required.
+
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new/template?template=https://github.com/liveinaus/Bemby)
+
+After the deploy finishes:
+
+1. Open the service **Variables** tab and set:
+   - `ADMIN_USERNAME` — your admin username
+   - `ADMIN_PASSWORD` — your admin password
+   - `JWT_SECRET` — any long random string (e.g. run `openssl rand -hex 32`)
+2. Open the service **Volumes** tab, add a volume, and set the mount path to `/app/data` — this keeps the database across restarts.
+3. Optional: add `TZ=Australia/Sydney` (or your local timezone).
+
+#### Render
+
+Render has a free tier, but free web services **pause after 15 minutes of inactivity** (which stops the scheduler from running), and a persistent disk requires a paid plan (~$7/month). **Good for a quick demo, not for daily use.**
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/liveinaus/Bemby)
+
+After deploying, open the service **Environment** tab and set `ADMIN_USERNAME`, `ADMIN_PASSWORD`, and `JWT_SECRET`.
 
 ---
 

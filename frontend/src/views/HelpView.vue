@@ -58,7 +58,7 @@
           </template>
           <template v-else>
             <div class="card-section-title">Accounts</div>
-            <p class="help-para">Accounts represent Telegram user sessions. Each job requires one authenticated account.</p>
+            <p class="help-para">Accounts represent Telegram user sessions. Each check-in job requires one authenticated account.</p>
             <table class="help-table">
               <tbody><tr><td>API ID / API Hash</td><td>Obtain from <code>my.telegram.org</code> under "API development tools".</td></tr>
               <tr><td>Request Code</td><td>Sends a login code to the account's phone number via Telegram.</td></tr>
@@ -109,9 +109,14 @@
             <table class="help-table">
               <tbody><tr><td>服务器地址</td><td>Emby 服务器完整地址，如 <code>https://emby.example.com:443</code>。粘贴含协议和端口的完整 URL 时会自动解析并填充各字段。</td></tr>
               <tr><td>Emby 用户名 / 密码</td><td>用于登录 Emby 账户的凭据。</td></tr>
-              <tr><td>播放时长</td><td>模拟播放的秒数。留空使用系统默认值。</td></tr>
+              <tr><td>播放时长</td><td>模拟播放的秒数。实际时长会在此基础上随机延长 0–10%。留空使用系统默认值。</td></tr>
               <tr><td>用户代理</td><td>发送给 Emby 的 UA 字符串。留空使用系统默认值。</td></tr>
+              <tr><td>播放后标记已看</td><td>播放结束后调用 Emby API 将该剧集/电影标记为已看。默认开启，可按任务单独配置。</td></tr>
             </tbody></table>
+            <p class="help-note">
+              播放从剧集随机 5–10% 处开始，而非从头播放，使行为更接近真实用户。
+              Emby 日志中的会话设备显示为 <strong>Mac / SenPlayer</strong>。
+            </p>
 
             <div class="card-section-title" style="margin-top:16px;font-size:11px">时间窗口</div>
             <p class="help-para">
@@ -160,9 +165,14 @@
             <table class="help-table">
               <tbody><tr><td>Server URL</td><td>Full address of the Emby server, e.g. <code>https://emby.example.com:443</code>. Paste a URL with protocol and port and the fields are auto-filled.</td></tr>
               <tr><td>Emby Username / Password</td><td>Credentials for the Emby account to log in as.</td></tr>
-              <tr><td>Play Duration</td><td>Seconds to simulate playback. Blank uses the system default.</td></tr>
+              <tr><td>Play Duration</td><td>Seconds to simulate playback. Actual duration is this value plus a random 0–10% extra. Blank uses the system default.</td></tr>
               <tr><td>User Agent</td><td>Browser UA string sent to Emby. Blank uses the system default.</td></tr>
+              <tr><td>Mark as watched</td><td>Calls the Emby PlayedItems API after playback ends to mark the item as watched. On by default; configurable per job.</td></tr>
             </tbody></table>
+            <p class="help-note">
+              Playback starts at a random position 5–10% into the episode rather than from the beginning, making the session more realistic.
+              The device appears in Emby as <strong>Mac / SenPlayer</strong>.
+            </p>
 
             <div class="card-section-title" style="margin-top:16px;font-size:11px">Schedule Window</div>
             <p class="help-para">
@@ -252,7 +262,12 @@
             </p>
             <p class="help-note">
               对于状态为<strong>运行中</strong>的任务，详情面板每 2 秒自动刷新。
-              可点击消息列的<strong>停止</strong>按钮随时中止正在运行的签到任务。
+              可点击消息列的<strong>停止</strong>按钮随时中止正在运行的任务。
+            </p>
+            <p class="help-para" style="margin-top:10px"><strong>Emby 观看任务详情</strong></p>
+            <p class="help-para">
+              点击任意 Emby 观看日志行可展开播放摘要卡片，显示以下信息：
+              内容名称（及剧集信息）、剧集总时长、播放起始与结束位置、实际观看时长、是否已标记为已看。
             </p>
           </template>
           <template v-else>
@@ -272,7 +287,7 @@
             </p>
             <ol class="help-steps">
               <li>A green bubble on the right shows the command that was sent (with any template placeholders already expanded).</li>
-              <li>A grey bubble on the left shows the bot's reply — photo, text, web preview — with the inline keyboard below it. The clicked button is highlighted green.</li>
+              <li>A grey bubble on the left shows the bot's reply -- photo, text, web preview -- with the inline keyboard below it. The clicked button is highlighted green.</li>
               <li>A green bubble on the right shows which button was clicked.</li>
               <li>If the bot responded after the button click -- whether by editing its original message or sending a new one -- the response appears as a second grey bubble on the left.</li>
               <li>If the job retried, each attempt is shown separately.</li>
@@ -282,7 +297,38 @@
             </p>
             <p class="help-note">
               While a job is <strong>Running</strong>, the detail panel refreshes automatically every 2 seconds.
-              Click the <strong>Stop</strong> button in the message column to cancel a running check-in at any time.
+              Click the <strong>Stop</strong> button in the message column to cancel a running job at any time.
+            </p>
+            <p class="help-para" style="margin-top:10px"><strong>Emby Watch detail view</strong></p>
+            <p class="help-para">
+              Click any Emby Watch log row to expand a playback summary card showing: content title (and series/episode info),
+              total runtime, start and end positions, actual duration watched, and whether the item was marked as watched.
+            </p>
+          </template>
+        </div>
+      </div>
+
+      <!-- Notifications -->
+      <div class="card">
+        <div class="card-body">
+          <template v-if="locale === 'zh'">
+            <div class="card-section-title">任务失败通知</div>
+            <p class="help-para">
+              签到任务失败时（用户主动中止除外），系统会通过该任务关联的 Telegram 账户向其<strong>收藏夹（Saved Messages）</strong>发送通知消息。
+            </p>
+            <p class="help-note">
+              Telegram 对发送到自己收藏夹的消息不推送通知。若需要接收推送提醒，建议将通知目标更改为其他频道或群组（规划中的功能）。
+            </p>
+          </template>
+          <template v-else>
+            <div class="card-section-title">Job Failure Notifications</div>
+            <p class="help-para">
+              When a check-in job fails (user-cancelled jobs excluded), Bemby sends a notification message to the linked
+              Telegram account's own <strong>Saved Messages</strong> chat.
+            </p>
+            <p class="help-note">
+              Telegram does not push notifications for messages sent to your own Saved Messages. If you need an audible
+              or banner alert, consider routing notifications to a different chat -- this is a planned improvement.
             </p>
           </template>
         </div>

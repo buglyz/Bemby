@@ -1,25 +1,38 @@
-import { Router } from 'express';
-import { db } from '../db/database';
-import { refreshScheduler } from '../scheduler';
+import { Router } from "express";
+import { db } from "../db/database";
+import { refreshScheduler } from "../scheduler";
 
 const router = Router();
 
 type SettingRow = { key: string; value: string };
 
 const ALLOWED_KEYS = [
-  'default_timezone', 'default_max_retry', 'check_daily_run',
-  'default_ua', 'default_play_duration', 'default_device_name',
-  'ai_base_url', 'ai_api_key', 'ai_model', 'ai_timeout_ms',
+  "default_timezone",
+  "default_max_retry",
+  "check_daily_run",
+  "default_ua",
+  "default_play_duration",
+  "default_device_name",
+  "ai_base_url",
+  "ai_api_key",
+  "ai_model",
+  "ai_timeout_ms",
+  "notify_tg_username",
+  "notify_tg_events",
 ];
 
-router.get('/', (_req, res) => {
-  const rows = db.prepare('SELECT key, value FROM settings').all() as SettingRow[];
-  res.json(Object.fromEntries(rows.map(r => [r.key, r.value])));
+router.get("/", (_req, res) => {
+  const rows = db
+    .prepare("SELECT key, value FROM settings")
+    .all() as SettingRow[];
+  res.json(Object.fromEntries(rows.map((r) => [r.key, r.value])));
 });
 
-router.put('/', (req, res) => {
+router.put("/", (req, res) => {
   const updates = req.body as Record<string, string>;
-  const stmt = db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
+  const stmt = db.prepare(
+    "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+  );
 
   db.transaction(() => {
     for (const key of ALLOWED_KEYS) {
@@ -28,10 +41,12 @@ router.put('/', (req, res) => {
   })();
 
   // Reschedule if daily-run check toggled
-  if ('check_daily_run' in updates) refreshScheduler();
+  if ("check_daily_run" in updates) refreshScheduler();
 
-  const rows = db.prepare('SELECT key, value FROM settings').all() as SettingRow[];
-  res.json(Object.fromEntries(rows.map(r => [r.key, r.value])));
+  const rows = db
+    .prepare("SELECT key, value FROM settings")
+    .all() as SettingRow[];
+  res.json(Object.fromEntries(rows.map((r) => [r.key, r.value])));
 });
 
 export default router;

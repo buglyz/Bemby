@@ -47,10 +47,17 @@ export type CustomStepLog = {
   step: number;
   actionType: string;
   label: string;
-  /** Bot response rendered as HTML */
+  /** For click_button: the bot message we clicked on, when we had to wait for it */
+  preClickHtml?: string;
+  preClickImage?: string;
+  preClickButtons?: string[][];
+  preClickHasMedia?: boolean;
+  clickedButton?: string;
+  /** Bot response after the action */
   responseHtml?: string;
   responseImage?: string;
   responseButtons?: string[][];
+  responseHasMedia?: boolean;
   callbackAnswer?: string;
   result?: string;
   error?: string;

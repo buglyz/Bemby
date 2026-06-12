@@ -239,6 +239,84 @@
         </div>
       </div>
 
+      <!-- Import / Export -->
+      <div class="card">
+        <div class="card-body">
+          <div class="card-section-title">
+            {{ t("settings.importExport.title") }}
+          </div>
+
+          <div v-if="importMsg" class="success-msg">{{ importMsg }}</div>
+          <div v-if="importError" class="error-msg">{{ importError }}</div>
+
+          <div class="form-group">
+            <p style="font-size: 12px; color: #888; margin: 0 0 8px">
+              {{ t("settings.importExport.exportHint") }}
+            </p>
+            <button class="btn btn-secondary" @click="doExport">
+              {{ t("settings.importExport.exportBtn") }}
+            </button>
+          </div>
+
+          <hr class="ie-divider" />
+
+          <div class="form-group">
+            <label class="form-label">{{
+              t("settings.importExport.importLabel")
+            }}</label>
+            <input
+              ref="fileInput"
+              type="file"
+              accept=".json"
+              class="form-input"
+              @change="onFileChange"
+            />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">{{
+              t("settings.importExport.importMode")
+            }}</label>
+            <div class="import-mode-row">
+              <label class="import-mode-option">
+                <input type="radio" v-model="importMode" value="merge" />
+                <div>
+                  <div class="import-mode-label">
+                    {{ t("settings.importExport.modeMerge") }}
+                  </div>
+                  <div class="import-mode-hint">
+                    {{ t("settings.importExport.modeMergeHint") }}
+                  </div>
+                </div>
+              </label>
+              <label class="import-mode-option">
+                <input type="radio" v-model="importMode" value="replace" />
+                <div>
+                  <div class="import-mode-label">
+                    {{ t("settings.importExport.modeReplace") }}
+                  </div>
+                  <div class="import-mode-hint">
+                    {{ t("settings.importExport.modeReplaceHint") }}
+                  </div>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <button
+            class="btn btn-primary"
+            :disabled="importing"
+            @click="doImport"
+          >
+            {{
+              importing
+                ? t("settings.importExport.importing")
+                : t("settings.importExport.importBtn")
+            }}
+          </button>
+        </div>
+      </div>
+
       <!-- Admin credentials -->
       <div class="card">
         <div class="card-body">
@@ -302,7 +380,8 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from "vue";
-import { settingsApi, authApi } from "../api/client";
+import { settingsApi, authApi, dataApi } from "../api/client";
+import type { ExportPayload } from "../api/client";
 import { t } from "../i18n";
 
 const timezones = [
@@ -466,6 +545,77 @@ async function saveNotify() {
   }
 }
 
+// ── Import / Export ───────────────────────────────────────────────────────────
+
+const fileInput = ref<HTMLInputElement | null>(null);
+const importFile = ref<File | null>(null);
+const importMode = ref<"merge" | "replace">("merge");
+const importing = ref(false);
+const importMsg = ref("");
+const importError = ref("");
+
+function onFileChange(e: Event) {
+  importFile.value =
+    (e.target as HTMLInputElement).files?.[0] ?? null;
+}
+
+async function doExport() {
+  const ok = confirm(t("settings.importExport.exportWarning"));
+  if (!ok) return;
+  try {
+    const data = await dataApi.export();
+    const blob = new Blob([JSON.stringify(data, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const date = new Date().toISOString().split("T")[0];
+    a.download = `bemby-backup-${date}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (err: any) {
+    importError.value =
+      err.response?.data?.error ?? t("settings.importExport.importFailed");
+  }
+}
+
+async function doImport() {
+  importMsg.value = "";
+  importError.value = "";
+  if (!importFile.value) {
+    importError.value = t("settings.importExport.noFileSelected");
+    return;
+  }
+  if (importMode.value === "replace") {
+    const ok = confirm(t("settings.importExport.replaceWarning"));
+    if (!ok) return;
+  }
+  importing.value = true;
+  try {
+    const text = await importFile.value.text();
+    let parsed: ExportPayload;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      importError.value = t("settings.importExport.invalidFile");
+      return;
+    }
+    const result = await dataApi.import(parsed, importMode.value);
+    importMsg.value = t("settings.importExport.importSuccess")
+      .replace("{a}", String(result.accountsImported))
+      .replace("{j}", String(result.jobsImported))
+      .replace("{s}", String(result.settingsUpdated));
+    if (fileInput.value) fileInput.value.value = "";
+    importFile.value = null;
+  } catch (err: any) {
+    importError.value =
+      err.response?.data?.error ?? t("settings.importExport.importFailed");
+  } finally {
+    importing.value = false;
+  }
+}
+
 async function saveCredentials() {
   credMsg.value = "";
   credError.value = "";
@@ -529,5 +679,40 @@ async function saveCredentials() {
 .event-pill:hover:not(.active) {
   border-color: #bbb;
   background: #fafafa;
+}
+
+.ie-divider {
+  border: none;
+  border-top: 1px solid #eee;
+  margin: 16px 0;
+}
+
+.import-mode-row {
+  display: flex;
+  gap: 16px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+.import-mode-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.import-mode-option input[type="radio"] {
+  margin-top: 3px;
+  flex-shrink: 0;
+}
+
+.import-mode-label {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.import-mode-hint {
+  font-size: 12px;
+  color: #888;
 }
 </style>

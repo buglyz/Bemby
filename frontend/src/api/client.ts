@@ -60,9 +60,15 @@ export type CustomStepLog = {
   step: number;
   actionType: string;
   label: string;
+  preClickHtml?: string;
+  preClickImage?: string;
+  preClickButtons?: string[][];
+  preClickHasMedia?: boolean;
+  clickedButton?: string;
   responseHtml?: string;
   responseImage?: string;
   responseButtons?: string[][];
+  responseHasMedia?: boolean;
   callbackAnswer?: string;
   result?: string;
   error?: string;
@@ -241,4 +247,51 @@ export const settingsApi = {
   get: () => api.get<Settings>("/settings").then((r) => r.data),
   update: (data: Partial<Settings>) =>
     api.put<Settings>("/settings", data).then((r) => r.data),
+};
+
+// ── Data Import / Export ───────────────────────────────────────────────────────
+
+export type ExportPayload = {
+  version: "1";
+  exportedAt: string;
+  accounts: Array<{
+    name: string;
+    phoneNumber: string;
+    apiId: number;
+    apiHash: string;
+    sessionString: string | null;
+    authStatus: string;
+  }>;
+  jobs: Array<{
+    accountIndex: number | null;
+    name: string;
+    jobType: string;
+    botUsername: string;
+    scheduleWindowStart: number;
+    scheduleWindowEnd: number;
+    timezone: string;
+    replyTimeoutMs: number;
+    retryMax: number;
+    enabled: boolean;
+    config: string | null;
+    startCommand: string;
+    checkinButton: string;
+  }>;
+  settings: Record<string, string>;
+};
+
+export type ImportResult = {
+  message: string;
+  accountsImported: number;
+  accountsSkipped: number;
+  jobsImported: number;
+  settingsUpdated: number;
+};
+
+export const dataApi = {
+  export: () => api.get<ExportPayload>("/data/export").then((r) => r.data),
+  import: (data: ExportPayload, mode: "merge" | "replace") =>
+    api
+      .post<ImportResult>("/data/import", { data, mode })
+      .then((r) => r.data),
 };

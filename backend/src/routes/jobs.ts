@@ -117,7 +117,7 @@ router.post("/", (req, res) => {
       name,
       resolvedType === "embywatch" ? null : Number(accountId),
       resolvedType,
-      botUsername,
+      (botUsername as string).replace(/^@+/, ""),
       Number(scheduleWindowStart ?? 1400),
       Number(scheduleWindowEnd ?? 1600),
       timezone ?? "Australia/Sydney",
@@ -179,7 +179,7 @@ router.put("/:id", (req, res) => {
       ? null
       : Number(accountId ?? existing.account_id),
     updatedType,
-    botUsername ?? existing.bot_username,
+    (botUsername as string | undefined)?.replace(/^@+/, "") ?? existing.bot_username,
     Number(scheduleWindowStart ?? existing.schedule_window_start),
     Number(scheduleWindowEnd ?? existing.schedule_window_end),
     timezone ?? existing.timezone,
@@ -224,7 +224,7 @@ router.post("/:id/run", async (req, res) => {
   const job = rowToJob(jobRow);
   let account: TgAccount | null = null;
 
-  if (job.jobType === "checkin") {
+  if (job.jobType === "checkin" || job.jobType === "custom") {
     const accountRow = db
       .prepare("SELECT * FROM tg_accounts WHERE id = ?")
       .get(jobRow.account_id) as AccountRow | undefined;

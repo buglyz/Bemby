@@ -18,6 +18,15 @@
     </div>
 
     <div class="card">
+      <!-- Job type filter -->
+      <div style="padding:12px 16px 0;display:flex;gap:6px;flex-wrap:wrap">
+        <button
+          v-for="opt in filterOptions" :key="opt.value"
+          class="btn btn-sm"
+          :class="filterType === opt.value ? 'btn-primary' : 'btn-ghost'"
+          @click="filterType = opt.value"
+        >{{ opt.label }}</button>
+      </div>
       <div class="table-wrap">
         <table>
           <thead>
@@ -32,13 +41,13 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-if="!jobs.length">
+            <tr v-if="!filteredJobs.length">
               <td colspan="7" class="empty">{{ t('jobs.noJobs') }}</td>
             </tr>
-            <tr v-for="j in jobs" :key="j.id">
+            <tr v-for="j in filteredJobs" :key="j.id">
               <td>{{ j.name }}</td>
               <td>{{ j.accountName ?? j.accountId }}</td>
-              <td><span class="badge badge-blue">{{ t(`logs.jobType.${j.jobType}`) }}</span></td>
+              <td><span :class="jobTypeBadge(j.jobType)">{{ t(`logs.jobType.${j.jobType}`) }}</span></td>
               <td>{{ j.jobType === 'embywatch' ? j.botUsername : '@' + j.botUsername }}</td>
               <td>{{ fmtWindow(j.scheduleWindowStart, j.scheduleWindowEnd) }}</td>
               <td>
@@ -69,6 +78,7 @@
     <div v-if="showForm" class="modal-backdrop">
       <div class="modal" style="width:560px">
         <h3 class="modal-title">{{ t(editTarget ? 'jobs.editTitle' : 'jobs.addTitle') }}</h3>
+        <div class="modal-body">
         <div v-if="formError" class="error-msg">{{ formError }}</div>
 
         <!-- Enabled -->
@@ -205,7 +215,12 @@
               <!-- send_command -->
               <div v-if="action.type === 'send_command'" class="custom-action-params">
                 <label class="form-label">{{ t('jobs.custom.labelContent') }}</label>
-                <input v-model="action.content" class="form-input" placeholder="/start" />
+                <select v-model="action.contentDropdown" class="form-select">
+                  <option value="/start">/start</option>
+                  <option value="/checkin">/checkin</option>
+                  <option value="custom">{{ t('common.custom') }}...</option>
+                </select>
+                <input v-if="action.contentDropdown === 'custom'" v-model="action.contentCustom" class="form-input" style="margin-top:6px" placeholder="/mycommand" />
                 <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.contentHint') }}</div>
               </div>
 
@@ -226,8 +241,19 @@
                 <div class="form-row" style="margin-bottom:0">
                   <div class="form-group">
                     <label class="form-label">{{ t('jobs.custom.labelButton') }}</label>
-                    <input v-model="action.button" class="form-input" placeholder="签到" />
-                    <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.buttonHint') }}</div>
+                    <select v-model="action.buttonDropdown" class="form-select">
+                      <option value="签到">签到</option>
+                      <option value="{aiBtn}" :disabled="aiKeyMissing">{{ t('jobs.aiBtnOption') }}{{ aiKeyMissing ? ' (' + t('jobs.noApiKey') + ')' : '' }}</option>
+                      <option value="{anyBtn}">{{ t('jobs.anyBtnOption') }}</option>
+                      <option value="custom">{{ t('common.custom') }}...</option>
+                    </select>
+                    <input v-if="action.buttonDropdown === 'custom'" v-model="action.buttonCustom" class="form-input" style="margin-top:6px" placeholder="Custom button text" />
+                    <template v-if="action.buttonDropdown === '{aiBtn}'">
+                      <input v-model.trim="action.buttonAiHint" class="form-input" style="margin-top:6px" :placeholder="t('jobs.aiHintPlaceholder')" />
+                      <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.aiHintHint') }}</div>
+                      <div v-if="aiKeyMissing" style="font-size:11px;color:#e63946;margin-top:4px">{{ t('jobs.aiKeyWarning') }}</div>
+                    </template>
+                    <div v-else style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.buttonHint') }}</div>
                   </div>
                   <div class="form-group">
                     <label class="form-label">{{ t('jobs.custom.labelMaxRetries') }}</label>
@@ -308,6 +334,7 @@
           </div>
         </div>
 
+        </div><!-- end modal-body -->
         <div class="modal-footer">
           <button class="btn btn-ghost" @click="showForm = false">{{ t('common.cancel') }}</button>
           <button class="btn btn-primary" :disabled="saving" @click="saveJob">
@@ -327,9 +354,14 @@ import { t, locale } from '../i18n';
 type CustomActionForm = {
   type: 'send_command' | 'wait_reply' | 'delay' | 'click_button';
   content: string;
+  contentDropdown: string;
+  contentCustom: string;
   maxWaitMs: number;
   waitMs: number;
   button: string;
+  buttonDropdown: string;
+  buttonCustom: string;
+  buttonAiHint: string;
   maxRetries: number;
 };
 
@@ -338,6 +370,26 @@ const accounts = ref<Account[]>([]);
 const scheduleStatus = ref<ScheduleStatus[]>([]);
 const settings = ref<Settings | null>(null);
 const running = ref(new Set<number>());
+
+const filterType = ref('');
+const filterOptions = computed(() => [
+  { value: '', label: t('common.all') },
+  { value: 'checkin', label: t('logs.jobType.checkin') },
+  { value: 'embywatch', label: t('logs.jobType.embywatch') },
+  { value: 'custom', label: t('logs.jobType.custom') },
+]);
+const filteredJobs = computed(() =>
+  filterType.value ? jobs.value.filter(j => j.jobType === filterType.value) : jobs.value,
+);
+
+function jobTypeBadge(type: string) {
+  const map: Record<string, string> = {
+    checkin: 'badge badge-blue',
+    embywatch: 'badge badge-purple',
+    custom: 'badge badge-amber',
+  };
+  return map[type] ?? 'badge badge-grey';
+}
 const pollTimers = new Map<number, ReturnType<typeof setTimeout>>();
 
 const showForm = ref(false);
@@ -373,6 +425,8 @@ const saving = ref(false);
 const aiKeyMissing = computed(() => !settings.value?.ai_api_key);
 
 const CMD_PRESETS = new Set(['', '/start', '/checkin'])
+const ACTION_CMD_PRESETS = new Set(['/start', '/checkin'])
+const ACTION_BTN_PRESETS = new Set(['签到', '{anyBtn}'])
 const BTN_PRESETS = new Set(['', '签到', '{aiBtn}', '{anyBtn}'])
 const cmdDropdown = ref('')
 const cmdCustom = ref('')
@@ -408,7 +462,7 @@ function onJobTypeChange() {
 }
 
 function defaultAction(): CustomActionForm {
-  return { type: 'send_command', content: '/start', maxWaitMs: 30000, waitMs: 2000, button: '签到', maxRetries: 3 };
+  return { type: 'send_command', content: '/start', contentDropdown: '/start', contentCustom: '', maxWaitMs: 30000, waitMs: 2000, button: '签到', buttonDropdown: '签到', buttonCustom: '', buttonAiHint: '', maxRetries: 3 };
 }
 
 function addAction() {
@@ -522,10 +576,24 @@ function openEdit(j: Job) {
         const cfg = JSON.parse(j.config) as CustomConfig;
         customActions.value = cfg.actions.map(a => {
           const base = defaultAction();
-          if (a.type === 'send_command') return { ...base, type: 'send_command', content: a.content };
+          if (a.type === 'send_command') {
+            const contentDropdown = ACTION_CMD_PRESETS.has(a.content) ? a.content : 'custom';
+            return { ...base, type: 'send_command', content: a.content, contentDropdown, contentCustom: contentDropdown === 'custom' ? a.content : '' };
+          }
           if (a.type === 'wait_reply') return { ...base, type: 'wait_reply', maxWaitMs: a.maxWaitMs };
           if (a.type === 'delay') return { ...base, type: 'delay', waitMs: a.waitMs };
-          if (a.type === 'click_button') return { ...base, type: 'click_button', button: a.button, maxRetries: a.maxRetries, maxWaitMs: a.maxWaitMs };
+          if (a.type === 'click_button') {
+            const aiMatch = a.button.match(/^\{aiBtn(?::(.+))?\}$/);
+            let buttonDropdown: string, buttonCustom = '', buttonAiHint = '';
+            if (aiMatch) {
+              buttonDropdown = '{aiBtn}'; buttonAiHint = aiMatch[1]?.trim() ?? '';
+            } else if (ACTION_BTN_PRESETS.has(a.button)) {
+              buttonDropdown = a.button;
+            } else {
+              buttonDropdown = 'custom'; buttonCustom = a.button;
+            }
+            return { ...base, type: 'click_button', button: a.button, buttonDropdown, buttonCustom, buttonAiHint, maxRetries: a.maxRetries, maxWaitMs: a.maxWaitMs };
+          }
           return base;
         });
       } catch { customActions.value = []; }
@@ -567,10 +635,17 @@ function buildConfig(): EmbywatchConfig | CustomConfig | null {
   if (form.jobType === 'custom') {
     return {
       actions: customActions.value.map(a => {
-        if (a.type === 'send_command') return { type: 'send_command' as const, content: a.content };
+        if (a.type === 'send_command') {
+          const content = a.contentDropdown === 'custom' ? a.contentCustom : a.contentDropdown;
+          return { type: 'send_command' as const, content };
+        }
         if (a.type === 'wait_reply') return { type: 'wait_reply' as const, maxWaitMs: a.maxWaitMs };
         if (a.type === 'delay') return { type: 'delay' as const, waitMs: a.waitMs };
-        return { type: 'click_button' as const, button: a.button, maxRetries: a.maxRetries, maxWaitMs: a.maxWaitMs };
+        let button: string;
+        if (a.buttonDropdown === 'custom') button = a.buttonCustom;
+        else if (a.buttonDropdown === '{aiBtn}') button = a.buttonAiHint.trim() ? `{aiBtn:${a.buttonAiHint.trim()}}` : '{aiBtn}';
+        else button = a.buttonDropdown || '签到';
+        return { type: 'click_button' as const, button, maxRetries: a.maxRetries, maxWaitMs: a.maxWaitMs };
       }),
     };
   }

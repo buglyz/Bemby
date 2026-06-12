@@ -139,20 +139,41 @@
                           <span v-if="s.error" class="badge badge-red" style="font-size:10px">failed</span>
                           <span v-else-if="s.result" class="badge badge-green" style="font-size:10px">ok</span>
                         </div>
-                        <div v-if="s.callbackAnswer" class="custom-step-callback">{{ s.callbackAnswer }}</div>
-                        <div v-if="s.responseHtml" class="chat-bg" style="margin-top:6px">
+                        <!-- Pre-click context: bot message received while waiting for buttons -->
+                        <div v-if="s.preClickHtml || s.preClickImage || s.preClickHasMedia || s.preClickButtons?.length" class="chat-bg" style="margin-top:6px">
                           <div class="chat-log">
                             <div class="chat-row-recv">
-                              <div class="bubble-recv" v-html="s.responseHtml" />
+                              <div>
+                                <div class="tg-bubble">
+                                  <img v-if="s.preClickImage" :src="s.preClickImage" class="tg-bubble-img" alt="" />
+                                  <div v-else-if="s.preClickHasMedia" class="tg-bubble-img-placeholder">📷</div>
+                                  <div v-if="s.preClickHtml" class="tg-bubble-text" v-html="s.preClickHtml" />
+                                </div>
+                                <div v-if="s.preClickButtons?.length" class="tg-keyboard">
+                                  <div v-for="(row, ri) in s.preClickButtons" :key="ri" class="tg-keyboard-row">
+                                    <div v-for="btn in row" :key="btn" :class="btn === s.clickedButton ? 'tg-btn tg-btn-active' : 'tg-btn'">{{ btn }}</div>
+                                  </div>
+                                </div>
+                              </div>
                             </div>
-                            <div v-if="s.responseImage" class="chat-row-recv">
-                              <img :src="s.responseImage" style="max-width:240px;border-radius:8px;margin-top:4px" />
-                            </div>
-                            <div v-if="s.responseButtons?.length" class="chat-row-recv">
-                              <div class="bubble-buttons">
-                                <span v-for="(row, ri) in s.responseButtons" :key="ri" class="btn-row">
-                                  <span v-for="(btn, bi) in row" :key="bi" class="tg-btn">{{ btn }}</span>
-                                </span>
+                          </div>
+                        </div>
+                        <div v-if="s.callbackAnswer" class="custom-step-callback">{{ s.callbackAnswer }}</div>
+                        <!-- Response after the action -->
+                        <div v-if="s.responseHtml || s.responseImage || s.responseHasMedia || s.responseButtons?.length" class="chat-bg" style="margin-top:6px">
+                          <div class="chat-log">
+                            <div class="chat-row-recv">
+                              <div>
+                                <div class="tg-bubble">
+                                  <img v-if="s.responseImage" :src="s.responseImage" class="tg-bubble-img" alt="" />
+                                  <div v-else-if="s.responseHasMedia" class="tg-bubble-img-placeholder">📷</div>
+                                  <div v-if="s.responseHtml" class="tg-bubble-text" v-html="s.responseHtml" />
+                                </div>
+                                <div v-if="s.responseButtons?.length" class="tg-keyboard">
+                                  <div v-for="(row, ri) in s.responseButtons" :key="ri" class="tg-keyboard-row">
+                                    <div v-for="btn in row" :key="btn" class="tg-btn">{{ btn }}</div>
+                                  </div>
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -222,7 +243,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { logsApi, jobsApi, type Log, type Job, type CheckinAttemptLog, type EmbywatchLog, type CustomStepLog } from '../api/client';
-import { t } from '../i18n';
+import { t, locale } from '../i18n';
 
 const logs = ref<Log[]>([]);
 const jobs = ref<Job[]>([]);
@@ -252,7 +273,9 @@ const embywatchDetail = computed(() => {
 const customDetail = computed(() => {
   if (!expandedDetail.value) return null;
   const d = expandedDetail.value as any;
-  if ('steps' in d && Array.isArray(d.steps)) return d.steps as CustomStepLog[];
+  // detail is stored as an array; custom log is the first element
+  const first = Array.isArray(d) ? d[0] : d;
+  if (first && 'steps' in first && Array.isArray(first.steps)) return first.steps as CustomStepLog[];
   return null;
 });
 
@@ -369,7 +392,8 @@ onUnmounted(() => {
 });
 
 function fmtDate(iso: string) {
-  return new Date(iso).toLocaleString('en-AU', {
+  const localeMap: Record<string, string> = { en: 'en-AU', zh: 'zh-CN' };
+  return new Date(iso).toLocaleString(localeMap[locale.value] ?? 'en-AU', {
     month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
   });
 }

@@ -127,7 +127,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue';
 import { accountsApi, type Account } from '../api/client';
-import { t } from '../i18n';
+import { t, locale } from '../i18n';
 
 const accounts = ref<Account[]>([]);
 
@@ -166,7 +166,8 @@ function statusBadge(s: Account['authStatus']) {
 }
 
 function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' });
+  const localeMap: Record<string, string> = { en: 'en-AU', zh: 'zh-CN' };
+  return new Date(iso).toLocaleDateString(localeMap[locale.value] ?? 'en-AU', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
 // ── Add / Edit ─────────────────────────────────────────────────────────────────

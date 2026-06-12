@@ -15,6 +15,7 @@ import jobsRouter from './routes/jobs';
 import logsRouter from './routes/logs';
 import statusRouter from './routes/status';
 import settingsRouter from './routes/settings';
+import dataRouter from './routes/data';
 import { requireAuth } from './middleware/auth';
 import { startScheduler } from './scheduler';
 
@@ -38,6 +39,7 @@ app.use('/api/jobs', requireAuth, jobsRouter);
 app.use('/api/logs', requireAuth, logsRouter);
 app.use('/api/status', requireAuth, statusRouter);
 app.use('/api/settings', requireAuth, settingsRouter);
+app.use('/api/data', requireAuth, dataRouter);
 
 // Serve Vue SPA
 const publicDir = path.join(__dirname, '..', 'public');

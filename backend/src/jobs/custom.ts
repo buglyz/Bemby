@@ -146,6 +146,7 @@ export async function runCustom(
             const parsed = await parseMessages(msgs, client, signal);
             step.responseHtml = parsed.html || undefined;
             step.responseImage = parsed.image;
+            step.responseHasMedia = parsed.hasMedia || undefined;
             step.responseButtons = parsed.buttons.length ? parsed.buttons : undefined;
             step.result = `Received ${msgs.length} message(s)`;
             break;
@@ -172,6 +173,12 @@ export async function runCustom(
               lastMessages = msgs;
               buttonsMsg = [...msgs].reverse().find(m => m.buttons) ?? null;
               if (buttonsMsg) lastButtonsMsg = buttonsMsg;
+              // Log the bot messages we received while waiting (reply to prior send_command)
+              const preParsed = await parseMessages(msgs, client, signal);
+              if (preParsed.html) step.preClickHtml = preParsed.html;
+              if (preParsed.image) step.preClickImage = preParsed.image;
+              if (preParsed.hasMedia) step.preClickHasMedia = preParsed.hasMedia;
+              if (preParsed.buttons.length) step.preClickButtons = preParsed.buttons;
             }
             if (!buttonsMsg) throw new Error('No message with buttons available');
 
@@ -235,9 +242,11 @@ export async function runCustom(
                     const parsed = await parseMessages([responseMsg], client, signal);
                     step.responseHtml = parsed.html || undefined;
                     step.responseImage = parsed.image;
+                    step.responseHasMedia = parsed.hasMedia || undefined;
                     step.responseButtons = parsed.buttons.length ? parsed.buttons : undefined;
                   }
 
+                  step.clickedButton = btn.text;
                   step.result = `Clicked "${btn.text}"`;
                   break;
                 }

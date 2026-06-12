@@ -107,7 +107,7 @@ function loadEligibleJobs(): Array<{ job: Job; account: TgAccount | null }> {
     LEFT JOIN tg_accounts a ON j.account_id = a.id
     WHERE j.enabled = 1
       AND (
-        j.job_type != 'checkin'
+        (j.job_type != 'checkin' AND j.job_type != 'custom')
         OR (a.auth_status = 'authenticated' AND a.session_string IS NOT NULL)
       )
   `,

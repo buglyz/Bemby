@@ -18,14 +18,18 @@
     </div>
 
     <div class="card">
-      <!-- Job type filter -->
-      <div style="padding:12px 16px 0;display:flex;gap:6px;flex-wrap:wrap">
+      <!-- Filters -->
+      <div style="padding:12px 16px 0;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         <button
           v-for="opt in filterOptions" :key="opt.value"
           class="btn btn-sm"
           :class="filterType === opt.value ? 'btn-primary' : 'btn-ghost'"
           @click="filterType = opt.value"
         >{{ opt.label }}</button>
+        <select v-if="accounts.length > 1" v-model="filterAccountId" class="form-select" style="width:160px;height:30px;font-size:13px;padding:0 8px">
+          <option value="">{{ t('jobs.allAccounts') }}</option>
+          <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.name }}</option>
+        </select>
       </div>
       <div class="table-wrap">
         <table>
@@ -65,6 +69,7 @@
                     {{ running.has(j.id) ? t('common.runBusy') : t('common.run') }}
                   </button>
                   <button class="btn btn-sm btn-ghost" @click="openEdit(j)">{{ t('common.edit') }}</button>
+                  <button class="btn btn-sm btn-ghost" @click="openDuplicate(j)">{{ t('common.duplicate') }}</button>
                   <button class="btn btn-sm btn-danger" @click="remove(j.id)">{{ t('common.delete') }}</button>
                 </div>
               </td>
@@ -372,6 +377,7 @@ const settings = ref<Settings | null>(null);
 const running = ref(new Set<number>());
 
 const filterType = ref('');
+const filterAccountId = ref<number | ''>('');
 const filterOptions = computed(() => [
   { value: '', label: t('common.all') },
   { value: 'checkin', label: t('logs.jobType.checkin') },
@@ -379,7 +385,10 @@ const filterOptions = computed(() => [
   { value: 'custom', label: t('logs.jobType.custom') },
 ]);
 const filteredJobs = computed(() =>
-  filterType.value ? jobs.value.filter(j => j.jobType === filterType.value) : jobs.value,
+  jobs.value.filter(j =>
+    (!filterType.value || j.jobType === filterType.value) &&
+    (filterAccountId.value === '' || j.accountId === filterAccountId.value),
+  ),
 );
 
 function jobTypeBadge(type: string) {
@@ -607,6 +616,12 @@ function openEdit(j: Job) {
   }
   formError.value = '';
   showForm.value = true;
+}
+
+function openDuplicate(j: Job) {
+  openEdit(j);
+  editTarget.value = null;
+  form.name = `${j.name} (copy)`;
 }
 
 function handleEmbyHostPaste(event: ClipboardEvent) {

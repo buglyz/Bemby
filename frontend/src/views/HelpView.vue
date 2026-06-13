@@ -12,7 +12,7 @@
           <template v-if="locale === 'zh'">
             <div class="card-section-title">概览</div>
             <p class="help-para">
-              Bemby 自动执行两类任务：Telegram 机器人签到（签到）和 Emby 视频观看会话。
+              Bemby 自动执行三类任务：Telegram 机器人签到（签到）、Emby 视频观看会话和自定义多步骤流程。
               任务按照可配置的时间窗口每日定时运行。一般流程如下：
             </p>
             <ol class="help-steps">
@@ -25,8 +25,9 @@
           <template v-else>
             <div class="card-section-title">Overview</div>
             <p class="help-para">
-              Bemby automates two types of tasks: Telegram bot check-ins (签到) and Emby video-watch sessions.
-              Jobs run on a daily schedule within a configurable time window. The general workflow is:
+              Bemby automates three types of tasks: Telegram bot check-ins (签到), Emby video-watch sessions,
+              and custom multi-step bot flows. Jobs run on a daily schedule within a configurable time window.
+              The general workflow is:
             </p>
             <ol class="help-steps">
               <li>Add and authenticate a <strong>Telegram account</strong> under Accounts.</li>
@@ -79,7 +80,7 @@
         <div class="card-body">
           <template v-if="locale === 'zh'">
             <div class="card-section-title">任务</div>
-            <p class="help-para">支持两种任务类型：</p>
+            <p class="help-para">支持三种任务类型：</p>
 
             <div class="card-section-title" style="margin-top:16px;font-size:11px">签到（Check-in）</div>
             <p class="help-para">
@@ -118,6 +119,13 @@
               Emby 日志中的会话设备显示为 <strong>Mac / SenPlayer</strong>。
             </p>
 
+            <div class="card-section-title" style="margin-top:16px;font-size:11px">自定义（Custom）</div>
+            <p class="help-para">
+              自定义任务通过可配置的多步骤流程操作任意 Telegram 机器人。每个步骤可执行以下动作：
+              发送命令、等待消息回复、点击按钮（支持 <code>{aiBtn}</code> AI 自动识别）。
+              适用于需要多轮交互才能完成的签到或操作场景。
+            </p>
+
             <div class="card-section-title" style="margin-top:16px;font-size:11px">时间窗口</div>
             <p class="help-para">
               任务每天在<strong>开始时间</strong>与<strong>结束时间</strong>（均为 HHMM 格式，如 <code>1400</code> 表示 14:00）之间随机一个时间点运行一次。
@@ -132,10 +140,20 @@
               点击任务列表中<strong>启用</strong>列的状态标签，可直接切换任务的启用状态，无需打开编辑表单。
               禁用任务时会弹出确认框；重新启用时无需确认。
             </p>
+
+            <div class="card-section-title" style="margin-top:16px;font-size:11px">复制任务</div>
+            <p class="help-para">
+              在任务列表中点击任意任务行的<strong>复制</strong>按钮，可将该任务的全部配置预填至新建任务表单，修改名称后保存即可。
+            </p>
+
+            <div class="card-section-title" style="margin-top:16px;font-size:11px">账号筛选</div>
+            <p class="help-para">
+              当系统存在多个账号时，任务列表顶部会显示账号筛选下拉框，可按账号过滤任务。
+            </p>
           </template>
           <template v-else>
             <div class="card-section-title">Jobs</div>
-            <p class="help-para">Two job types are supported:</p>
+            <p class="help-para">Three job types are supported:</p>
 
             <div class="card-section-title" style="margin-top:16px;font-size:11px">Check-in (签到)</div>
             <p class="help-para">
@@ -174,6 +192,13 @@
               The device appears in Emby as <strong>Mac / SenPlayer</strong>.
             </p>
 
+            <div class="card-section-title" style="margin-top:16px;font-size:11px">Custom (自定义)</div>
+            <p class="help-para">
+              Custom jobs run configurable multi-step flows against any Telegram bot. Each step can send a command,
+              wait for a reply, and click a button -- including <code>{aiBtn}</code> for AI-driven selection.
+              Use this type for check-ins or interactions that require multiple rounds of bot communication.
+            </p>
+
             <div class="card-section-title" style="margin-top:16px;font-size:11px">Schedule Window</div>
             <p class="help-para">
               Jobs run once per day at a random time between <strong>Window Start</strong> and <strong>Window End</strong>
@@ -190,6 +215,18 @@
             <p class="help-para">
               Click the status badge in the <strong>Enabled</strong> column to toggle a job on or off without opening the edit form.
               Disabling a job requires confirmation; re-enabling is immediate.
+            </p>
+
+            <div class="card-section-title" style="margin-top:16px;font-size:11px">Duplicate Job</div>
+            <p class="help-para">
+              Click the <strong>Duplicate</strong> button on any job row to copy all of its settings into the new job form.
+              The name is pre-filled as "<em>original name</em> (copy)" -- update it and save.
+            </p>
+
+            <div class="card-section-title" style="margin-top:16px;font-size:11px">Account Filter</div>
+            <p class="help-para">
+              When more than one account exists, an account filter dropdown appears at the top of the jobs list,
+              letting you show only jobs that belong to a specific account.
             </p>
           </template>
         </div>
@@ -210,6 +247,7 @@
               <tr><td>AI 按钮识别</td><td>配置用于 <code>{aiBtn}</code> 功能的 API 地址、密钥、模型和超时。支持任意 OpenAI 兼容接口（如 OpenRouter）。</td></tr>
               <tr><td>通知目标用户名</td><td>接收通知的 Telegram 用户名，接受 <code>username</code>、<code>@username</code> 或 <code>https://t.me/username</code>。未填写时发至账户"收藏夹"。</td></tr>
               <tr><td>通知触发时机</td><td>选择触发通知的事件：失败（默认）和/或成功，可多选。</td></tr>
+              <tr><td>账号导出 / 导入</td><td>将 Telegram 会话数据导出为 JSON 文件，可导入至另一 Bemby 实例，无需重新认证。</td></tr>
             </tbody></table>
             <p class="help-para" style="margin-top:14px">
               <strong>管理员凭据</strong> -- 随时更改管理员用户名或密码，确认更改时需输入当前密码。
@@ -227,6 +265,7 @@
               <tr><td>AI Button Detection</td><td>Configure the API base URL, key, model, and timeout for the <code>{aiBtn}</code> feature. Any OpenAI-compatible provider works (e.g. OpenRouter).</td></tr>
               <tr><td>TG Notification Target</td><td>Telegram username to receive notifications. Accepts <code>username</code>, <code>@username</code>, or <code>https://t.me/username</code>. Falls back to Saved Messages if not set.</td></tr>
               <tr><td>Notify On Events</td><td>Which events trigger a notification: failed (default) and/or success. Multi-select.</td></tr>
+              <tr><td>Account Export / Import</td><td>Export Telegram session data as a JSON file. Import it into another Bemby instance to transfer accounts without re-authenticating.</td></tr>
             </tbody></table>
             <p class="help-para" style="margin-top:14px">
               <strong>Admin Credentials</strong> -- change the admin username or password at any time.
@@ -273,6 +312,12 @@
               点击任意 Emby 观看日志行可展开播放摘要卡片，显示以下信息：
               内容名称（及剧集信息）、剧集总时长、播放起始与结束位置、实际观看时长、是否已标记为已看。
             </p>
+
+            <div class="card-section-title" style="margin-top:16px;font-size:11px">开发者日志</div>
+            <p class="help-para">
+              日志列表顶部有<strong>显示开发者日志</strong>开关，开启后可在 AI 按钮识别步骤下方看到完整的 AI 请求内容：
+              发送给 AI 的提示词、图片及响应文本，以及响应所用时长。默认关闭。
+            </p>
           </template>
           <template v-else>
             <div class="card-section-title">Logs</div>
@@ -307,6 +352,13 @@
             <p class="help-para">
               Click any Emby Watch log row to expand a playback summary card showing: content title (and series/episode info),
               total runtime, start and end positions, actual duration watched, and whether the item was marked as watched.
+            </p>
+
+            <div class="card-section-title" style="margin-top:16px;font-size:11px">Developer Logs</div>
+            <p class="help-para">
+              Toggle <strong>Show developer logs</strong> at the top of the log list to reveal the full AI request
+              detail for any AI button selection step: the prompt sent, the image(s) included, the model's response,
+              and how long the request took. Off by default.
             </p>
           </template>
         </div>

@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import { db } from '../db/database';
-import { cancelJob, isJobRunning } from '../jobs/cancellation';
+import { cancelJob, isJobRunning, getLiveDetail } from '../jobs/cancellation';
 
 const router = Router();
 
 router.get('/:id', (req, res) => {
+  const id = Number(req.params.id);
   const row = db.prepare(`
     SELECT l.id, l.job_id, l.ran_at, l.status, l.message, l.detail,
            j.name AS job_name, j.job_type,
@@ -13,8 +14,9 @@ router.get('/:id', (req, res) => {
     LEFT JOIN jobs j ON l.job_id = j.id
     LEFT JOIN tg_accounts a ON j.account_id = a.id
     WHERE l.id = ?
-  `).get(Number(req.params.id)) as any;
+  `).get(id) as any;
   if (!row) { res.status(404).json({ error: 'Not found' }); return; }
+  const liveDetail = getLiveDetail(id);
   res.json({
     id: row.id,
     jobId: row.job_id,
@@ -24,7 +26,7 @@ router.get('/:id', (req, res) => {
     ranAt: row.ran_at,
     status: row.status,
     message: row.message,
-    detail: row.detail ? JSON.parse(row.detail) : null,
+    detail: liveDetail ?? (row.detail ? JSON.parse(row.detail) : null),
   });
 });
 

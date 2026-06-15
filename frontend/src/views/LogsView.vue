@@ -368,8 +368,8 @@ function clearDetailPoll() {
   if (detailPollTimer) { clearTimeout(detailPollTimer); detailPollTimer = null; }
 }
 
-async function fetchDetail(logId: number) {
-  detailLoading.value = true;
+async function fetchDetail(logId: number, showLoading = true) {
+  if (showLoading) detailLoading.value = true;
   try {
     const full = await logsApi.getOne(logId);
     if (expandedId.value !== logId) return null;
@@ -380,16 +380,16 @@ async function fetchDetail(logId: number) {
   } catch {
     return null;
   } finally {
-    detailLoading.value = false;
+    if (showLoading) detailLoading.value = false;
   }
 }
 
 function scheduleDetailPoll(logId: number) {
   clearDetailPoll();
   detailPollTimer = setTimeout(async () => {
-    const full = await fetchDetail(logId);
+    const full = await fetchDetail(logId, false);
     if (full?.status === 'running' && expandedId.value === logId) scheduleDetailPoll(logId);
-  }, 2000);
+  }, 1000);
 }
 
 async function toggleDetail(log: Log) {

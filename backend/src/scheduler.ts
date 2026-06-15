@@ -8,7 +8,7 @@ import {
   getNotifyConfig,
 } from "./jobs/notify";
 import type { Job, TgAccount } from "./types";
-import { registerJob, unregisterJob } from "./jobs/cancellation";
+import { registerJob, unregisterJob, registerLiveDetail, clearLiveDetail } from "./jobs/cancellation";
 
 type ScheduleEntry = {
   job: Job;
@@ -158,6 +158,7 @@ async function executeJob(job: Job, account: TgAccount | null): Promise<void> {
 
   const detailLogs: JobDetailLog[] = [];
   const signal = registerJob(Number(logId));
+  registerLiveDetail(Number(logId), detailLogs);
   try {
     // Re-fetch session for checkin jobs in case it was updated since scheduling
     if (account) {
@@ -204,6 +205,7 @@ async function executeJob(job: Job, account: TgAccount | null): Promise<void> {
     }
   } finally {
     unregisterJob(Number(logId));
+    clearLiveDetail(Number(logId));
     scheduleOne(job, account, true);
   }
 }

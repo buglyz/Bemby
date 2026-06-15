@@ -21,3 +21,19 @@ export function cancelJob(logId: number): boolean {
 export function isJobRunning(logId: number): boolean {
   return registry.has(logId);
 }
+
+// Live detail registry — holds a reference to the in-progress detailLogs array
+// so the logs API can stream partial results while a job is running.
+const liveDetails = new Map<number, any[]>();
+
+export function registerLiveDetail(logId: number, detail: any[]): void {
+  liveDetails.set(logId, detail);
+}
+
+export function getLiveDetail(logId: number): any[] | undefined {
+  return liveDetails.get(logId);
+}
+
+export function clearLiveDetail(logId: number): void {
+  liveDetails.delete(logId);
+}

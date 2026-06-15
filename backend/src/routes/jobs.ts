@@ -9,7 +9,7 @@ import {
 } from "../jobs/notify";
 import { refreshScheduler } from "../scheduler";
 import type { Job, TgAccount } from "../types";
-import { registerJob, unregisterJob } from "../jobs/cancellation";
+import { registerJob, unregisterJob, registerLiveDetail, clearLiveDetail } from "../jobs/cancellation";
 
 const router = Router();
 
@@ -256,6 +256,7 @@ router.post("/:id/run", async (req, res) => {
 
   const detailLogs: JobDetailLog[] = [];
   const signal = registerJob(Number(logId));
+  registerLiveDetail(Number(logId), detailLogs);
   runJob(job, account, detailLogs, signal)
     .then(() => {
       const detail = detailLogs.length ? JSON.stringify(detailLogs) : null;
@@ -291,7 +292,7 @@ router.post("/:id/run", async (req, res) => {
         }
       }
     })
-    .finally(() => unregisterJob(Number(logId)));
+    .finally(() => { unregisterJob(Number(logId)); clearLiveDetail(Number(logId)); });
 });
 
 export default router;

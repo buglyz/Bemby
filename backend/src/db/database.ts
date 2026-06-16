@@ -58,14 +58,23 @@ db.exec(`
     ('default_timezone',     'Australia/Sydney'),
     ('default_max_retry',    '5'),
     ('check_daily_run',      'true'),
-    ('default_ua',           'SenPlayer/6.1.0 CFNetwork/1490.0.4 Darwin/23.2.0'),
+    ('default_ua',           'SenPlayer/6.1.2 CFNetwork/1490.0.4 Darwin/23.2.0'),
     ('default_play_duration','300'),
     ('default_device_name',  'Mac'),
     ('ai_base_url',          'https://openrouter.ai/api/v1'),
     ('ai_api_key',           ''),
     ('ai_model',             'nvidia/nemotron-nano-12b-v2-vl:free'),
-    ('ai_timeout_ms',        '25000');
+    ('ai_timeout_ms',        '25000'),
+    ('ua_presets',           '[{"name":"SenPlayer (Mac)","value":"SenPlayer/6.1.2 CFNetwork/1490.0.4 Darwin/23.2.0"},{"name":"Yamby (Android TV)","value":"Yamby/2.0.3.4(Android)"},{"name":"Hills (Windows)","value":"Hills/0.2.1"},{"name":"Lenna (iOS)","value":"Lenna/1.0.15 CFNetwork/1494.0.7 Darwin/23.4.0"},{"name":"VidHub (iOS)","value":"VidHub/2.2.4"}]');
 `);
+
+// Seed ua_presets for existing installs that pre-date this setting
+try {
+  db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)").run(
+    'ua_presets',
+    '[{"name":"SenPlayer (Mac)","value":"SenPlayer/6.1.2 CFNetwork/1490.0.4 Darwin/23.2.0"},{"name":"Yamby (Android TV)","value":"Yamby/2.0.3.4(Android)"},{"name":"Hills (Windows)","value":"Hills/0.2.1"},{"name":"Lenna (iOS)","value":"Lenna/1.0.15 CFNetwork/1494.0.7 Darwin/23.4.0"},{"name":"VidHub (iOS)","value":"VidHub/2.2.4"}]'
+  );
+} catch {}
 
 // Migrations for columns added after initial schema
 try { db.exec("ALTER TABLE job_logs ADD COLUMN source TEXT NOT NULL DEFAULT 'scheduler'"); } catch {}
@@ -73,6 +82,13 @@ try { db.exec('ALTER TABLE jobs ADD COLUMN config TEXT'); } catch {}
 try { db.exec("UPDATE settings SET value = 'Yamby' WHERE key = 'default_device_name' AND value = 'tg-runner'"); } catch {}
 try { db.exec("UPDATE settings SET value = 'Mac' WHERE key = 'default_device_name' AND value = 'Yamby'"); } catch {}
 try { db.exec("UPDATE settings SET value = 'SenPlayer/6.1.0 CFNetwork/1490.0.4 Darwin/23.2.0' WHERE key = 'default_ua' AND value = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'"); } catch {}
+try { db.exec("UPDATE settings SET value = 'SenPlayer/6.1.2 CFNetwork/1490.0.4 Darwin/23.2.0' WHERE key = 'default_ua' AND value = 'SenPlayer/6.1.0 CFNetwork/1490.0.4 Darwin/23.2.0'"); } catch {}
+// Overwrite placeholder preset values written before correct UAs were researched
+try {
+  db.prepare(
+    "UPDATE settings SET value = ? WHERE key = 'ua_presets' AND (value LIKE '%ExoPlayerLib%' OR value LIKE '%VidHub/2.1.0%')"
+  ).run('[{"name":"SenPlayer (Mac)","value":"SenPlayer/6.1.2 CFNetwork/1490.0.4 Darwin/23.2.0"},{"name":"Yamby (Android TV)","value":"Yamby/2.0.3.4(Android)"},{"name":"Hills (Windows)","value":"Hills/0.2.1"},{"name":"Lenna (iOS)","value":"Lenna/1.0.15 CFNetwork/1494.0.7 Darwin/23.4.0"},{"name":"VidHub (iOS)","value":"VidHub/2.2.4"}]');
+} catch {}
 try { db.exec("ALTER TABLE jobs ADD COLUMN start_command TEXT NOT NULL DEFAULT '/start'"); } catch {}
 try { db.exec("ALTER TABLE jobs ADD COLUMN checkin_button TEXT NOT NULL DEFAULT '签到'"); } catch {}
 try { db.exec('ALTER TABLE job_logs ADD COLUMN detail TEXT'); } catch {}

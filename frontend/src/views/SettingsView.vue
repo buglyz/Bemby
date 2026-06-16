@@ -94,13 +94,28 @@
 
           <div class="form-group">
             <label class="form-label">{{ t("settings.labelUserAgent") }}</label>
-            <textarea
-              v-model.trim="form.default_ua"
-              class="form-input"
-              rows="3"
-              placeholder="Mozilla/5.0 ..."
-              style="resize: vertical"
-            />
+            <select v-model="form.default_ua" class="form-select">
+              <option value="">— {{ t("jobs.uaDefault") }} —</option>
+              <option v-for="p in uaPresets" :key="p.name" :value="p.value">{{ p.name }}</option>
+            </select>
+          </div>
+
+          <div style="margin-bottom:16px">
+            <div class="card-section-title" style="margin-bottom:10px">{{ t("settings.uaPresetsSection") }}</div>
+            <div v-for="(p, i) in uaPresets" :key="i" class="ua-preset-row">
+              <span class="ua-preset-name">{{ p.name }}</span>
+              <span class="ua-preset-value">{{ p.value }}</span>
+              <button class="btn btn-sm btn-ghost ua-preset-del" :title="t('settings.uaPresetDeleteTip')" @click="removeUaPreset(i)">
+                <i class="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+            <div class="ua-preset-add">
+              <input v-model.trim="newPresetName" class="form-input" style="flex:0 0 140px" :placeholder="t('settings.uaPresetName')" @keyup.enter="addUaPreset" />
+              <input v-model.trim="newPresetValue" class="form-input" style="flex:1;min-width:0" :placeholder="t('settings.uaPresetValue')" @keyup.enter="addUaPreset" />
+              <button class="btn btn-ghost btn-sm" :disabled="!newPresetName || !newPresetValue" @click="addUaPreset">
+                <i class="fa-solid fa-plus"></i> {{ t("settings.addPreset") }}
+              </button>
+            </div>
           </div>
 
           <button
@@ -382,7 +397,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from "vue";
 import { settingsApi, authApi, dataApi } from "../api/client";
-import type { ExportPayload } from "../api/client";
+import type { ExportPayload, UAPreset } from "../api/client";
 import { t } from "../i18n";
 
 const timezones = [
@@ -433,6 +448,10 @@ const notifySaving = ref(false);
 const notifyMsg = ref("");
 const notifyError = ref("");
 
+const uaPresets = ref<UAPreset[]>([]);
+const newPresetName = ref("");
+const newPresetValue = ref("");
+
 const notifyEventOptions = computed(() => [
   { value: "failed", label: t("settings.notifyEventFailed") },
   { value: "success", label: t("settings.notifyEventSuccess") },
@@ -456,6 +475,7 @@ onMounted(async () => {
     form.default_max_retry = Number(s.default_max_retry);
     form.check_daily_run = s.check_daily_run !== "false";
     form.default_ua = s.default_ua ?? "";
+    try { uaPresets.value = JSON.parse(s.ua_presets ?? "[]"); } catch { uaPresets.value = []; }
     form.default_play_duration = Number(s.default_play_duration ?? 300);
     form.default_device_name = s.default_device_name ?? "Mac";
     form.ai_base_url = s.ai_base_url ?? "";
@@ -492,6 +512,21 @@ async function saveSettings() {
   }
 }
 
+function addUaPreset() {
+  const name = newPresetName.value.trim();
+  const value = newPresetValue.value.trim();
+  if (!name || !value) return;
+  uaPresets.value.push({ name, value });
+  newPresetName.value = "";
+  newPresetValue.value = "";
+}
+
+function removeUaPreset(index: number) {
+  // If the default UA matches the removed preset, clear it
+  if (form.default_ua === uaPresets.value[index]?.value) form.default_ua = "";
+  uaPresets.value.splice(index, 1);
+}
+
 async function saveEmby() {
   embyMsg.value = "";
   embyError.value = "";
@@ -501,6 +536,7 @@ async function saveEmby() {
       default_ua: form.default_ua,
       default_play_duration: String(form.default_play_duration),
       default_device_name: form.default_device_name,
+      ua_presets: JSON.stringify(uaPresets.value),
     });
     embyMsg.value = t("settings.saved");
   } catch (err: any) {
@@ -715,5 +751,48 @@ async function saveCredentials() {
 .import-mode-hint {
   font-size: 12px;
   color: #888;
+}
+
+.ua-preset-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.ua-preset-name {
+  flex: 0 0 140px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #1a1a2e;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ua-preset-value {
+  flex: 1;
+  font-size: 11px;
+  font-family: monospace;
+  color: #888;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.ua-preset-del {
+  flex-shrink: 0;
+  color: #e63946;
+  padding: 3px 7px;
+}
+
+.ua-preset-add {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 8px;
+  flex-wrap: wrap;
 }
 </style>

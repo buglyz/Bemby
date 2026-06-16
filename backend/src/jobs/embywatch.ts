@@ -1,7 +1,7 @@
 import { db } from '../db/database';
 import type { EmbywatchConfig, EmbywatchLog } from '../types';
 
-const DEFAULT_UA = 'SenPlayer/6.1.0 CFNetwork/1490.0.4 Darwin/23.2.0';
+const DEFAULT_UA = 'SenPlayer/6.1.2 CFNetwork/1490.0.4 Darwin/23.2.0';
 const PROGRESS_INTERVAL_S = 30;
 // Emby uses 100-nanosecond ticks (same as .NET TimeSpan)
 const TICKS_PER_SECOND = 10_000_000;

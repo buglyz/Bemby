@@ -248,6 +248,11 @@ export const statusApi = {
 
 // ── Settings ──────────────────────────────────────────────────────────────────
 
+export type UAPreset = {
+  name: string;
+  value: string;
+};
+
 export type Settings = {
   default_timezone: string;
   default_max_retry: string;
@@ -261,6 +266,7 @@ export type Settings = {
   ai_timeout_ms: string;
   notify_tg_username: string;
   notify_tg_events: string;
+  ua_presets: string;
 };
 
 export const settingsApi = {

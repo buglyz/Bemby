@@ -176,11 +176,20 @@
             </div>
           </div>
           <div class="form-group">
-            <label class="form-label">
-              {{ t('jobs.labelUserAgent') }}
-              <span style="color:#aaa;font-weight:400"> — {{ t('common.blankForDefault') }}</span>
-            </label>
-            <textarea v-model.trim="embyCfg.userAgent" class="form-input" rows="3" placeholder="Leave blank for default" style="resize:vertical" />
+            <label class="form-label">{{ t('jobs.labelUserAgent') }}</label>
+            <select v-model="embyUaDropdown" class="form-select" @change="onUaDropdownChange">
+              <option value="">{{ t('jobs.uaDefault') }}</option>
+              <option v-for="p in uaPresets" :key="p.name" :value="p.name">{{ p.name }}</option>
+              <option value="__custom__">{{ t('jobs.uaCustom') }}</option>
+            </select>
+            <textarea
+              v-if="embyUaDropdown === '__custom__'"
+              v-model.trim="embyCfg.userAgent"
+              class="form-input"
+              rows="2"
+              style="margin-top:6px;resize:vertical"
+              placeholder="Mozilla/5.0 ..."
+            />
           </div>
           <div class="emby-rules-hint">{{ t('jobs.playbackRulesHint') }}</div>
           <div class="form-group" style="margin-top:4px">
@@ -400,7 +409,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
-import { jobsApi, accountsApi, statusApi, settingsApi, logsApi, type Job, type Account, type ScheduleStatus, type Settings, type EmbywatchConfig, type CustomConfig } from '../api/client';
+import { jobsApi, accountsApi, statusApi, settingsApi, logsApi, type Job, type Account, type ScheduleStatus, type Settings, type UAPreset, type EmbywatchConfig, type CustomConfig } from '../api/client';
 import { t, locale } from '../i18n';
 import { usePersistedRef } from '../composables/usePersistedRef';
 
@@ -422,6 +431,9 @@ const jobs = ref<Job[]>([]);
 const accounts = ref<Account[]>([]);
 const scheduleStatus = ref<ScheduleStatus[]>([]);
 const settings = ref<Settings | null>(null);
+const uaPresets = computed<UAPreset[]>(() => {
+  try { return JSON.parse(settings.value?.ua_presets ?? '[]'); } catch { return []; }
+});
 const running = ref(new Set<number>());
 
 const filterType = usePersistedRef<string>('bemby:jobs:filterType', '');
@@ -514,6 +526,7 @@ const embyCfg = reactive<{ username: string; password: string; playDuration: num
   userAgent: '',
   markWatched: true,
 });
+const embyUaDropdown = ref('');
 const embyServer = reactive<{ protocol: 'https' | 'http'; host: string; port: number | '' }>({
   protocol: 'https',
   host: '',
@@ -548,9 +561,23 @@ function setBtnState(val: string) {
   }
 }
 
+function setUaState(ua: string) {
+  if (!ua) { embyUaDropdown.value = ''; return; }
+  const match = uaPresets.value.find(p => p.value === ua);
+  embyUaDropdown.value = match ? match.name : '__custom__';
+}
+
+function onUaDropdownChange() {
+  if (embyUaDropdown.value === '' ) { embyCfg.userAgent = ''; return; }
+  if (embyUaDropdown.value === '__custom__') return;
+  const preset = uaPresets.value.find(p => p.name === embyUaDropdown.value);
+  if (preset) embyCfg.userAgent = preset.value;
+}
+
 function onJobTypeChange() {
   Object.assign(embyCfg, { username: '', password: '', playDuration: '', userAgent: '', markWatched: true });
   Object.assign(embyServer, { protocol: 'https', host: '', port: 443 });
+  embyUaDropdown.value = '';
   form.botUsername = '';
   form.accountId = (form.jobType === 'checkin' || form.jobType === 'custom')
     ? (accounts.value[0]?.id ?? null)
@@ -627,6 +654,7 @@ function openAdd() {
   });
   Object.assign(embyCfg, { username: '', password: '', playDuration: '', userAgent: '', markWatched: true });
   Object.assign(embyServer, { protocol: 'https', host: '', port: 443 });
+  embyUaDropdown.value = '';
   customActions.value = [];
   setCmdState(''); setBtnState('');
   formError.value = '';
@@ -663,9 +691,14 @@ function openEdit(j: Job) {
           userAgent: c.userAgent ?? '',
           markWatched: c.markWatched !== false,
         });
-      } catch { Object.assign(embyCfg, { username: '', password: '', playDuration: '', userAgent: '', markWatched: true }); }
+        setUaState(c.userAgent ?? '');
+      } catch {
+        Object.assign(embyCfg, { username: '', password: '', playDuration: '', userAgent: '', markWatched: true });
+        embyUaDropdown.value = '';
+      }
     } else {
       Object.assign(embyCfg, { username: '', password: '', playDuration: '', userAgent: '', markWatched: true });
+      embyUaDropdown.value = '';
     }
   } else if (j.jobType === 'custom') {
     Object.assign(embyCfg, { username: '', password: '', playDuration: '', userAgent: '', markWatched: true });

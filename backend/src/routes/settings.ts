@@ -19,6 +19,7 @@ const ALLOWED_KEYS = [
   "ai_timeout_ms",
   "notify_tg_username",
   "notify_tg_events",
+  "ua_presets",
 ];
 
 router.get("/", (_req, res) => {

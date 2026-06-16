@@ -4,4 +4,9 @@ import router from './router';
 import './style.css';
 import '@fortawesome/fontawesome-free/css/all.min.css';
 
-createApp(App).use(router).mount('#app');
+(async () => {
+  const app = createApp(App);
+  app.use(router);
+  await router.isReady();
+  app.mount('#app');
+})();

@@ -31,11 +31,11 @@
           </div>
         </a>
       </div>
-      <router-link class="nav-link" to="/accounts" @click="sidebarOpen = false">{{ t('nav.accounts') }}</router-link>
-      <router-link class="nav-link" to="/jobs" @click="sidebarOpen = false">{{ t('nav.jobs') }}</router-link>
-      <router-link class="nav-link" to="/settings" @click="sidebarOpen = false">{{ t('nav.settings') }}</router-link>
-      <router-link class="nav-link" to="/logs" @click="sidebarOpen = false">{{ t('nav.logs') }}</router-link>
-      <router-link class="nav-link" to="/help" @click="sidebarOpen = false">{{ t('nav.help') }}</router-link>
+      <a class="nav-link" href="#" :class="{ active: currentView === 'accounts' }" @click.prevent="setView('accounts')">{{ t('nav.accounts') }}</a>
+      <a class="nav-link" href="#" :class="{ active: currentView === 'jobs' }" @click.prevent="setView('jobs')">{{ t('nav.jobs') }}</a>
+      <a class="nav-link" href="#" :class="{ active: currentView === 'settings' }" @click.prevent="setView('settings')">{{ t('nav.settings') }}</a>
+      <a class="nav-link" href="#" :class="{ active: currentView === 'logs' }" @click.prevent="setView('logs')">{{ t('nav.logs') }}</a>
+      <a class="nav-link" href="#" :class="{ active: currentView === 'help' }" @click.prevent="setView('help')">{{ t('nav.help') }}</a>
       <div class="sidebar-footer">
         <div class="lang-switcher">
           <button class="lang-btn" @click="setLocale(locale === 'zh' ? 'en' : 'zh')">
@@ -53,16 +53,44 @@
     </nav>
 
     <main class="main">
-      <router-view />
+      <component :is="currentComponent" />
     </main>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, type Component } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { version as APP_VERSION } from '../package.json';
 import { t, locale, setLocale } from './i18n';
+import AccountsView from './views/AccountsView.vue';
+import JobsView from './views/JobsView.vue';
+import LogsView from './views/LogsView.vue';
+import SettingsView from './views/SettingsView.vue';
+import HelpView from './views/HelpView.vue';
+
+type ViewName = 'accounts' | 'jobs' | 'settings' | 'logs' | 'help';
+
+const LAST_VIEW_KEY = 'bemby:lastView';
+const VALID_VIEWS: ViewName[] = ['accounts', 'jobs', 'settings', 'logs', 'help'];
+
+const viewComponents: Record<ViewName, Component> = {
+  accounts: AccountsView,
+  jobs: JobsView,
+  settings: SettingsView,
+  logs: LogsView,
+  help: HelpView,
+};
+
+const savedView = localStorage.getItem(LAST_VIEW_KEY) as ViewName;
+const currentView = ref<ViewName>(VALID_VIEWS.includes(savedView) ? savedView : 'accounts');
+const currentComponent = computed(() => viewComponents[currentView.value]);
+
+function setView(view: ViewName) {
+  currentView.value = view;
+  localStorage.setItem(LAST_VIEW_KEY, view);
+  sidebarOpen.value = false;
+}
 
 const route = useRoute();
 const router = useRouter();

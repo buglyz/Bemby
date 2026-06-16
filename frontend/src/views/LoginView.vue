@@ -75,7 +75,7 @@ async function submit() {
   try {
     const { token } = await authApi.login(form.username, form.password, captchaToken.value, form.captchaAnswer);
     localStorage.setItem('token', token);
-    router.push('/accounts');
+    router.push('/');
   } catch (err: unknown) {
     const status = (err as { response?: { status?: number } })?.response?.status;
     const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? '';

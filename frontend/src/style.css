@@ -101,7 +101,8 @@ body {
 	color: #fff;
 }
 
-.nav-link.router-link-active {
+.nav-link.router-link-active,
+.nav-link.active {
 	background: #16213e;
 	color: #fff;
 }

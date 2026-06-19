@@ -642,7 +642,6 @@ function onJobTypeChange() {
   Object.assign(embyCfg, { username: '', password: '', playDuration: '', userAgent: '', markWatched: true });
   Object.assign(embyServer, { protocol: 'https', host: '', port: 443 });
   embyUaDropdown.value = '';
-  form.botUsername = '';
   form.accountId = (form.jobType === 'checkin' || form.jobType === 'custom')
     ? (accounts.value[0]?.id ?? null)
     : null;

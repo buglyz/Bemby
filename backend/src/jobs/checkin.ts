@@ -617,12 +617,17 @@ export async function runCheckin(
           const editPromise = waitForBotMessageEdit(client, buttonsMsg.id, 10_000, signal);
           const newMsgPromise = waitForNewBotMessage(client, botUsername, 10_000, signal);
 
-          const callbackData = (btn as Api.KeyboardButtonCallback).data;
+          if (!(btn instanceof Api.KeyboardButtonCallback)) {
+            const typeName = (btn as any).className ?? btn.constructor?.name ?? 'unknown';
+            throw new Error(
+              `Button "${btnText}" is a ${typeName}, not a callback button — only KeyboardButtonCallback can be clicked automatically`,
+            );
+          }
           const t_click = Date.now();
           const answer = await client.invoke(new Api.messages.GetBotCallbackAnswer({
             peer,
             msgId: buttonsMsg.id,
-            data: callbackData,
+            data: btn.data,
           })) as Api.messages.BotCallbackAnswer;
           log.buttonClickMs = Date.now() - t_click;
           log.buttonClicked = btnText;

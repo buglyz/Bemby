@@ -83,18 +83,17 @@ docker run -d \
 
 ### Railway（推荐）
 
-Railway 会自动识别项目中的 Dockerfile 并完成构建。新账户每月赠送 **$5 免费额度**，无需绑定信用卡。
+Railway 会自动识别项目中的 `railway.toml` 和 Dockerfile 并完成构建。新账户每月赠送 **$5 免费额度**，无需绑定信用卡。
 
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new/template?template=https://github.com/liveinaus/Bemby)
-
-部署完成后需完成以下配置：
-
-1. 进入服务的 **Variables** 标签页，设置以下变量：
+1. 登录 [railway.app](https://railway.app) 后点击 **New Project**
+2. 选择 **Deploy from GitHub repo**，搜索并选择 `liveinaus/Bemby`
+3. Railway 检测到 `railway.toml` 后会自动使用 Dockerfile 构建
+4. 部署完成后进入服务的 **Variables** 标签页，设置以下变量：
    - `ADMIN_USERNAME` — 管理员用户名
    - `ADMIN_PASSWORD` — 管理员密码
    - `JWT_SECRET` — 随机长字符串，可用 `openssl rand -hex 32` 生成
-2. 进入服务的 **Volumes** 标签页，添加一个持久化卷，挂载路径设为 `/app/data`，防止重启后数据丢失。
-3. 可选：添加 `TZ=Asia/Shanghai` 等时区变量。
+5. 进入 **Volumes** 标签页，添加持久化卷，挂载路径设为 `/app/data`，防止重启后数据丢失
+6. 可选：添加 `TZ=Asia/Shanghai` 等时区变量
 
 ### Render
 
@@ -405,18 +404,17 @@ Not comfortable with the command line or Docker? Deploy Bemby to a cloud platfor
 
 #### Railway *(recommended)*
 
-Railway auto-detects the Dockerfile and builds the image for you. New accounts get **$5 free credit per month** with no credit card required.
+Railway auto-detects `railway.toml` and builds from the Dockerfile automatically. New accounts get **$5 free credit per month** with no credit card required.
 
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new/template?template=https://github.com/liveinaus/Bemby)
-
-After the deploy finishes:
-
-1. Open the service **Variables** tab and set:
+1. Log in to [railway.app](https://railway.app) and click **New Project**
+2. Choose **Deploy from GitHub repo** and select `liveinaus/Bemby`
+3. Railway detects `railway.toml` and builds using the Dockerfile
+4. Once deployed, open the service **Variables** tab and set:
    - `ADMIN_USERNAME` — your admin username
    - `ADMIN_PASSWORD` — your admin password
-   - `JWT_SECRET` — any long random string (e.g. run `openssl rand -hex 32`)
-2. Open the service **Volumes** tab, add a volume, and set the mount path to `/app/data` — this keeps the database across restarts.
-3. Optional: add `TZ=Australia/Sydney` (or your local timezone).
+   - `JWT_SECRET` — any long random string (e.g. `openssl rand -hex 32`)
+5. Open the **Volumes** tab, add a volume, and set the mount path to `/app/data` — this keeps the database across restarts
+6. Optional: add `TZ=Australia/Sydney` (or your local timezone)
 
 #### Render
 

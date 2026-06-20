@@ -1,4 +1,3 @@
-import { DateTime } from "luxon";
 import { db } from "./db/database";
 import { runJob, type JobDetailLog } from "./jobs/runner";
 import {
@@ -9,6 +8,7 @@ import {
 } from "./jobs/notify";
 import type { Job, TgAccount } from "./types";
 import { registerJob, unregisterJob, registerLiveDetail, clearLiveDetail } from "./jobs/cancellation";
+import { toMinutes, pickNextRun } from "./scheduler-utils";
 
 type ScheduleEntry = {
   job: Job;
@@ -19,61 +19,6 @@ type ScheduleEntry = {
 
 const schedule = new Map<number, ScheduleEntry>();
 
-function toMinutes(hhmm: number): number {
-  return Math.floor(hhmm / 100) * 60 + (hhmm % 100);
-}
-
-function pickNextRun(
-  windowStart: number,
-  windowEnd: number,
-  tz: string,
-  forceTomorrow = false,
-): DateTime {
-  const startMin = toMinutes(windowStart);
-  const endMin = toMinutes(windowEnd);
-  const now = DateTime.now().setZone(tz);
-  const nowMin = now.hour * 60 + now.minute;
-
-  if (!forceTomorrow) {
-    if (nowMin < startMin) {
-      // Window hasn't started yet today — pick anywhere in the full window
-      const randomMin =
-        startMin + Math.floor(Math.random() * Math.max(1, endMin - startMin));
-      return now.set({
-        hour: Math.floor(randomMin / 60),
-        minute: randomMin % 60,
-        second: 0,
-        millisecond: 0,
-      });
-    }
-    if (nowMin < endMin) {
-      // Inside the window — pick from now+1 min to end
-      const remaining = endMin - (nowMin + 1);
-      if (remaining > 0) {
-        const randomMin = nowMin + 1 + Math.floor(Math.random() * remaining);
-        return now.set({
-          hour: Math.floor(randomMin / 60),
-          minute: randomMin % 60,
-          second: 0,
-          millisecond: 0,
-        });
-      }
-      // Under a minute left in today's window — fall through to tomorrow
-    }
-  }
-
-  // Window has passed today or forceTomorrow — pick within window tomorrow
-  const randomMin =
-    startMin + Math.floor(Math.random() * Math.max(1, endMin - startMin));
-  return now
-    .plus({ days: 1 })
-    .set({
-      hour: Math.floor(randomMin / 60),
-      minute: randomMin % 60,
-      second: 0,
-      millisecond: 0,
-    });
-}
 
 function checkDailyRunEnabled(): boolean {
   const row = db
@@ -148,7 +93,7 @@ function loadEligibleJobs(): Array<{ job: Job; account: TgAccount | null }> {
   }));
 }
 
-async function executeJob(job: Job, account: TgAccount | null): Promise<void> {
+export async function executeJob(job: Job, account: TgAccount | null): Promise<void> {
   // Re-fetch job settings so changes made after scheduling take effect
   const freshJob = db.prepare("SELECT * FROM jobs WHERE id = ?").get(job.id) as any;
   if (freshJob) {

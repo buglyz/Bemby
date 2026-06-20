@@ -102,7 +102,7 @@ export type ParsedMessages = {
 // ── AI button selection ───────────────────────────────────────────────────────
 
 // Strips HTML tags to plain text for the AI prompt
-function htmlToText(html: string): string {
+export function htmlToText(html: string): string {
   return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 }
 

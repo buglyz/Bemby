@@ -6,7 +6,7 @@ const router = Router();
 
 type SettingRow = { key: string; value: string };
 
-const ALLOWED_KEYS = [
+export const ALLOWED_KEYS = [
   "default_timezone",
   "default_max_retry",
   "check_daily_run",

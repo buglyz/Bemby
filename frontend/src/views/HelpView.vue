@@ -286,6 +286,52 @@
         </div>
       </div>
 
+      <!-- Templates -->
+      <div class="card">
+        <div class="card-body">
+          <template v-if="locale === 'zh'">
+            <div class="card-section-title">模板</div>
+            <p class="help-para">
+              模板存储可复用的任务配置。将任务关联至模板后，模板的变更会自动同步至所有关联任务。
+            </p>
+            <div class="card-section-title" style="margin-top:16px;font-size:11px">分享模板</div>
+            <p class="help-para">
+              点击任意行的分享图标，将该模板以 JSON 格式复制至剪贴板。
+              如需同时分享多个模板，勾选对应行左侧的复选框，然后点击页头的<strong>分享所选 (N)</strong> 按钮，所有选中模板将以 JSON 数组形式一并复制。
+            </p>
+            <div class="card-section-title" style="margin-top:16px;font-size:11px">导入模板</div>
+            <p class="help-para">
+              点击页头的<strong>导入模板</strong>按钮，在弹出的文本框中粘贴 JSON 内容并确认：
+            </p>
+            <ul class="help-steps">
+              <li>粘贴单个 JSON 对象 <code>{"{"}"name": "..."{"}"}</code> — 导入一个模板</li>
+              <li>粘贴 JSON 数组 <code>[{"{"}"name": "..."{"}"}, ...]</code> — 批量导入多个模板</li>
+            </ul>
+          </template>
+          <template v-else>
+            <div class="card-section-title">Templates</div>
+            <p class="help-para">
+              Templates store reusable job configurations. Jobs linked to a template inherit its settings;
+              changes to the template propagate to all linked jobs automatically.
+            </p>
+            <div class="card-section-title" style="margin-top:16px;font-size:11px">Sharing templates</div>
+            <p class="help-para">
+              Click the share icon on any template row to copy it as JSON to the clipboard.
+              To share multiple templates at once, tick the checkboxes on the rows you want and click
+              <strong>Share Selected (N)</strong> in the page header — all selected templates are copied as a JSON array.
+            </p>
+            <div class="card-section-title" style="margin-top:16px;font-size:11px">Importing templates</div>
+            <p class="help-para">
+              Click <strong>Import Template</strong> in the header, paste JSON into the textarea, and confirm:
+            </p>
+            <ul class="help-steps">
+              <li>Paste a single JSON object <code>{"{"}"name": "..."{"}"}</code> to import one template.</li>
+              <li>Paste a JSON array <code>[{"{"}"name": "..."{"}"}, ...]</code> to import multiple templates at once.</li>
+            </ul>
+          </template>
+        </div>
+      </div>
+
       <!-- Settings -->
       <div class="card">
         <div class="card-body">
@@ -369,6 +415,13 @@
               内容名称（及剧集信息）、剧集总时长、播放起始与结束位置、实际观看时长、是否已标记为已看。
             </p>
 
+            <div class="card-section-title" style="margin-top:16px;font-size:11px">归档日志</div>
+            <p class="help-para">
+              点击非运行中日志行右侧的归档图标，可将该记录软隐藏（不删除数据）。
+              归档记录默认不显示；开启列表顶部的<strong>显示已移除</strong>开关可查看所有归档记录。
+              点击还原图标可取消归档。
+            </p>
+
             <div class="card-section-title" style="margin-top:16px;font-size:11px">开发者日志</div>
             <p class="help-para">
               日志列表顶部有<strong>开发者</strong>开关，开启后可查看以下调试信息：
@@ -419,6 +472,13 @@
             <p class="help-para">
               Click any Emby Watch log row to expand a playback summary card showing: content title (and series/episode info),
               total runtime, start and end positions, actual duration watched, and whether the item was marked as watched.
+            </p>
+
+            <div class="card-section-title" style="margin-top:16px;font-size:11px">Archiving logs</div>
+            <p class="help-para">
+              Click the archive icon on any non-running log row to soft-hide it without deleting the data.
+              Archived records are hidden by default; toggle <strong>Show Retired</strong> at the top of the list to include them.
+              Click the restore icon to un-archive.
             </p>
 
             <div class="card-section-title" style="margin-top:16px;font-size:11px">Developer Logs</div>

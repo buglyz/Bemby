@@ -32,7 +32,7 @@ function resolveProxyUrl(jobConfig: string | null, templateId: number | null | u
   } catch { return undefined; }
 }
 
-function parseTgProxy(proxyUrl: string | undefined): TgProxy | undefined {
+export function parseTgProxy(proxyUrl: string | undefined): TgProxy | undefined {
   if (!proxyUrl) return undefined;
   try {
     const u = new URL(proxyUrl);

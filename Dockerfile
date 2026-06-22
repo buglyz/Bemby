@@ -32,4 +32,5 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD wget -qO /dev/null http://127.0.0.1:${PORT:-3000}/api/health || exit 1
 
-CMD ["node", "dist/server.js"]
+# Prefer IPv4 to avoid IPv6 routing issues in container environments
+CMD ["node", "--dns-result-order=ipv4first", "dist/server.js"]

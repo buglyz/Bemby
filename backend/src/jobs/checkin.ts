@@ -617,8 +617,9 @@ export async function runCheckin(
         if (matches) {
           // Start watching BEFORE invoking to avoid a race condition.
           // Bots respond either by editing the original message or sending a new one.
-          const editPromise = waitForBotMessageEdit(client, buttonsMsg.id, 10_000, signal);
-          const newMsgPromise = waitForNewBotMessage(client, botUsername, 10_000, signal);
+          // Use replyTimeoutMs so slow bots (>10s) still get captured.
+          const editPromise = waitForBotMessageEdit(client, buttonsMsg.id, replyTimeoutMs, signal);
+          const newMsgPromise = waitForNewBotMessage(client, botUsername, replyTimeoutMs, signal);
 
           if (!(btn instanceof Api.KeyboardButtonCallback)) {
             const typeName = (btn as any).className ?? btn.constructor?.name ?? 'unknown';

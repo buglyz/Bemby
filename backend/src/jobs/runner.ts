@@ -2,6 +2,7 @@ import type { Job, TgAccount, EmbywatchConfig, EmbywatchLog } from '../types';
 import { runCheckin, CheckinError, type CheckinAttemptLog } from './checkin';
 import { runEmbywatch } from './embywatch';
 import { runCustom, CustomJobError, type CustomJobLog } from './custom';
+import { db } from '../db/database';
 
 export type JobDetailLog = CheckinAttemptLog | EmbywatchLog | CustomJobLog;
 
@@ -38,9 +39,18 @@ export async function runJob(
           break;
         }
         case 'embywatch': {
-          let config: EmbywatchConfig = JSON.parse(job.config ?? '{}');
-          // Migrate legacy double-encoded records
-          if (typeof config === 'string') config = JSON.parse(config) as EmbywatchConfig;
+          let jobCfg: Partial<EmbywatchConfig> = JSON.parse(job.config ?? '{}');
+          if (typeof jobCfg === 'string') jobCfg = JSON.parse(jobCfg as unknown as string);
+          let config: EmbywatchConfig = jobCfg as EmbywatchConfig;
+          // Template-linked jobs: merge template config (settings) with job config (credentials)
+          if (job.templateId) {
+            const tplRow = db.prepare('SELECT config FROM job_templates WHERE id = ?').get(job.templateId) as { config: string | null } | undefined;
+            if (tplRow?.config) {
+              let tplCfg = JSON.parse(tplRow.config);
+              if (typeof tplCfg === 'string') tplCfg = JSON.parse(tplCfg);
+              config = { ...tplCfg, ...jobCfg } as EmbywatchConfig;
+            }
+          }
           if (!config.username || !config.password) throw new Error('Emby username and password are required');
           const log = await runEmbywatch(job.botUsername, config);
           detailLogs?.push(log);

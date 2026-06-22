@@ -99,18 +99,8 @@
             </div>
           </div>
 
-          <!-- embywatch-specific fields -->
+          <!-- embywatch-specific fields (credentials are set per-job, not in template) -->
           <template v-if="form.jobType === 'embywatch'">
-            <div class="form-row">
-              <div class="form-group">
-                <label class="form-label">{{ t('jobs.labelEmbyUser') }} <span style="color:#e63946">*</span></label>
-                <input v-model.trim="embyCfg.username" class="form-input" placeholder="Username" autocomplete="off" />
-              </div>
-              <div class="form-group">
-                <label class="form-label">{{ t('jobs.labelEmbyPass') }} <span style="color:#e63946">*</span></label>
-                <input v-model="embyCfg.password" class="form-input" type="password" placeholder="Password" autocomplete="new-password" />
-              </div>
-            </div>
             <div class="form-row">
               <div class="form-group">
                 <label class="form-label">
@@ -572,11 +562,12 @@ function handleEmbyHostPaste(event: ClipboardEvent) {
 
 function buildConfig(): EmbywatchConfig | CustomConfig | null {
   if (form.jobType === 'embywatch') {
-    const cfg: EmbywatchConfig = { username: embyCfg.username, password: embyCfg.password };
+    // Credentials (username/password) are job-specific; template only stores playback settings
+    const cfg: Partial<EmbywatchConfig> = {};
     if (embyCfg.playDuration !== '') cfg.playDuration = Number(embyCfg.playDuration as string | number);
     if (embyCfg.userAgent) cfg.userAgent = embyCfg.userAgent;
     cfg.markWatched = embyCfg.markWatched;
-    return cfg;
+    return cfg as EmbywatchConfig;
   }
   if (form.jobType === 'custom') {
     const cfg: CustomConfig = {
@@ -674,8 +665,8 @@ function openEdit(tpl: JobTemplate) {
         let c = JSON.parse(tpl.config) as EmbywatchConfig | string;
         if (typeof c === 'string') c = JSON.parse(c) as EmbywatchConfig;
         Object.assign(embyCfg, {
-          username: c.username ?? '',
-          password: c.password ?? '',
+          username: '',
+          password: '',
           playDuration: c.playDuration ?? '',
           userAgent: c.userAgent ?? '',
           markWatched: c.markWatched !== false,
@@ -748,10 +739,7 @@ async function saveTemplate() {
     if (!embyServer.host) { formError.value = t('jobs.errors.hostRequired'); return; }
     const portPart = (embyServer.port as number | string) !== '' ? `:${embyServer.port}` : '';
     form.botUsername = `${embyServer.protocol}://${embyServer.host.replace(/^https?:\/\//, '')}${portPart}`;
-    if (!embyCfg.username || !embyCfg.password) {
-      formError.value = t('jobs.errors.embyCredRequired');
-      return;
-    }
+    // Credentials are set per-job, not in the template
   }
   if (form.jobType === 'checkin' && !form.botUsername) {
     formError.value = t('jobs.errors.botRequired');

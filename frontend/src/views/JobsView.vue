@@ -191,8 +191,8 @@
           </div>
         </div>
 
-        <!-- embywatch-specific fields (hidden when template controls them) -->
-        <template v-if="form.jobType === 'embywatch' && !form.templateId">
+        <!-- Emby credentials (always job-specific, shown even for template-linked jobs) -->
+        <template v-if="form.jobType === 'embywatch'">
           <div class="form-row">
             <div class="form-group">
               <label class="form-label">{{ t('jobs.labelEmbyUser') }} <span style="color:#e63946">*</span></label>
@@ -203,6 +203,10 @@
               <input v-model="embyCfg.password" class="form-input" type="password" placeholder="Password" autocomplete="new-password" />
             </div>
           </div>
+        </template>
+
+        <!-- embywatch-specific fields (hidden when template controls them) -->
+        <template v-if="form.jobType === 'embywatch' && !form.templateId">
           <div class="form-row">
             <div class="form-group">
               <label class="form-label">
@@ -1006,6 +1010,10 @@ function handleEmbyHostPaste(event: ClipboardEvent) {
 
 function buildConfig(): EmbywatchConfig | CustomConfig | null {
   if (form.jobType === 'embywatch') {
+    if (form.templateId) {
+      // Template provides all settings; job only stores credentials
+      return { username: embyCfg.username, password: embyCfg.password } as EmbywatchConfig;
+    }
     const cfg: EmbywatchConfig = { username: embyCfg.username, password: embyCfg.password };
     if (embyCfg.playDuration !== '') cfg.playDuration = Number(embyCfg.playDuration as string | number);
     if (embyCfg.userAgent) cfg.userAgent = embyCfg.userAgent;

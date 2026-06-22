@@ -1,6 +1,13 @@
-import { ProxyAgent, fetch as undiciFetch } from 'undici';
+import { Agent, ProxyAgent, fetch as undiciFetch } from 'undici';
+import { lookup } from 'node:dns';
 import { db } from '../db/database';
 import type { EmbywatchConfig, EmbywatchLog } from '../types';
+
+// Forces IPv4-only DNS resolution so Happy Eyeballs doesn't waste the connect
+// timeout on broken IPv6 routes in container environments.
+const ipv4Agent = new Agent({
+  connect: { lookup: (hostname, opts, cb) => lookup(hostname, { ...opts, family: 4 }, cb) },
+});
 
 const DEFAULT_UA = 'SenPlayer/6.1.2 CFNetwork/1490.0.4 Darwin/23.2.0';
 const PROGRESS_INTERVAL_S = 30;
@@ -40,17 +47,12 @@ async function embyRequest<T = any>(
 
   let res: Response;
   try {
-    if (opts.proxyUrl) {
-      // Use undici only when a proxy dispatcher is needed
-      res = await undiciFetch(url, {
-        method,
-        headers,
-        body,
-        dispatcher: new ProxyAgent(opts.proxyUrl),
-      } as Parameters<typeof undiciFetch>[1]) as unknown as Response;
-    } else {
-      res = await fetch(url, { method, headers, body });
-    }
+    res = await undiciFetch(url, {
+      method,
+      headers,
+      body,
+      dispatcher: opts.proxyUrl ? new ProxyAgent(opts.proxyUrl) : ipv4Agent,
+    } as Parameters<typeof undiciFetch>[1]) as unknown as Response;
   } catch (err: any) {
     // Network-level failure (ECONNREFUSED, ENOTFOUND, timeout, etc.)
     const cause = err?.cause?.message ?? err?.cause?.code ?? '';

@@ -3,7 +3,11 @@
     <div class="page-header">
       <h2 class="page-title">{{ t('templates.title') }}</h2>
       <div style="display:flex;gap:8px">
-        <button class="btn btn-ghost" @click="openImport"><i class="fa-solid fa-file-import"></i> {{ t('templates.importBtn') }}</button>
+        <button v-if="selectedIds.length" class="btn btn-secondary" @click="shareSelected">
+          <i :class="sharedMulti ? 'fa-solid fa-check' : 'fa-solid fa-share-nodes'"></i>
+          {{ t('templates.shareSelectedBtn').replace('{n}', String(selectedIds.length)) }}
+        </button>
+        <button class="btn btn-secondary" @click="openImport"><i class="fa-solid fa-file-import"></i> {{ t('templates.importBtn') }}</button>
         <button class="btn btn-primary" @click="openAdd"><i class="fa-solid fa-plus"></i> {{ t('templates.addBtn') }}</button>
       </div>
     </div>
@@ -13,6 +17,9 @@
         <table>
           <thead>
             <tr>
+              <th style="width:36px">
+                <input type="checkbox" :checked="allSelected" :indeterminate="selectedIds.length > 0 && !allSelected" @change="toggleAll" />
+              </th>
               <th>{{ t('common.name') }}</th>
               <th>{{ t('templates.colType') }}</th>
               <th class="col-hide-mobile">{{ t('templates.colBotUrl') }}</th>
@@ -22,9 +29,10 @@
           </thead>
           <tbody>
             <tr v-if="!templates.length">
-              <td colspan="5" class="empty">{{ t('templates.noTemplates') }}</td>
+              <td colspan="6" class="empty">{{ t('templates.noTemplates') }}</td>
             </tr>
             <tr v-for="tpl in templates" :key="tpl.id">
+              <td><input type="checkbox" :checked="selectedIds.includes(tpl.id)" @change="toggleSelect(tpl.id)" /></td>
               <td>{{ tpl.name }}</td>
               <td><span :class="jobTypeBadge(tpl.jobType)">{{ t(`logs.jobType.${tpl.jobType}`) }}</span></td>
               <td class="col-hide-mobile">{{ tpl.jobType === 'embywatch' ? tpl.botUsername : '@' + tpl.botUsername }}</td>
@@ -430,6 +438,19 @@ const importError = ref('');
 const importing = ref(false);
 const copiedTplId = ref<number | null>(null);
 
+const selectedIds = ref<number[]>([]);
+const sharedMulti = ref(false);
+const allSelected = computed(() => templates.value.length > 0 && selectedIds.value.length === templates.value.length);
+
+function toggleAll() {
+  selectedIds.value = allSelected.value ? [] : templates.value.map(t => t.id);
+}
+function toggleSelect(id: number) {
+  const idx = selectedIds.value.indexOf(id);
+  if (idx === -1) selectedIds.value.push(id);
+  else selectedIds.value.splice(idx, 1);
+}
+
 const customActions = ref<CustomActionForm[]>([]);
 const customJobMaxRetries = ref(1);
 
@@ -775,12 +796,18 @@ async function remove(id: number) {
 
 const SHARE_KEYS: (keyof JobTemplate)[] = ['name', 'jobType', 'botUsername', 'timezone', 'replyTimeoutMs', 'retryMax', 'config', 'startCommand', 'checkinButton'];
 
-async function shareTemplate(tpl: JobTemplate) {
-  const text = JSON.stringify(Object.fromEntries(SHARE_KEYS.map(k => [k, tpl[k]])), null, 2);
+async function shareSelected() {
+  const selected = templates.value.filter(t => selectedIds.value.includes(t.id));
+  const text = JSON.stringify(selected.map(tpl => Object.fromEntries(SHARE_KEYS.map(k => [k, tpl[k]]))), null, 2);
+  await writeClipboard(text);
+  sharedMulti.value = true;
+  setTimeout(() => { sharedMulti.value = false; }, 1500);
+}
+
+async function writeClipboard(text: string) {
   try {
     await navigator.clipboard.writeText(text);
   } catch {
-    // fallback for HTTP (non-secure) contexts
     const el = document.createElement('textarea');
     el.value = text;
     el.style.position = 'fixed';
@@ -790,6 +817,11 @@ async function shareTemplate(tpl: JobTemplate) {
     document.execCommand('copy');
     document.body.removeChild(el);
   }
+}
+
+async function shareTemplate(tpl: JobTemplate) {
+  const text = JSON.stringify(Object.fromEntries(SHARE_KEYS.map(k => [k, tpl[k]])), null, 2);
+  await writeClipboard(text);
   copiedTplId.value = tpl.id;
   setTimeout(() => { copiedTplId.value = null; }, 1500);
 }
@@ -800,27 +832,34 @@ function openImport() {
   showImport.value = true;
 }
 
+function normaliseImportItem(item: Record<string, unknown>) {
+  if (typeof item.config === 'string') {
+    try { item.config = JSON.parse(item.config); } catch { /* leave as-is */ }
+  }
+  return item;
+}
+
 async function doImport() {
   importError.value = '';
-  let parsed: Record<string, unknown>;
+  let raw: unknown;
   try {
-    parsed = JSON.parse(importJson.value);
+    raw = JSON.parse(importJson.value);
   } catch {
     importError.value = t('templates.importError');
     return;
   }
-  if (!('name' in parsed) || !('jobType' in parsed)) {
+
+  const items: Record<string, unknown>[] = Array.isArray(raw) ? raw : [raw as Record<string, unknown>];
+  if (!items.length || !('name' in items[0]) || !('jobType' in items[0])) {
     importError.value = t('templates.importError');
     return;
   }
-  // config arrives as a string from the exported JSON; parse it to an object
-  // so the backend doesn't double-stringify it
-  if (typeof parsed.config === 'string') {
-    try { parsed.config = JSON.parse(parsed.config); } catch { /* leave as-is */ }
-  }
+
   importing.value = true;
   try {
-    await templatesApi.create(parsed as Partial<JobTemplate>);
+    for (const item of items) {
+      await templatesApi.create(normaliseImportItem(item) as Partial<JobTemplate>);
+    }
     showImport.value = false;
     await loadTemplates();
   } catch (err: any) {

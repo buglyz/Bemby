@@ -487,6 +487,20 @@
       </div>
     </div>
 
+    <!-- Disable confirmation modal -->
+    <div v-if="confirmDisableJob" class="modal-backdrop">
+      <div class="modal" style="width:360px">
+        <h3 class="modal-title">{{ t('common.disable') }}</h3>
+        <div class="modal-body">
+          <p>{{ t('jobs.confirmDisable') }}</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-ghost" @click="confirmDisableJob = null"><i class="fa-solid fa-xmark"></i> {{ t('common.cancel') }}</button>
+          <button class="btn btn-danger" @click="executeDisable"><i class="fa-solid fa-ban"></i> {{ t('common.disable') }}</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Mobile action sheet -->
     <div v-if="actionMenuJob" class="action-sheet-backdrop" @click="actionMenuJob = null">
       <div class="action-sheet" @click.stop>
@@ -499,6 +513,10 @@
         </button>
         <button class="action-sheet-btn" @click="openDuplicate(actionMenuJob); actionMenuJob = null">
           <i class="fa-solid fa-copy"></i> {{ t('common.duplicate') }}
+        </button>
+        <button class="action-sheet-btn" @click="toggleEnabled(actionMenuJob); actionMenuJob = null">
+          <i :class="actionMenuJob.enabled ? 'fa-solid fa-ban' : 'fa-solid fa-circle-check'"></i>
+          {{ actionMenuJob.enabled ? t('common.disable') : t('common.enable') }}
         </button>
         <button class="action-sheet-btn danger" @click="remove(actionMenuJob.id); actionMenuJob = null">
           <i class="fa-solid fa-trash"></i> {{ t('common.delete') }}
@@ -565,6 +583,7 @@ const sortKey = usePersistedRef<string>('bemby:jobs:sortKey', '');
 const sortDir = usePersistedRef<'asc' | 'desc'>('bemby:jobs:sortDir', 'asc');
 const selectedJobId = ref<number | null>(null);
 const actionMenuJob = ref<Job | null>(null);
+const confirmDisableJob = ref<Job | null>(null);
 
 function setSort(key: string) {
   if (sortKey.value === key) {
@@ -1100,9 +1119,19 @@ async function confirmExtract() {
 }
 
 async function toggleEnabled(j: Job) {
-  if (j.enabled && !confirm(t('jobs.confirmDisable'))) return;
-  await jobsApi.update(j.id, { enabled: !j.enabled });
+  if (j.enabled) {
+    confirmDisableJob.value = j;
+    return;
+  }
+  await jobsApi.update(j.id, { enabled: true });
   await Promise.all([loadJobs(), loadStatus()]);
+}
+
+async function executeDisable() {
+  if (!confirmDisableJob.value) return;
+  await jobsApi.update(confirmDisableJob.value.id, { enabled: false });
+  await Promise.all([loadJobs(), loadStatus()]);
+  confirmDisableJob.value = null;
 }
 
 async function remove(id: number) {

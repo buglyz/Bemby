@@ -194,7 +194,7 @@ router.put("/:id", (req, res) => {
     isLinked ? existing.timezone : (timezone ?? existing.timezone),
     isLinked ? existing.reply_timeout_ms : Number(replyTimeoutMs ?? existing.reply_timeout_ms),
     isLinked ? existing.retry_max : Number(retryMax ?? existing.retry_max),
-    isLinked ? existing.enabled : (enabled !== undefined ? (enabled ? 1 : 0) : existing.enabled),
+    enabled !== undefined ? (enabled ? 1 : 0) : existing.enabled,
     isLinked ? existing.config : (config !== undefined
       ? config != null
         ? JSON.stringify(config)

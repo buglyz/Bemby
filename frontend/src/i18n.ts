@@ -35,6 +35,8 @@ const zh = {
     all: "全部",
     default: "默认",
     custom: "自定义",
+    enable: "启用",
+    disable: "禁用",
   },
   login: {
     subtitle: "登录管理面板",
@@ -376,6 +378,8 @@ const en: typeof zh = {
     all: "All",
     default: "Default",
     custom: "Custom",
+    enable: "Enable",
+    disable: "Disable",
   },
   login: {
     subtitle: "Sign in to access the admin panel",

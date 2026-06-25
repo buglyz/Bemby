@@ -13,6 +13,8 @@ import {
   muteDialog,
   pinDialog,
   clickButton,
+  sendReaction,
+  getThreadMessages,
   subscribeToMessages,
   getFolders,
 } from "../tg/liveClient";
@@ -61,14 +63,22 @@ router.get("/:accountId/messages/:chatId", async (req, res) => {
 router.post("/:accountId/messages/:chatId", async (req, res) => {
   const accountId = Number(req.params.accountId);
   const chatId = req.params.chatId;
-  const { text } = req.body as { text?: string };
+  const { text, replyToMsgId } = req.body as {
+    text?: string;
+    replyToMsgId?: number;
+  };
   if (!text?.trim()) {
     res.status(400).json({ error: "text is required" });
     return;
   }
   try {
     const entry = await getLiveClient(accountId);
-    const result = await sendMessage(entry, chatId, text.trim());
+    const result = await sendMessage(
+      entry,
+      chatId,
+      text.trim(),
+      replyToMsgId ? Number(replyToMsgId) : undefined,
+    );
     res.json(result);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -202,6 +212,40 @@ router.post("/:accountId/messages/:chatId/:msgId/button", async (req, res) => {
     const entry = await getLiveClient(accountId);
     const result = await clickButton(entry, chatId, msgId, data);
     res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /:accountId/messages/:chatId/:msgId/reaction -- send or remove a reaction
+router.post(
+  "/:accountId/messages/:chatId/:msgId/reaction",
+  async (req, res) => {
+    const accountId = Number(req.params.accountId);
+    const chatId = decodeURIComponent(req.params.chatId);
+    const msgId = Number(req.params.msgId);
+    const { emoji } = req.body as { emoji?: string | null };
+    try {
+      const entry = await getLiveClient(accountId);
+      await sendReaction(entry, chatId, msgId, emoji ?? null);
+      res.json({ ok: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  },
+);
+
+// GET /:accountId/messages/:chatId/:msgId/thread -- replies / comments for a message
+router.get("/:accountId/messages/:chatId/:msgId/thread", async (req, res) => {
+  const accountId = Number(req.params.accountId);
+  const chatId = decodeURIComponent(req.params.chatId);
+  const msgId = Number(req.params.msgId);
+  const limit = Math.min(Number(req.query.limit ?? 50), 100);
+  const offsetId = Number(req.query.offsetId ?? 0);
+  try {
+    const entry = await getLiveClient(accountId);
+    const msgs = await getThreadMessages(entry, chatId, msgId, limit, offsetId);
+    res.json(msgs);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

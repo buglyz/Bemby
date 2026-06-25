@@ -11,6 +11,12 @@ export type TgLiveMessage = {
   message: TgMsgPayload;
 };
 
+export type TgReaction = {
+  emoji: string;
+  count: number;
+  mine: boolean;
+};
+
 export type TgButton = {
   text: string;
   data: string | null; // base64-encoded callback data
@@ -27,6 +33,11 @@ export type TgMsgPayload = {
   hasPhoto: boolean;
   hasDocument: boolean;
   buttons: TgButton[][] | null;
+  reactions: TgReaction[] | null;
+  replyToId: number | null;
+  replyToText: string | null;
+  replyToName: string | null;
+  replyCount: number | null;
 };
 
 export type TgDialogItem = {
@@ -105,6 +116,19 @@ function extractButtons(msg: Api.Message): TgButton[][] | null {
     );
   }
   return null;
+}
+
+function extractReactions(msg: Api.Message): TgReaction[] | null {
+  const r = (msg as any).reactions;
+  if (!r?.results?.length) return null;
+  const out = (r.results as any[])
+    .filter((rc: any) => rc.reaction?.emoticon)
+    .map((rc: any) => ({
+      emoji: rc.reaction.emoticon as string,
+      count: rc.count as number,
+      mine: rc.chosenOrder !== undefined && rc.chosenOrder !== null,
+    }));
+  return out.length ? out : null;
 }
 
 function resolveProxy(proxyId: string | null) {
@@ -210,6 +234,11 @@ export async function getLiveClient(accountId: number): Promise<LiveEntry> {
         hasPhoto: msg.media instanceof Api.MessageMediaPhoto,
         hasDocument: msg.media instanceof Api.MessageMediaDocument,
         buttons: extractButtons(msg),
+        reactions: extractReactions(msg),
+        replyToId: (msg.replyTo as any)?.replyToMsgId ?? null,
+        replyToText: null,
+        replyToName: null,
+        replyCount: (msg as any).replies?.replies ?? null,
       },
     };
 
@@ -284,6 +313,35 @@ export async function getMessages(
     ...(offsetId ? { offsetId } : {}),
   });
 
+  // Batch-fetch reply-to message texts for quote display
+  const replyIdSet = new Set<number>();
+  for (const msg of msgs) {
+    const rt = (msg as any).replyTo;
+    if (rt?.className === "MessageReplyHeader" && rt.replyToMsgId) {
+      replyIdSet.add(rt.replyToMsgId as number);
+    }
+  }
+  const replyMap = new Map<number, { text: string; name: string | null }>();
+  if (replyIdSet.size > 0) {
+    try {
+      const replyMsgs = await entry.client.getMessages(entity, {
+        ids: [...replyIdSet],
+      });
+      for (const rm of replyMsgs) {
+        if (!rm?.id) continue;
+        let rname: string | null = null;
+        if (rm.fromId) {
+          const rfid = peerToChatId(rm.fromId as Api.TypePeer);
+          const rsender = entry.entityCache.get(rfid);
+          if (rsender) rname = entityName(rsender);
+        }
+        replyMap.set(rm.id, { text: rm.message ?? "", name: rname });
+      }
+    } catch {
+      // Best effort -- reply quotes may be missing
+    }
+  }
+
   return msgs.map((msg) => {
     let fromName: string | null = null;
     if (msg.fromId) {
@@ -291,6 +349,10 @@ export async function getMessages(
       const sender = entry.entityCache.get(fid);
       if (sender) fromName = entityName(sender);
     }
+    const rt = (msg as any).replyTo;
+    const replyToId =
+      rt?.className === "MessageReplyHeader" ? (rt.replyToMsgId ?? null) : null;
+    const replyInfo = replyToId ? replyMap.get(replyToId) : undefined;
     return {
       id: msg.id,
       text: msg.message ?? "",
@@ -301,6 +363,11 @@ export async function getMessages(
       hasPhoto: msg.media instanceof Api.MessageMediaPhoto,
       hasDocument: msg.media instanceof Api.MessageMediaDocument,
       buttons: extractButtons(msg as Api.Message),
+      reactions: extractReactions(msg as Api.Message),
+      replyToId,
+      replyToText: replyInfo?.text ?? null,
+      replyToName: replyInfo?.name ?? null,
+      replyCount: (msg as any).replies?.replies ?? null,
     };
   });
 }
@@ -309,12 +376,16 @@ export async function sendMessage(
   entry: LiveEntry,
   chatId: string,
   text: string,
+  replyToMsgId?: number,
 ): Promise<{ id: number; date: number }> {
   await ensureEntityCached(entry, chatId);
   const entity = entry.entityCache.get(chatId);
   if (!entity) throw new Error("Chat not found");
 
-  const result = await entry.client.sendMessage(entity, { message: text });
+  const result = await entry.client.sendMessage(entity, {
+    message: text,
+    ...(replyToMsgId ? { replyTo: replyToMsgId } : {}),
+  });
   return { id: result.id, date: result.date };
 }
 
@@ -688,6 +759,76 @@ export async function clickButton(
     message: result.message ?? null,
     url: result.url ?? null,
   };
+}
+
+export async function sendReaction(
+  entry: LiveEntry,
+  chatId: string,
+  msgId: number,
+  emoji: string | null,
+): Promise<void> {
+  await ensureEntityCached(entry, chatId);
+  const entity = entry.entityCache.get(chatId);
+  if (!entity) throw new Error("Chat not found");
+  await entry.client.invoke(
+    new Api.messages.SendReaction({
+      peer: entity as any,
+      msgId,
+      reaction: emoji ? [new Api.ReactionEmoji({ emoticon: emoji })] : [],
+    }),
+  );
+}
+
+export async function getThreadMessages(
+  entry: LiveEntry,
+  chatId: string,
+  msgId: number,
+  limit: number,
+  offsetId: number,
+): Promise<TgMsgPayload[]> {
+  await ensureEntityCached(entry, chatId);
+  const entity = entry.entityCache.get(chatId);
+  if (!entity) throw new Error("Chat not found");
+
+  const result = await entry.client.invoke(
+    new Api.messages.GetReplies({
+      peer: entity as any,
+      msgId,
+      offsetId,
+      offsetDate: 0,
+      addOffset: 0,
+      limit,
+      maxId: 0,
+      minId: 0,
+      hash: BigInt(0) as any,
+    }),
+  );
+
+  const msgs = ((result as any).messages ?? []) as Api.Message[];
+  return msgs.map((msg) => {
+    let fromName: string | null = null;
+    if (msg.fromId) {
+      const fid = peerToChatId(msg.fromId as Api.TypePeer);
+      const sender = entry.entityCache.get(fid);
+      if (sender) fromName = entityName(sender);
+    }
+    return {
+      id: msg.id,
+      text: msg.message ?? "",
+      date: msg.date,
+      fromMe: Boolean(msg.out),
+      fromId: msg.fromId ? peerToChatId(msg.fromId as Api.TypePeer) : null,
+      fromName,
+      hasPhoto: msg.media instanceof Api.MessageMediaPhoto,
+      hasDocument: msg.media instanceof Api.MessageMediaDocument,
+      buttons: extractButtons(msg),
+      reactions: extractReactions(msg),
+      replyToId: null,
+      replyToText: null,
+      replyToName: null,
+      replyCount: null,
+    };
+  });
 }
 
 export function subscribeToMessages(

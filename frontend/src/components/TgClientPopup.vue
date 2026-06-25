@@ -208,7 +208,11 @@
                 <span class="tgc-spinner"></span>
               </div>
               <template v-else>
-                <div v-for="(msg, idx) in messages" :key="msg.id">
+                <div
+                  v-for="(msg, idx) in messages"
+                  :key="msg.id"
+                  :data-msg-id="msg.id"
+                >
                   <!-- Date separator -->
                   <div
                     v-if="
@@ -223,6 +227,32 @@
                     class="tgc-msg-wrap"
                     :class="msg.fromMe ? 'tgc-msg-out' : 'tgc-msg-in'"
                   >
+                    <!-- Hover action bar -->
+                    <div class="tgc-msg-actions">
+                      <button
+                        class="tgc-msg-action"
+                        title="Reply"
+                        @click.stop="startReply(msg)"
+                      >
+                        <i class="fa-solid fa-reply"></i>
+                      </button>
+                      <button
+                        class="tgc-msg-action"
+                        title="React"
+                        @click.stop="openReactPicker(msg, $event)"
+                      >
+                        <i class="fa-regular fa-face-smile"></i>
+                      </button>
+                      <button
+                        v-if="msg.replyCount"
+                        class="tgc-msg-action"
+                        title="View thread"
+                        @click.stop="openThread(msg)"
+                      >
+                        <i class="fa-regular fa-comment"></i>
+                      </button>
+                    </div>
+
                     <div class="tgc-msg-bubble">
                       <div
                         v-if="
@@ -234,6 +264,22 @@
                         class="tgc-msg-sender"
                       >
                         {{ msg.fromName }}
+                      </div>
+                      <!-- Reply quote -->
+                      <div
+                        v-if="msg.replyToId"
+                        class="tgc-reply-quote"
+                        @click.stop="scrollToReply(msg.replyToId)"
+                      >
+                        <div class="tgc-reply-bar"></div>
+                        <div class="tgc-reply-content">
+                          <div class="tgc-reply-name">
+                            {{ msg.replyToName || "Message" }}
+                          </div>
+                          <div class="tgc-reply-text">
+                            {{ msg.replyToText || "..." }}
+                          </div>
+                        </div>
                       </div>
                       <img
                         v-if="msg.hasPhoto"
@@ -255,7 +301,29 @@
                       >
                         <i class="fa-solid fa-file"></i> Document
                       </div>
+                      <!-- Reactions -->
+                      <div v-if="msg.reactions?.length" class="tgc-reactions">
+                        <button
+                          v-for="r in msg.reactions"
+                          :key="r.emoji"
+                          class="tgc-reaction"
+                          :class="{ 'tgc-reaction-mine': r.mine }"
+                          @click.stop="doReact(msg.id, r.emoji)"
+                        >
+                          {{ r.emoji }}
+                          <span class="tgc-reaction-count">{{ r.count }}</span>
+                        </button>
+                      </div>
                       <div class="tgc-msg-meta">
+                        <!-- Comment count -->
+                        <button
+                          v-if="msg.replyCount"
+                          class="tgc-comment-btn"
+                          @click.stop="openThread(msg)"
+                        >
+                          <i class="fa-regular fa-comment"></i>
+                          {{ msg.replyCount }}
+                        </button>
                         <span class="tgc-msg-time">{{
                           fmtMsgTime(msg.date)
                         }}</span>
@@ -299,28 +367,49 @@
             </div>
 
             <div class="tgc-compose">
-              <textarea
-                v-model="inputText"
-                class="tgc-input"
-                placeholder="Write a message..."
-                rows="1"
-                @keydown="onComposeKey"
-                @input="autoResize"
-                ref="inputEl"
-              ></textarea>
-              <button
-                class="tgc-send-btn"
-                :disabled="!inputText.trim() || sending"
-                @click="sendMessage"
-                title="Send (Enter)"
-              >
-                <i class="fa-solid fa-paper-plane"></i>
-              </button>
+              <!-- Reply strip -->
+              <div v-if="replyingTo" class="tgc-reply-strip">
+                <i class="fa-solid fa-reply tgc-reply-strip-icon"></i>
+                <div class="tgc-reply-strip-body">
+                  <div class="tgc-reply-strip-name">
+                    {{ replyingTo.fromName || "Message" }}
+                  </div>
+                  <div class="tgc-reply-strip-text">
+                    {{ replyingTo.text || "..." }}
+                  </div>
+                </div>
+                <button
+                  class="tgc-icon-btn"
+                  @click="replyingTo = null"
+                  title="Cancel reply"
+                >
+                  <i class="fa-solid fa-xmark"></i>
+                </button>
+              </div>
+              <div class="tgc-compose-row">
+                <textarea
+                  v-model="inputText"
+                  class="tgc-input"
+                  placeholder="Write a message..."
+                  rows="1"
+                  @keydown="onComposeKey"
+                  @input="autoResize"
+                  ref="inputEl"
+                ></textarea>
+                <button
+                  class="tgc-send-btn"
+                  :disabled="!inputText.trim() || sending"
+                  @click="sendMessage"
+                  title="Send (Enter)"
+                >
+                  <i class="fa-solid fa-paper-plane"></i>
+                </button>
+              </div>
             </div>
           </div>
 
-          <!-- Profile info panel (flex sibling of chat) -->
-          <div v-if="showProfile" class="tgc-profile-panel">
+          <!-- Profile info panel / Thread panel (flex sibling of chat) -->
+          <div v-if="showProfile && !showThread" class="tgc-profile-panel">
             <div class="tgc-profile-header">
               <span class="tgc-profile-title">Info</span>
               <button class="tgc-icon-btn" @click="showProfile = false">
@@ -413,6 +502,72 @@
               </div>
             </div>
           </div>
+          <!-- Thread panel -->
+          <div v-if="showThread" class="tgc-thread-panel">
+            <div class="tgc-profile-header">
+              <span class="tgc-profile-title">
+                Thread
+                <span
+                  v-if="threadRootMsg?.replyCount"
+                  class="tgc-thread-count"
+                  >{{ threadRootMsg.replyCount }}</span
+                >
+              </span>
+              <button class="tgc-icon-btn" @click="showThread = false">
+                <i class="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+            <!-- Root message preview -->
+            <div v-if="threadRootMsg" class="tgc-thread-root">
+              <div class="tgc-thread-root-text">
+                {{ threadRootMsg.text || "(media)" }}
+              </div>
+            </div>
+            <!-- Thread messages -->
+            <div class="tgc-thread-messages" ref="threadEl">
+              <div v-if="loadingThread" class="tgc-spinner-wrap">
+                <span class="tgc-spinner"></span>
+              </div>
+              <template v-else>
+                <div
+                  v-for="msg in threadMessages"
+                  :key="msg.id"
+                  class="tgc-thread-msg"
+                  :class="
+                    msg.fromMe ? 'tgc-thread-msg-out' : 'tgc-thread-msg-in'
+                  "
+                >
+                  <div class="tgc-thread-msg-name" v-if="!msg.fromMe">
+                    {{ msg.fromName || "User" }}
+                  </div>
+                  <div class="tgc-thread-msg-text">{{ msg.text }}</div>
+                  <div class="tgc-thread-msg-time">
+                    {{ fmtMsgTime(msg.date) }}
+                  </div>
+                </div>
+                <div v-if="!threadMessages.length" class="tgc-empty-list">
+                  No comments yet
+                </div>
+              </template>
+            </div>
+            <!-- Thread compose -->
+            <div class="tgc-thread-compose">
+              <textarea
+                v-model="threadInputText"
+                class="tgc-input"
+                placeholder="Write a comment..."
+                rows="1"
+                @keydown.enter.exact.prevent="sendThreadMessage"
+              ></textarea>
+              <button
+                class="tgc-send-btn"
+                :disabled="!threadInputText.trim() || sendingThread"
+                @click="sendThreadMessage"
+              >
+                <i class="fa-solid fa-paper-plane"></i>
+              </button>
+            </div>
+          </div>
         </template>
 
         <!-- Empty state -->
@@ -468,6 +623,31 @@
       </button>
       <button class="tgc-ctx-item" @click="ctxPin(false)">
         <i class="fa-regular fa-thumbtack"></i> Unpin
+      </button>
+    </div>
+
+    <!-- Emoji reaction picker -->
+    <div
+      v-if="emojiPickerMsgId !== null"
+      class="tgc-ctx-backdrop"
+      @click="emojiPickerMsgId = null"
+    ></div>
+    <div
+      v-if="emojiPickerMsgId !== null"
+      class="tgc-emoji-picker"
+      :style="{
+        left: emojiPickerPos.x + 'px',
+        top: emojiPickerPos.y + 'px',
+        transform: 'translateY(-110%)',
+      }"
+    >
+      <button
+        v-for="e in QUICK_EMOJIS"
+        :key="e"
+        class="tgc-emoji-btn"
+        @click="pickReaction(e)"
+      >
+        {{ e }}
       </button>
     </div>
 
@@ -578,6 +758,7 @@ import {
   type Account,
   type TgDialog,
   type TgMessage,
+  type TgReaction,
   type TgContact,
   type TgFolder,
   type TgProfile,
@@ -628,6 +809,23 @@ const profileDetails = ref<TgProfile | null>(null);
 const profileLoading = ref(false);
 const copyToast = ref("");
 const btnLoadingKey = ref<string | null>(null);
+
+// Reply compose
+const replyingTo = ref<TgMessage | null>(null);
+
+// Emoji reaction picker
+const emojiPickerMsgId = ref<number | null>(null);
+const emojiPickerPos = ref({ x: 0, y: 0 });
+const QUICK_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "👎", "🔥", "🎉"];
+
+// Thread / comments panel
+const showThread = ref(false);
+const threadRootMsg = ref<TgMessage | null>(null);
+const threadMessages = ref<TgMessage[]>([]);
+const loadingThread = ref(false);
+const threadInputText = ref("");
+const sendingThread = ref(false);
+const threadEl = ref<HTMLElement | null>(null);
 
 // Context menu for dialog actions
 const ctxMenu = ref<{ dialog: TgDialog; x: number; y: number } | null>(null);
@@ -769,6 +967,7 @@ async function openProfile() {
     return;
   }
   showProfile.value = true;
+  showThread.value = false;
   profileLoading.value = true;
   profileDetails.value = null;
   try {
@@ -888,6 +1087,159 @@ async function refreshMessages() {
   }
 }
 
+function showToast(msg: string, ms = 3000) {
+  copyToast.value = msg;
+  if (copyToastTimer) clearTimeout(copyToastTimer);
+  copyToastTimer = setTimeout(() => {
+    copyToast.value = "";
+  }, ms);
+}
+
+// ── Reply ─────────────────────────────────────────────────────────────────────
+
+function startReply(msg: TgMessage) {
+  replyingTo.value = msg;
+  nextTick(() => inputEl.value?.focus());
+}
+
+function scrollToReply(replyToId: number) {
+  const el = messagesEl.value;
+  if (!el) return;
+  const target = el.querySelector(`[data-msg-id="${replyToId}"]`);
+  if (!target) return;
+  target.scrollIntoView({ behavior: "smooth", block: "center" });
+  target.classList.add("tgc-msg-highlighted");
+  setTimeout(() => target.classList.remove("tgc-msg-highlighted"), 1500);
+}
+
+// ── Reactions ─────────────────────────────────────────────────────────────────
+
+function openReactPicker(msg: TgMessage, e: MouseEvent) {
+  e.stopPropagation();
+  emojiPickerMsgId.value = msg.id;
+  const btn = e.currentTarget as HTMLElement;
+  const rect = btn.getBoundingClientRect();
+  emojiPickerPos.value = { x: rect.left - 40, y: rect.top };
+}
+
+async function doReact(msgId: number, emoji: string) {
+  if (!selectedAccountId.value || !activeChatId.value) return;
+  const msg =
+    messages.value.find((m) => m.id === msgId) ??
+    threadMessages.value.find((m) => m.id === msgId);
+  const existing = msg?.reactions?.find((r) => r.emoji === emoji);
+  const sendEmoji = existing?.mine ? null : emoji;
+  try {
+    await tgClientApi.sendReaction(
+      selectedAccountId.value,
+      activeChatId.value,
+      msgId,
+      sendEmoji,
+    );
+    // Optimistic update
+    if (msg) {
+      if (sendEmoji) {
+        if (existing) {
+          existing.mine = true;
+          existing.count++;
+        } else {
+          if (!msg.reactions) msg.reactions = [];
+          msg.reactions.push({ emoji, count: 1, mine: true });
+        }
+      } else if (existing) {
+        existing.mine = false;
+        existing.count = Math.max(0, existing.count - 1);
+        msg.reactions = msg.reactions!.filter((r) => r.count > 0);
+        if (!msg.reactions.length) msg.reactions = null;
+      }
+    }
+    setTimeout(refreshMessages, 1500);
+  } catch (e: any) {
+    showToast(e?.response?.data?.error ?? e?.message ?? "Failed to react");
+  }
+}
+
+async function pickReaction(emoji: string) {
+  const msgId = emojiPickerMsgId.value;
+  emojiPickerMsgId.value = null;
+  if (msgId === null) return;
+  await doReact(msgId, emoji);
+}
+
+// ── Thread / comments ─────────────────────────────────────────────────────────
+
+async function openThread(msg: TgMessage) {
+  if (!selectedAccountId.value || !activeChatId.value) return;
+  threadRootMsg.value = msg;
+  showThread.value = true;
+  showProfile.value = false;
+  loadingThread.value = true;
+  threadMessages.value = [];
+  try {
+    const msgs = await tgClientApi.threadMessages(
+      selectedAccountId.value,
+      activeChatId.value,
+      msg.id,
+    );
+    threadMessages.value = msgs.reverse();
+    await nextTick();
+    if (threadEl.value) threadEl.value.scrollTop = threadEl.value.scrollHeight;
+  } catch (e: any) {
+    showToast(
+      e?.response?.data?.error ?? e?.message ?? "Failed to load thread",
+    );
+  } finally {
+    loadingThread.value = false;
+  }
+}
+
+async function sendThreadMessage() {
+  const text = threadInputText.value.trim();
+  if (
+    !text ||
+    !selectedAccountId.value ||
+    !activeChatId.value ||
+    !threadRootMsg.value ||
+    sendingThread.value
+  )
+    return;
+  sendingThread.value = true;
+  threadInputText.value = "";
+  try {
+    const result = await tgClientApi.send(
+      selectedAccountId.value,
+      activeChatId.value,
+      text,
+      threadRootMsg.value.id,
+    );
+    threadMessages.value.push({
+      id: result.id,
+      text,
+      date: result.date,
+      fromMe: true,
+      fromId: null,
+      fromName: null,
+      hasPhoto: false,
+      hasDocument: false,
+      buttons: null,
+      reactions: null,
+      replyToId: threadRootMsg.value.id,
+      replyToText: threadRootMsg.value.text,
+      replyToName: null,
+      replyCount: null,
+    });
+    await nextTick();
+    if (threadEl.value) threadEl.value.scrollTop = threadEl.value.scrollHeight;
+    // Update reply count on root message
+    const root = messages.value.find((m) => m.id === threadRootMsg.value!.id);
+    if (root && root.replyCount !== null) root.replyCount++;
+  } catch (e: any) {
+    showToast(e?.response?.data?.error ?? e?.message ?? "Failed to send reply");
+  } finally {
+    sendingThread.value = false;
+  }
+}
+
 function avatarLetter(name: string) {
   return (name || "?").trim()[0].toUpperCase();
 }
@@ -967,6 +1319,8 @@ async function onAccountChange() {
   showMobileChat.value = false;
   activeFolder.value = "all";
   tgFolders.value = [];
+  showThread.value = false;
+  replyingTo.value = null;
   await loadDialogs();
   startSSE();
 }
@@ -1036,6 +1390,9 @@ async function openChat(dialog: TgDialog) {
   showMobileChat.value = true;
   showProfile.value = false;
   profileDetails.value = null;
+  showThread.value = false;
+  threadRootMsg.value = null;
+  replyingTo.value = null;
   await fetchMessages();
   await nextTick();
   inputEl.value?.focus();
@@ -1104,7 +1461,9 @@ async function sendMessage() {
   if (!text || !selectedAccountId.value || !activeChatId.value || sending.value)
     return;
   sending.value = true;
+  const replyMsg = replyingTo.value;
   inputText.value = "";
+  replyingTo.value = null;
   if (inputEl.value) {
     inputEl.value.style.height = "auto";
   }
@@ -1113,6 +1472,7 @@ async function sendMessage() {
       selectedAccountId.value,
       activeChatId.value,
       text,
+      replyMsg?.id,
     );
     // Optimistically append
     messages.value.push({
@@ -1125,6 +1485,11 @@ async function sendMessage() {
       hasPhoto: false,
       hasDocument: false,
       buttons: null,
+      reactions: null,
+      replyToId: replyMsg?.id ?? null,
+      replyToText: replyMsg?.text ?? null,
+      replyToName: null,
+      replyCount: null,
     });
     await scrollBottom(true);
     // Update dialog preview
@@ -1811,15 +2176,285 @@ async function addContactSubmit() {
   background: #e0e4f7;
 }
 
+/* ── Message hover actions ──────────────────────────────────────────────────── */
+.tgc-msg-wrap {
+  position: relative;
+  align-items: center;
+}
+
+.tgc-msg-actions {
+  display: none;
+  align-items: center;
+  gap: 1px;
+  flex-shrink: 0;
+}
+
+.tgc-msg-wrap:hover .tgc-msg-actions {
+  display: flex;
+}
+
+.tgc-msg-in .tgc-msg-actions {
+  order: 2;
+  margin-left: 4px;
+}
+
+.tgc-msg-out .tgc-msg-actions {
+  order: 0;
+  margin-right: 4px;
+}
+
+.tgc-msg-action {
+  background: #fff;
+  border: 1px solid #e8e9ed;
+  border-radius: 50%;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: #888;
+  cursor: pointer;
+  transition:
+    background 0.1s,
+    color 0.1s;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+
+.tgc-msg-action:hover {
+  background: #f0f2f5;
+  color: #4361ee;
+}
+
+/* ── Reply quote in bubble ──────────────────────────────────────────────────── */
+.tgc-reply-quote {
+  display: flex;
+  gap: 6px;
+  border-radius: 6px;
+  padding: 4px 6px;
+  margin-bottom: 4px;
+  cursor: pointer;
+  background: rgba(0, 0, 0, 0.05);
+  max-width: 100%;
+  overflow: hidden;
+  transition: background 0.1s;
+}
+
+.tgc-reply-quote:hover {
+  background: rgba(0, 0, 0, 0.09);
+}
+
+.tgc-reply-bar {
+  width: 3px;
+  border-radius: 2px;
+  background: #4361ee;
+  flex-shrink: 0;
+}
+
+.tgc-msg-out .tgc-reply-bar {
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.tgc-reply-content {
+  min-width: 0;
+}
+
+.tgc-reply-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: #4361ee;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tgc-msg-out .tgc-reply-name {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.tgc-reply-text {
+  font-size: 12px;
+  color: #666;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tgc-msg-out .tgc-reply-text {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* ── Reactions ──────────────────────────────────────────────────────────────── */
+.tgc-reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.tgc-reaction {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: #f0f2f5;
+  border: 1px solid #e0e3ea;
+  border-radius: 12px;
+  padding: 2px 7px;
+  font-size: 14px;
+  cursor: pointer;
+  transition:
+    background 0.1s,
+    border-color 0.1s;
+  line-height: 1;
+}
+
+.tgc-reaction:hover {
+  background: #e4e8f5;
+  border-color: #c4cbdf;
+}
+
+.tgc-reaction-mine {
+  background: #dce3ff;
+  border-color: #4361ee;
+}
+
+.tgc-msg-out .tgc-reaction {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.35);
+  color: #fff;
+}
+
+.tgc-msg-out .tgc-reaction-mine {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.tgc-reaction-count {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* ── Comment count button ───────────────────────────────────────────────────── */
+.tgc-comment-btn {
+  background: none;
+  border: none;
+  color: #999;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-right: auto;
+  transition: color 0.1s;
+}
+
+.tgc-comment-btn:hover {
+  color: #4361ee;
+}
+
+.tgc-msg-out .tgc-comment-btn {
+  color: rgba(255, 255, 255, 0.65);
+}
+
+/* ── Highlight flash (scroll-to-reply) ──────────────────────────────────────── */
+.tgc-msg-highlighted .tgc-msg-bubble {
+  animation: tgc-highlight 1.5s ease;
+}
+
+@keyframes tgc-highlight {
+  0%,
+  15% {
+    box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.4);
+  }
+  100% {
+    box-shadow: none;
+  }
+}
+
+/* ── Emoji picker ───────────────────────────────────────────────────────────── */
+.tgc-emoji-picker {
+  position: fixed;
+  display: flex;
+  gap: 2px;
+  background: #fff;
+  border: 1px solid #e8e9ed;
+  border-radius: 28px;
+  padding: 6px 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  z-index: 61;
+}
+
+.tgc-emoji-btn {
+  font-size: 22px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 3px 5px;
+  border-radius: 8px;
+  line-height: 1;
+  transition:
+    background 0.1s,
+    transform 0.1s;
+}
+
+.tgc-emoji-btn:hover {
+  background: #f0f2f5;
+  transform: scale(1.25);
+}
+
+/* ── Reply compose strip ────────────────────────────────────────────────────── */
+.tgc-reply-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: #f8f9fb;
+  border-bottom: 1px solid #e8e9ed;
+  border-radius: 0;
+}
+
+.tgc-reply-strip-icon {
+  color: #4361ee;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.tgc-reply-strip-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.tgc-reply-strip-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #4361ee;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tgc-reply-strip-text {
+  font-size: 12px;
+  color: #888;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* ── Compose ────────────────────────────────────────────────────────────────── */
 .tgc-compose {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid #e8e9ed;
+  flex-shrink: 0;
+  background: #fff;
+}
+
+.tgc-compose-row {
   display: flex;
   align-items: flex-end;
   gap: 8px;
   padding: 10px 16px;
-  border-top: 1px solid #e8e9ed;
-  flex-shrink: 0;
-  background: #fff;
 }
 
 .tgc-input {
@@ -2426,6 +3061,131 @@ async function addContactSubmit() {
     min-width: 0;
     font-size: 14px;
     padding: 5px 8px;
+  }
+}
+
+/* ── Thread panel ───────────────────────────────────────────────────────────── */
+.tgc-thread-panel {
+  width: 300px;
+  flex-shrink: 0;
+  background: #fff;
+  border-left: 1px solid #e8e9ed;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: tgc-slide-right 0.18s ease;
+}
+
+.tgc-thread-count {
+  font-size: 12px;
+  font-weight: 600;
+  background: #4361ee;
+  color: #fff;
+  border-radius: 10px;
+  padding: 1px 6px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.tgc-thread-root {
+  border-bottom: 1px solid #f0f2f5;
+  padding: 10px 16px;
+  background: #f8f9fb;
+  flex-shrink: 0;
+}
+
+.tgc-thread-root-text {
+  font-size: 13px;
+  color: #555;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 60px;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+.tgc-thread-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 14px;
+  scrollbar-width: thin;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: #f5f7fb;
+}
+
+.tgc-thread-msg {
+  max-width: 90%;
+}
+
+.tgc-thread-msg-in {
+  align-self: flex-start;
+}
+
+.tgc-thread-msg-out {
+  align-self: flex-end;
+}
+
+.tgc-thread-msg-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: #4361ee;
+  margin-bottom: 2px;
+}
+
+.tgc-thread-msg-text {
+  font-size: 13px;
+  line-height: 1.4;
+  word-break: break-word;
+  padding: 6px 10px;
+  border-radius: 10px;
+  white-space: pre-wrap;
+}
+
+.tgc-thread-msg-in .tgc-thread-msg-text {
+  background: #fff;
+  border: 1px solid #e8e9ed;
+  border-bottom-left-radius: 3px;
+  color: #1a1a2e;
+}
+
+.tgc-thread-msg-out .tgc-thread-msg-text {
+  background: #4361ee;
+  color: #fff;
+  border-bottom-right-radius: 3px;
+}
+
+.tgc-thread-msg-time {
+  font-size: 10px;
+  color: #bbb;
+  margin-top: 2px;
+  text-align: right;
+}
+
+.tgc-thread-msg-in .tgc-thread-msg-time {
+  text-align: left;
+}
+
+.tgc-thread-compose {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 8px 12px;
+  border-top: 1px solid #e8e9ed;
+  flex-shrink: 0;
+  background: #fff;
+}
+
+@media (max-width: 640px) {
+  .tgc-thread-panel {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    z-index: 20;
+    border-left: none;
   }
 }
 </style>

@@ -529,6 +529,12 @@ export type TgButton = {
   url: string | null;
 };
 
+export type TgReaction = {
+  emoji: string;
+  count: number;
+  mine: boolean;
+};
+
 export type TgMessage = {
   id: number;
   text: string;
@@ -539,6 +545,11 @@ export type TgMessage = {
   hasPhoto: boolean;
   hasDocument: boolean;
   buttons: TgButton[][] | null;
+  reactions: TgReaction[] | null;
+  replyToId: number | null;
+  replyToText: string | null;
+  replyToName: string | null;
+  replyCount: number | null;
 };
 
 export type TgContact = {
@@ -588,13 +599,19 @@ export const tgClientApi = {
       >(`/tg-client/${accountId}/messages/${encodeURIComponent(chatId)}`, { params })
       .then((r) => r.data),
 
-  send: (accountId: number, chatId: string, text: string) =>
+  send: (
+    accountId: number,
+    chatId: string,
+    text: string,
+    replyToMsgId?: number,
+  ) =>
     api
       .post<{
         id: number;
         date: number;
       }>(`/tg-client/${accountId}/messages/${encodeURIComponent(chatId)}`, {
         text,
+        ...(replyToMsgId ? { replyToMsgId } : {}),
       })
       .then((r) => r.data),
 
@@ -675,6 +692,30 @@ export const tgClientApi = {
         `/tg-client/${accountId}/messages/${encodeURIComponent(chatId)}/${msgId}/button`,
         { data },
       )
+      .then((r) => r.data),
+
+  sendReaction: (
+    accountId: number,
+    chatId: string,
+    msgId: number,
+    emoji: string | null,
+  ) =>
+    api
+      .post<{
+        ok: boolean;
+      }>(`/tg-client/${accountId}/messages/${encodeURIComponent(chatId)}/${msgId}/reaction`, { emoji })
+      .then((r) => r.data),
+
+  threadMessages: (
+    accountId: number,
+    chatId: string,
+    msgId: number,
+    params?: { limit?: number; offsetId?: number },
+  ) =>
+    api
+      .get<
+        TgMessage[]
+      >(`/tg-client/${accountId}/messages/${encodeURIComponent(chatId)}/${msgId}/thread`, { params })
       .then((r) => r.data),
 };
 

@@ -31,13 +31,13 @@
           </div>
         </a>
       </div>
-      <a class="nav-link" href="#" :class="{ active: currentView === 'accounts' }" @click.prevent="setView('accounts')">{{ t('nav.accounts') }}</a>
-      <a class="nav-link" href="#" :class="{ active: currentView === 'jobs' }" @click.prevent="setView('jobs')">{{ t('nav.jobs') }}</a>
-      <a class="nav-link" href="#" :class="{ active: currentView === 'templates' }" @click.prevent="setView('templates')">{{ t('nav.templates') }}</a>
-      <a class="nav-link" href="#" :class="{ active: currentView === 'settings' }" @click.prevent="setView('settings')">{{ t('nav.settings') }}</a>
-      <a class="nav-link" href="#" :class="{ active: currentView === 'logs' }" @click.prevent="setView('logs')">{{ t('nav.logs') }}</a>
-      <a class="nav-link" href="#" :class="{ active: currentView === 'help' }" @click.prevent="setView('help')">{{ t('nav.help') }}</a>
-      <a class="nav-link" href="#" @click.prevent="showMessenger = true">{{ t('nav.messenger') }}</a>
+      <a class="nav-link" href="#" :class="{ active: currentView === 'accounts' }" @click.prevent="setView('accounts')"><i class="fa-solid fa-users"></i>{{ t('nav.accounts') }}</a>
+      <a class="nav-link" href="#" @click.prevent="showMessenger = true"><i class="fa-brands fa-telegram"></i>{{ t('nav.messenger') }}</a>
+      <a class="nav-link" href="#" :class="{ active: currentView === 'jobs' }" @click.prevent="setView('jobs')"><i class="fa-solid fa-robot"></i>{{ t('nav.jobs') }}</a>
+      <a class="nav-link" href="#" :class="{ active: currentView === 'templates' }" @click.prevent="setView('templates')"><i class="fa-solid fa-layer-group"></i>{{ t('nav.templates') }}</a>
+      <a class="nav-link" href="#" :class="{ active: currentView === 'logs' }" @click.prevent="setView('logs')"><i class="fa-solid fa-scroll"></i>{{ t('nav.logs') }}</a>
+      <a class="nav-link" href="#" :class="{ active: currentView === 'settings' }" @click.prevent="setView('settings')"><i class="fa-solid fa-gear"></i>{{ t('nav.settings') }}</a>
+      <a class="nav-link" href="#" :class="{ active: currentView === 'help' }" @click.prevent="setView('help')"><i class="fa-solid fa-circle-question"></i>{{ t('nav.help') }}</a>
       <div class="sidebar-footer">
         <div class="lang-switcher">
           <button class="lang-btn" @click="setLocale(locale === 'zh' ? 'en' : 'zh')">

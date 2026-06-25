@@ -858,6 +858,25 @@ export async function getBotCommands(
   }
 }
 
+export async function markRead(
+  entry: LiveEntry,
+  chatId: string,
+  maxId: number,
+): Promise<void> {
+  await ensureEntityCached(entry, chatId);
+  const entity = entry.entityCache.get(chatId);
+  if (!entity) throw new Error("Chat not found");
+  if (chatId.startsWith("c")) {
+    await entry.client.invoke(
+      new Api.channels.ReadHistory({ channel: entity as any, maxId }),
+    );
+  } else {
+    await entry.client.invoke(
+      new Api.messages.ReadHistory({ peer: entity as any, maxId }),
+    );
+  }
+}
+
 export function subscribeToMessages(
   accountId: number,
   handler: (msg: TgLiveMessage) => void,

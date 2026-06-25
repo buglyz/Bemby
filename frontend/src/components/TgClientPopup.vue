@@ -1479,10 +1479,21 @@ async function openChat(dialog: TgDialog) {
   replyingTo.value = null;
   botCommands.value = [];
   await fetchMessages();
+  markChatRead(dialog.chatId);
   // Load bot commands in the background -- non-blocking
   if (dialog.type === "bot") loadBotCommands(dialog.chatId);
   await nextTick();
   inputEl.value?.focus();
+}
+
+function markChatRead(chatId: string) {
+  if (!selectedAccountId.value || !messages.value.length) return;
+  const maxId = Math.max(...messages.value.map((m) => m.id));
+  // Clear badge immediately in UI
+  const idx = dialogs.value.findIndex((d) => d.chatId === chatId);
+  if (idx !== -1) dialogs.value[idx] = { ...dialogs.value[idx], unreadCount: 0 };
+  // Fire-and-forget -- non-blocking
+  tgClientApi.markRead(selectedAccountId.value, chatId, maxId).catch(() => {});
 }
 
 function backToDialogs() {
@@ -1678,9 +1689,8 @@ function onIncomingMessage(chatId: string, msg: TgMessage) {
       messages.value.push(msg);
       scrollBottom();
     }
-    // Reset unread for open chat
-    const di = dialogs.value.findIndex((d) => d.chatId === chatId);
-    if (di !== -1) dialogs.value[di] = { ...dialogs.value[di], unreadCount: 0 };
+    // Mark as read on TG server and clear local badge
+    markChatRead(chatId);
   }
 }
 

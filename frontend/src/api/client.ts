@@ -644,8 +644,10 @@ export const tgClientApi = {
       .get<TgDialog[]>(`/tg-client/${accountId}/search`, { params: { q } })
       .then((r) => r.data),
 
-  photoUrl: (accountId: number, chatId: string, msgId: number) =>
-    `/api/tg-client/${accountId}/messages/${encodeURIComponent(chatId)}/${msgId}/photo`,
+  photoUrl: (accountId: number, chatId: string, msgId: number) => {
+    const token = localStorage.getItem("token") ?? "";
+    return `/api/tg-client/${accountId}/messages/${encodeURIComponent(chatId)}/${msgId}/photo?token=${encodeURIComponent(token)}`;
+  },
 
   eventsUrl: (accountId: number) => `/api/tg-client/${accountId}/events`,
 
@@ -731,6 +733,11 @@ export const tgClientApi = {
       .get<
         TgMessage[]
       >(`/tg-client/${accountId}/messages/${encodeURIComponent(chatId)}/${msgId}/thread`, { params })
+      .then((r) => r.data),
+
+  markRead: (accountId: number, chatId: string, maxId: number) =>
+    api
+      .post(`/tg-client/${accountId}/mark-read/${encodeURIComponent(chatId)}`, { maxId })
       .then((r) => r.data),
 };
 

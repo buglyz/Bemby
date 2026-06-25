@@ -16,6 +16,7 @@ import {
   sendReaction,
   getThreadMessages,
   getBotCommands,
+  markRead,
   subscribeToMessages,
   getFolders,
 } from "../tg/liveClient";
@@ -267,6 +268,24 @@ router.get("/:accountId/messages/:chatId/:msgId/photo", async (req, res) => {
     res.set("Content-Type", "image/jpeg");
     res.set("Cache-Control", "private, max-age=3600");
     res.send(buf);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /:accountId/mark-read/:chatId -- mark messages as read up to maxId
+router.post("/:accountId/mark-read/:chatId", async (req, res) => {
+  const accountId = Number(req.params.accountId);
+  const chatId = decodeURIComponent(req.params.chatId);
+  const { maxId } = req.body as { maxId?: number };
+  if (!maxId) {
+    res.status(400).json({ error: "maxId is required" });
+    return;
+  }
+  try {
+    const entry = await getLiveClient(accountId);
+    await markRead(entry, chatId, Number(maxId));
+    res.json({ ok: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

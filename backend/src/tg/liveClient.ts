@@ -1,10 +1,10 @@
-import { TelegramClient, Api, Logger } from 'telegram';
-import { LogLevel } from 'telegram/extensions/Logger';
-import { StringSession } from 'telegram/sessions';
-import { NewMessage, type NewMessageEvent } from 'telegram/events';
-import { db } from '../db/database';
-import { parseTgProxy } from '../jobs/runner';
-import type { TgDeviceParams } from '../auth/tgAuth';
+import { TelegramClient, Api, Logger } from "telegram";
+import { LogLevel } from "telegram/extensions/Logger";
+import { StringSession } from "telegram/sessions";
+import { NewMessage, type NewMessageEvent } from "telegram/events";
+import { db } from "../db/database";
+import { parseTgProxy } from "../jobs/runner";
+import type { TgDeviceParams } from "../auth/tgAuth";
 
 export type TgLiveMessage = {
   chatId: string;
@@ -32,7 +32,7 @@ export type TgMsgPayload = {
 export type TgDialogItem = {
   chatId: string;
   name: string;
-  type: 'user' | 'bot' | 'group' | 'channel';
+  type: "user" | "bot" | "group" | "channel";
   username: string | null;
   unreadCount: number;
   lastMessage: { text: string; date: number; fromMe: boolean } | null;
@@ -63,7 +63,9 @@ type AccountRow = {
 };
 
 // Derive a stable chatId string from an entity
-export function entityToChatId(entity: Api.User | Api.Chat | Api.Channel): string {
+export function entityToChatId(
+  entity: Api.User | Api.Chat | Api.Channel,
+): string {
   const id = entity.id.toString();
   if (entity instanceof Api.User) return `u${id}`;
   if (entity instanceof Api.Channel) return `c${id}`;
@@ -75,25 +77,31 @@ export function peerToChatId(peer: Api.TypePeer): string {
   if (peer instanceof Api.PeerUser) return `u${peer.userId.toString()}`;
   if (peer instanceof Api.PeerChannel) return `c${peer.channelId.toString()}`;
   if (peer instanceof Api.PeerChat) return `g${peer.chatId.toString()}`;
-  return '';
+  return "";
 }
 
 function entityName(entity: Api.User | Api.Chat | Api.Channel): string {
   if (entity instanceof Api.User) {
-    return [entity.firstName, entity.lastName].filter(Boolean).join(' ') || entity.username || 'Unknown';
+    return (
+      [entity.firstName, entity.lastName].filter(Boolean).join(" ") ||
+      entity.username ||
+      "Unknown"
+    );
   }
-  return (entity as any).title ?? (entity as any).username ?? 'Unknown';
+  return (entity as any).title ?? (entity as any).username ?? "Unknown";
 }
 
 function extractButtons(msg: Api.Message): TgButton[][] | null {
   if (!msg.replyMarkup) return null;
   if (msg.replyMarkup instanceof Api.ReplyInlineMarkup) {
-    return msg.replyMarkup.rows.map(row =>
-      row.buttons.map((btn: any): TgButton => ({
-        text: btn.text ?? '',
-        data: btn.data ? Buffer.from(btn.data).toString('base64') : null,
-        url: btn.url ?? null,
-      }))
+    return msg.replyMarkup.rows.map((row) =>
+      row.buttons.map(
+        (btn: any): TgButton => ({
+          text: btn.text ?? "",
+          data: btn.data ? Buffer.from(btn.data).toString("base64") : null,
+          url: btn.url ?? null,
+        }),
+      ),
     );
   }
   return null;
@@ -102,19 +110,30 @@ function extractButtons(msg: Api.Message): TgButton[][] | null {
 function resolveProxy(proxyId: string | null) {
   if (!proxyId) return undefined;
   try {
-    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get('proxies') as { value: string } | undefined;
+    const row = db
+      .prepare("SELECT value FROM settings WHERE key = ?")
+      .get("proxies") as { value: string } | undefined;
     if (!row?.value) return undefined;
     const list: Array<{ id: string; url: string }> = JSON.parse(row.value);
-    return parseTgProxy(list.find(p => p.id === proxyId)?.url);
-  } catch { return undefined; }
+    return parseTgProxy(list.find((p) => p.id === proxyId)?.url);
+  } catch {
+    return undefined;
+  }
 }
 
-function resolveDeviceParams(appClientId: string | null): TgDeviceParams | undefined {
+function resolveDeviceParams(
+  appClientId: string | null,
+): TgDeviceParams | undefined {
   try {
-    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get('tg_app_clients') as { value: string } | undefined;
+    const row = db
+      .prepare("SELECT value FROM settings WHERE key = ?")
+      .get("tg_app_clients") as { value: string } | undefined;
     if (!row?.value) return undefined;
-    const list: Array<{ id: string; isDefault?: boolean } & TgDeviceParams> = JSON.parse(row.value);
-    const c = appClientId ? list.find(x => x.id === appClientId) : list.find(x => x.isDefault);
+    const list: Array<{ id: string; isDefault?: boolean } & TgDeviceParams> =
+      JSON.parse(row.value);
+    const c = appClientId
+      ? list.find((x) => x.id === appClientId)
+      : list.find((x) => x.isDefault);
     if (!c) return undefined;
     return {
       deviceModel: c.deviceModel,
@@ -124,7 +143,9 @@ function resolveDeviceParams(appClientId: string | null): TgDeviceParams | undef
       langPack: c.langPack,
       systemLangCode: c.systemLangCode,
     };
-  } catch { return undefined; }
+  } catch {
+    return undefined;
+  }
 }
 
 export async function getLiveClient(accountId: number): Promise<LiveEntry> {
@@ -134,11 +155,14 @@ export async function getLiveClient(accountId: number): Promise<LiveEntry> {
     return entry;
   }
 
-  const account = db.prepare(
-    'SELECT api_id, api_hash, session_string, proxy_id, app_client_id FROM tg_accounts WHERE id = ?',
-  ).get(accountId) as AccountRow | undefined;
+  const account = db
+    .prepare(
+      "SELECT api_id, api_hash, session_string, proxy_id, app_client_id FROM tg_accounts WHERE id = ?",
+    )
+    .get(accountId) as AccountRow | undefined;
 
-  if (!account?.session_string) throw new Error('Account not found or not authenticated');
+  if (!account?.session_string)
+    throw new Error("Account not found or not authenticated");
 
   const proxy = resolveProxy(account.proxy_id);
   const deviceParams = resolveDeviceParams(account.app_client_id);
@@ -178,7 +202,7 @@ export async function getLiveClient(accountId: number): Promise<LiveEntry> {
       chatId,
       message: {
         id: msg.id,
-        text: msg.message ?? '',
+        text: msg.message ?? "",
         date: msg.date,
         fromMe: Boolean(msg.out),
         fromId: msg.fromId ? peerToChatId(msg.fromId as Api.TypePeer) : null,
@@ -189,7 +213,7 @@ export async function getLiveClient(accountId: number): Promise<LiveEntry> {
       },
     };
 
-    entry!.subscribers.forEach(sub => sub(liveMsg));
+    entry!.subscribers.forEach((sub) => sub(liveMsg));
   }, new NewMessage({}));
 
   return entry;
@@ -206,12 +230,16 @@ export async function loadDialogs(entry: LiveEntry): Promise<TgDialogItem[]> {
     const chatId = entityToChatId(entity);
     entry.entityCache.set(chatId, entity);
 
-    const type: TgDialogItem['type'] =
+    const type: TgDialogItem["type"] =
       entity instanceof Api.User
-        ? (entity.bot ? 'bot' : 'user')
+        ? entity.bot
+          ? "bot"
+          : "user"
         : entity instanceof Api.Channel
-          ? (entity.megagroup ? 'group' : 'channel')
-          : 'group';
+          ? entity.megagroup
+            ? "group"
+            : "channel"
+          : "group";
 
     const lastMsg = d.message as Api.Message | undefined;
     result.push({
@@ -221,7 +249,11 @@ export async function loadDialogs(entry: LiveEntry): Promise<TgDialogItem[]> {
       username: (entity as any).username ?? null,
       unreadCount: d.dialog.unreadCount ?? 0,
       lastMessage: lastMsg
-        ? { text: lastMsg.message ?? '', date: lastMsg.date, fromMe: Boolean(lastMsg.out) }
+        ? {
+            text: lastMsg.message ?? "",
+            date: lastMsg.date,
+            fromMe: Boolean(lastMsg.out),
+          }
         : null,
     });
   }
@@ -229,7 +261,10 @@ export async function loadDialogs(entry: LiveEntry): Promise<TgDialogItem[]> {
   return result;
 }
 
-export async function ensureEntityCached(entry: LiveEntry, chatId: string): Promise<void> {
+export async function ensureEntityCached(
+  entry: LiveEntry,
+  chatId: string,
+): Promise<void> {
   if (entry.entityCache.has(chatId)) return;
   await loadDialogs(entry);
 }
@@ -242,14 +277,14 @@ export async function getMessages(
 ): Promise<TgMsgPayload[]> {
   await ensureEntityCached(entry, chatId);
   const entity = entry.entityCache.get(chatId);
-  if (!entity) throw new Error('Chat not found -- open the dialogs list first');
+  if (!entity) throw new Error("Chat not found -- open the dialogs list first");
 
   const msgs = await entry.client.getMessages(entity, {
     limit,
     ...(offsetId ? { offsetId } : {}),
   });
 
-  return msgs.map(msg => {
+  return msgs.map((msg) => {
     let fromName: string | null = null;
     if (msg.fromId) {
       const fid = peerToChatId(msg.fromId as Api.TypePeer);
@@ -258,7 +293,7 @@ export async function getMessages(
     }
     return {
       id: msg.id,
-      text: msg.message ?? '',
+      text: msg.message ?? "",
       date: msg.date,
       fromMe: Boolean(msg.out),
       fromId: msg.fromId ? peerToChatId(msg.fromId as Api.TypePeer) : null,
@@ -270,43 +305,58 @@ export async function getMessages(
   });
 }
 
-export async function sendMessage(entry: LiveEntry, chatId: string, text: string): Promise<{ id: number; date: number }> {
+export async function sendMessage(
+  entry: LiveEntry,
+  chatId: string,
+  text: string,
+): Promise<{ id: number; date: number }> {
   await ensureEntityCached(entry, chatId);
   const entity = entry.entityCache.get(chatId);
-  if (!entity) throw new Error('Chat not found');
+  if (!entity) throw new Error("Chat not found");
 
   const result = await entry.client.sendMessage(entity, { message: text });
   return { id: result.id, date: result.date };
 }
 
 export async function getContacts(entry: LiveEntry): Promise<TgContactItem[]> {
-  const result = await entry.client.invoke(new Api.contacts.GetContacts({ hash: BigInt(0) as any }));
-  if (!('users' in result)) return [];
+  const result = await entry.client.invoke(
+    new Api.contacts.GetContacts({ hash: BigInt(0) as any }),
+  );
+  if (!("users" in result)) return [];
 
   return (result.users as Api.User[])
-    .filter(u => !u.deleted)
-    .map(u => {
+    .filter((u) => !u.deleted)
+    .map((u) => {
       const chatId = entityToChatId(u);
       entry.entityCache.set(chatId, u);
       return {
         chatId,
-        firstName: u.firstName ?? '',
-        lastName: u.lastName ?? '',
+        firstName: u.firstName ?? "",
+        lastName: u.lastName ?? "",
         username: u.username ?? null,
         phone: u.phone ?? null,
       };
     });
 }
 
-export async function addContact(entry: LiveEntry, phone: string, firstName: string, lastName = ''): Promise<TgContactItem | null> {
-  const result = await entry.client.invoke(new Api.contacts.ImportContacts({
-    contacts: [new Api.InputPhoneContact({
-      clientId: BigInt(Date.now() % 1_000_000) as any,
-      phone,
-      firstName,
-      lastName,
-    })],
-  }));
+export async function addContact(
+  entry: LiveEntry,
+  phone: string,
+  firstName: string,
+  lastName = "",
+): Promise<TgContactItem | null> {
+  const result = await entry.client.invoke(
+    new Api.contacts.ImportContacts({
+      contacts: [
+        new Api.InputPhoneContact({
+          clientId: BigInt(Date.now() % 1_000_000) as any,
+          phone,
+          firstName,
+          lastName,
+        }),
+      ],
+    }),
+  );
 
   const user = (result.users as Api.User[])[0];
   if (!user) return null;
@@ -315,15 +365,20 @@ export async function addContact(entry: LiveEntry, phone: string, firstName: str
   entry.entityCache.set(chatId, user);
   return {
     chatId,
-    firstName: user.firstName ?? '',
-    lastName: user.lastName ?? '',
+    firstName: user.firstName ?? "",
+    lastName: user.lastName ?? "",
     username: user.username ?? null,
     phone: user.phone ?? null,
   };
 }
 
-export async function searchPeers(entry: LiveEntry, query: string): Promise<TgDialogItem[]> {
-  const result = await entry.client.invoke(new Api.contacts.Search({ q: query, limit: 20 }));
+export async function searchPeers(
+  entry: LiveEntry,
+  query: string,
+): Promise<TgDialogItem[]> {
+  const result = await entry.client.invoke(
+    new Api.contacts.Search({ q: query, limit: 20 }),
+  );
 
   const items: TgDialogItem[] = [];
 
@@ -334,7 +389,7 @@ export async function searchPeers(entry: LiveEntry, query: string): Promise<TgDi
     items.push({
       chatId,
       name: entityName(u),
-      type: u.bot ? 'bot' : 'user',
+      type: u.bot ? "bot" : "user",
       username: u.username ?? null,
       unreadCount: 0,
       lastMessage: null,
@@ -348,7 +403,12 @@ export async function searchPeers(entry: LiveEntry, query: string): Promise<TgDi
     items.push({
       chatId,
       name: entityName(c as Api.Chat | Api.Channel),
-      type: c instanceof Api.Channel ? (c.megagroup ? 'group' : 'channel') : 'group',
+      type:
+        c instanceof Api.Channel
+          ? c.megagroup
+            ? "group"
+            : "channel"
+          : "group",
       username: (c as any).username ?? null,
       unreadCount: 0,
       lastMessage: null,
@@ -358,7 +418,11 @@ export async function searchPeers(entry: LiveEntry, query: string): Promise<TgDi
   return items;
 }
 
-export async function fetchPhoto(entry: LiveEntry, chatId: string, msgId: number): Promise<Buffer | null> {
+export async function fetchPhoto(
+  entry: LiveEntry,
+  chatId: string,
+  msgId: number,
+): Promise<Buffer | null> {
   await ensureEntityCached(entry, chatId);
   const entity = entry.entityCache.get(chatId);
   if (!entity) return null;
@@ -369,20 +433,26 @@ export async function fetchPhoto(entry: LiveEntry, chatId: string, msgId: number
   const data = await entry.client.downloadMedia(msg, {});
   if (!data) return null;
   if (Buffer.isBuffer(data)) return data;
-  if (typeof data === 'string') return Buffer.from(data, 'binary');
+  if (typeof data === "string") return Buffer.from(data, "binary");
   return Buffer.from(data as Uint8Array);
 }
 
-export async function fetchAvatar(entry: LiveEntry, chatId: string): Promise<Buffer | null> {
+export async function fetchAvatar(
+  entry: LiveEntry,
+  chatId: string,
+): Promise<Buffer | null> {
   await ensureEntityCached(entry, chatId);
   const entity = entry.entityCache.get(chatId);
   if (!entity) return null;
   try {
-    const data = await entry.client.downloadProfilePhoto(entity as any);
-    if (!data) return null;
+    // isBig must be provided -- GramJS throws TypeError if fileParams is undefined
+    const data = await entry.client.downloadProfilePhoto(
+      entity as any,
+      { isBig: false } as any,
+    );
+    if (!data || (Buffer.isBuffer(data) && data.length === 0)) return null;
     if (Buffer.isBuffer(data)) return data;
-    if (typeof data === 'string') return Buffer.from(data, 'binary');
-    return Buffer.from(data as Uint8Array);
+    return Buffer.from(data as unknown as Uint8Array);
   } catch {
     return null;
   }
@@ -391,40 +461,54 @@ export async function fetchAvatar(entry: LiveEntry, chatId: string): Promise<Buf
 export type TgProfileInfo = {
   chatId: string;
   name: string;
-  type: 'user' | 'bot' | 'group' | 'channel';
+  type: "user" | "bot" | "group" | "channel";
   username: string | null;
   phone: string | null;
   bio: string | null;
   memberCount: number | null;
 };
 
-export async function getEntityDetails(entry: LiveEntry, chatId: string): Promise<TgProfileInfo> {
+export async function getEntityDetails(
+  entry: LiveEntry,
+  chatId: string,
+): Promise<TgProfileInfo> {
   await ensureEntityCached(entry, chatId);
   const entity = entry.entityCache.get(chatId);
-  if (!entity) throw new Error('Entity not found');
+  if (!entity) throw new Error("Entity not found");
 
-  const type: TgProfileInfo['type'] =
+  const type: TgProfileInfo["type"] =
     entity instanceof Api.User
-      ? ((entity as any).bot ? 'bot' : 'user')
+      ? (entity as any).bot
+        ? "bot"
+        : "user"
       : entity instanceof Api.Channel
-        ? ((entity as any).megagroup ? 'group' : 'channel')
-        : 'group';
+        ? (entity as any).megagroup
+          ? "group"
+          : "channel"
+        : "group";
 
   let bio: string | null = null;
   let memberCount: number | null = null;
 
   try {
     if (entity instanceof Api.User) {
-      const full = await entry.client.invoke(new Api.users.GetFullUser({ id: entity as any }));
+      const full = await entry.client.invoke(
+        new Api.users.GetFullUser({ id: entity as any }),
+      );
       bio = (full as any).fullUser?.about ?? null;
     } else if (entity instanceof Api.Channel) {
-      const full = await entry.client.invoke(new Api.channels.GetFullChannel({ channel: entity as any }));
+      const full = await entry.client.invoke(
+        new Api.channels.GetFullChannel({ channel: entity as any }),
+      );
       bio = (full as any).fullChat?.about ?? null;
       memberCount = (full as any).fullChat?.participantsCount ?? null;
     } else {
-      const full = await entry.client.invoke(new Api.messages.GetFullChat({ chatId: (entity as any).id as any }));
+      const full = await entry.client.invoke(
+        new Api.messages.GetFullChat({ chatId: (entity as any).id as any }),
+      );
       bio = (full as any).fullChat?.about ?? null;
-      memberCount = (full as any).fullChat?.participants?.participants?.length ?? null;
+      memberCount =
+        (full as any).fullChat?.participants?.participants?.length ?? null;
     }
   } catch {
     // Full details unavailable -- basic info from entity cache is still returned
@@ -457,49 +541,84 @@ export type TgFolderItem = {
 
 // Convert an InputPeer (from DialogFilter peer lists) to chatId format
 function inputPeerToChatId(peer: any): string {
-  if (!peer) return '';
+  if (!peer) return "";
   if (peer.userId !== undefined) return `u${peer.userId}`;
   if (peer.channelId !== undefined) return `c${peer.channelId}`;
   if (peer.chatId !== undefined) return `g${peer.chatId}`;
-  return '';
+  return "";
 }
 
 // Mute a dialog -- pass muteSecs=0 to unmute
-export async function muteDialog(entry: LiveEntry, chatId: string, muteSecs: number): Promise<void> {
+export async function muteDialog(
+  entry: LiveEntry,
+  chatId: string,
+  muteSecs: number,
+): Promise<void> {
   await ensureEntityCached(entry, chatId);
   const entity = entry.entityCache.get(chatId);
-  if (!entity) throw new Error('Entity not found');
+  if (!entity) throw new Error("Entity not found");
 
   let peer: any;
   if (entity instanceof Api.User) {
-    peer = new Api.InputNotifyPeer({ peer: new Api.InputPeerUser({ userId: (entity as any).id, accessHash: (entity as any).accessHash ?? BigInt(0) as any }) });
+    peer = new Api.InputNotifyPeer({
+      peer: new Api.InputPeerUser({
+        userId: (entity as any).id,
+        accessHash: (entity as any).accessHash ?? (BigInt(0) as any),
+      }),
+    });
   } else if (entity instanceof Api.Channel) {
-    peer = new Api.InputNotifyPeer({ peer: new Api.InputPeerChannel({ channelId: (entity as any).id, accessHash: (entity as any).accessHash ?? BigInt(0) as any }) });
+    peer = new Api.InputNotifyPeer({
+      peer: new Api.InputPeerChannel({
+        channelId: (entity as any).id,
+        accessHash: (entity as any).accessHash ?? (BigInt(0) as any),
+      }),
+    });
   } else {
-    peer = new Api.InputNotifyPeer({ peer: new Api.InputPeerChat({ chatId: (entity as any).id as any }) });
+    peer = new Api.InputNotifyPeer({
+      peer: new Api.InputPeerChat({ chatId: (entity as any).id as any }),
+    });
   }
 
-  await entry.client.invoke(new Api.account.UpdateNotifySettings({
-    peer,
-    settings: new Api.InputPeerNotifySettings({
-      muteUntil: muteSecs === 0 ? 0 : Math.floor(Date.now() / 1000) + muteSecs,
+  await entry.client.invoke(
+    new Api.account.UpdateNotifySettings({
+      peer,
+      settings: new Api.InputPeerNotifySettings({
+        muteUntil:
+          muteSecs === 0 ? 0 : Math.floor(Date.now() / 1000) + muteSecs,
+      }),
     }),
-  }));
+  );
 }
 
 // Pin or unpin a dialog in the user's dialog list
-export async function pinDialog(entry: LiveEntry, chatId: string, pinned: boolean): Promise<void> {
+export async function pinDialog(
+  entry: LiveEntry,
+  chatId: string,
+  pinned: boolean,
+): Promise<void> {
   await ensureEntityCached(entry, chatId);
   const entity = entry.entityCache.get(chatId);
-  if (!entity) throw new Error('Entity not found');
+  if (!entity) throw new Error("Entity not found");
 
   let peer: any;
   if (entity instanceof Api.User) {
-    peer = new Api.InputDialogPeer({ peer: new Api.InputPeerUser({ userId: (entity as any).id, accessHash: (entity as any).accessHash ?? BigInt(0) as any }) });
+    peer = new Api.InputDialogPeer({
+      peer: new Api.InputPeerUser({
+        userId: (entity as any).id,
+        accessHash: (entity as any).accessHash ?? (BigInt(0) as any),
+      }),
+    });
   } else if (entity instanceof Api.Channel) {
-    peer = new Api.InputDialogPeer({ peer: new Api.InputPeerChannel({ channelId: (entity as any).id, accessHash: (entity as any).accessHash ?? BigInt(0) as any }) });
+    peer = new Api.InputDialogPeer({
+      peer: new Api.InputPeerChannel({
+        channelId: (entity as any).id,
+        accessHash: (entity as any).accessHash ?? (BigInt(0) as any),
+      }),
+    });
   } else {
-    peer = new Api.InputDialogPeer({ peer: new Api.InputPeerChat({ chatId: (entity as any).id as any }) });
+    peer = new Api.InputDialogPeer({
+      peer: new Api.InputPeerChat({ chatId: (entity as any).id as any }),
+    });
   }
 
   await entry.client.invoke(new Api.messages.ToggleDialogPin({ peer, pinned }));
@@ -509,22 +628,31 @@ export async function getFolders(entry: LiveEntry): Promise<TgFolderItem[]> {
   try {
     const raw = await entry.client.invoke(new Api.messages.GetDialogFilters());
     // Older layers return a plain array; newer layers wrap in { filters: [...] }
-    const filters: any[] = Array.isArray(raw) ? raw : ((raw as any)?.filters ?? []);
+    const filters: any[] = Array.isArray(raw)
+      ? raw
+      : ((raw as any)?.filters ?? []);
 
     return filters
       .filter((f: any) => f.id && f.title !== undefined)
       .map((f: any) => ({
         id: f.id as number,
-        title: typeof f.title === 'string' ? f.title : (f.title?.text ?? 'Folder'),
+        title:
+          typeof f.title === "string" ? f.title : (f.title?.text ?? "Folder"),
         emoticon: (f.emoticon as string | undefined) ?? null,
-        includeGroups:    Boolean(f.groups),
+        includeGroups: Boolean(f.groups),
         includeBroadcasts: Boolean(f.broadcasts),
-        includeBots:      Boolean(f.bots),
-        includeContacts:  Boolean(f.contacts),
+        includeBots: Boolean(f.bots),
+        includeContacts: Boolean(f.contacts),
         includeNonContacts: Boolean(f.nonContacts),
-        pinnedChatIds:   ((f.pinnedPeers  ?? []) as any[]).map(inputPeerToChatId).filter(Boolean),
-        includedChatIds: ((f.includePeers ?? []) as any[]).map(inputPeerToChatId).filter(Boolean),
-        excludedChatIds: ((f.excludePeers ?? []) as any[]).map(inputPeerToChatId).filter(Boolean),
+        pinnedChatIds: ((f.pinnedPeers ?? []) as any[])
+          .map(inputPeerToChatId)
+          .filter(Boolean),
+        includedChatIds: ((f.includePeers ?? []) as any[])
+          .map(inputPeerToChatId)
+          .filter(Boolean),
+        excludedChatIds: ((f.excludePeers ?? []) as any[])
+          .map(inputPeerToChatId)
+          .filter(Boolean),
       }));
   } catch {
     return [];
@@ -546,14 +674,14 @@ export async function clickButton(
   const { client } = entry;
   await ensureEntityCached(entry, chatId);
   const entity = entry.entityCache.get(chatId);
-  if (!entity) throw new Error('Chat not found');
+  if (!entity) throw new Error("Chat not found");
   const result = await client.invoke(
     new Api.messages.GetBotCallbackAnswer({
       peer: entity as any,
       msgId,
-      data: Buffer.from(data, 'base64'),
+      data: Buffer.from(data, "base64"),
       game: false,
-    })
+    }),
   );
   return {
     alert: result.alert ?? false,
@@ -562,7 +690,10 @@ export async function clickButton(
   };
 }
 
-export function subscribeToMessages(accountId: number, handler: (msg: TgLiveMessage) => void): () => void {
+export function subscribeToMessages(
+  accountId: number,
+  handler: (msg: TgLiveMessage) => void,
+): () => void {
   const entry = liveClients.get(accountId);
   if (!entry) return () => {};
   entry.subscribers.add(handler);

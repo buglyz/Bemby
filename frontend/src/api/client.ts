@@ -593,7 +593,9 @@ export const tgClientApi = {
       .post<{
         id: number;
         date: number;
-      }>(`/tg-client/${accountId}/messages/${encodeURIComponent(chatId)}`, { text })
+      }>(`/tg-client/${accountId}/messages/${encodeURIComponent(chatId)}`, {
+        text,
+      })
       .then((r) => r.data),
 
   contacts: (accountId: number) =>
@@ -628,8 +630,10 @@ export const tgClientApi = {
   folders: (accountId: number) =>
     api.get<TgFolder[]>(`/tg-client/${accountId}/folders`).then((r) => r.data),
 
-  avatarUrl: (accountId: number, chatId: string) =>
-    `/api/tg-client/${accountId}/avatar/${encodeURIComponent(chatId)}`,
+  avatarUrl: (accountId: number, chatId: string) => {
+    const token = localStorage.getItem("token") ?? "";
+    return `/api/tg-client/${accountId}/avatar/${encodeURIComponent(chatId)}?token=${encodeURIComponent(token)}`;
+  },
 
   profile: (accountId: number, chatId: string) =>
     api
@@ -642,14 +646,18 @@ export const tgClientApi = {
     api
       .post<{
         ok: boolean;
-      }>(`/tg-client/${accountId}/mute/${encodeURIComponent(chatId)}`, { muteSecs })
+      }>(`/tg-client/${accountId}/mute/${encodeURIComponent(chatId)}`, {
+        muteSecs,
+      })
       .then((r) => r.data),
 
   pin: (accountId: number, chatId: string, pinned: boolean) =>
     api
       .post<{
         ok: boolean;
-      }>(`/tg-client/${accountId}/pin/${encodeURIComponent(chatId)}`, { pinned })
+      }>(`/tg-client/${accountId}/pin/${encodeURIComponent(chatId)}`, {
+        pinned,
+      })
       .then((r) => r.data),
 
   clickButton: (
@@ -663,7 +671,10 @@ export const tgClientApi = {
         alert: boolean;
         message: string | null;
         url: string | null;
-      }>(`/tg-client/${accountId}/messages/${encodeURIComponent(chatId)}/${msgId}/button`, { data })
+      }>(
+        `/tg-client/${accountId}/messages/${encodeURIComponent(chatId)}/${msgId}/button`,
+        { data },
+      )
       .then((r) => r.data),
 };
 

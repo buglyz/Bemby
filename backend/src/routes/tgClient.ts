@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router } from "express";
 import {
   getLiveClient,
   loadDialogs,
@@ -15,12 +15,12 @@ import {
   clickButton,
   subscribeToMessages,
   getFolders,
-} from '../tg/liveClient';
+} from "../tg/liveClient";
 
 const router = Router();
 
 // GET /:accountId/folders
-router.get('/:accountId/folders', async (req, res) => {
+router.get("/:accountId/folders", async (req, res) => {
   const accountId = Number(req.params.accountId);
   try {
     const entry = await getLiveClient(accountId);
@@ -31,7 +31,7 @@ router.get('/:accountId/folders', async (req, res) => {
 });
 
 // GET /:accountId/dialogs
-router.get('/:accountId/dialogs', async (req, res) => {
+router.get("/:accountId/dialogs", async (req, res) => {
   const accountId = Number(req.params.accountId);
   try {
     const entry = await getLiveClient(accountId);
@@ -43,7 +43,7 @@ router.get('/:accountId/dialogs', async (req, res) => {
 });
 
 // GET /:accountId/messages/:chatId?limit=50&offsetId=0
-router.get('/:accountId/messages/:chatId', async (req, res) => {
+router.get("/:accountId/messages/:chatId", async (req, res) => {
   const accountId = Number(req.params.accountId);
   const chatId = req.params.chatId;
   const limit = Math.min(Number(req.query.limit ?? 50), 100);
@@ -58,11 +58,14 @@ router.get('/:accountId/messages/:chatId', async (req, res) => {
 });
 
 // POST /:accountId/messages/:chatId -- send a message
-router.post('/:accountId/messages/:chatId', async (req, res) => {
+router.post("/:accountId/messages/:chatId", async (req, res) => {
   const accountId = Number(req.params.accountId);
   const chatId = req.params.chatId;
   const { text } = req.body as { text?: string };
-  if (!text?.trim()) { res.status(400).json({ error: 'text is required' }); return; }
+  if (!text?.trim()) {
+    res.status(400).json({ error: "text is required" });
+    return;
+  }
   try {
     const entry = await getLiveClient(accountId);
     const result = await sendMessage(entry, chatId, text.trim());
@@ -73,7 +76,7 @@ router.post('/:accountId/messages/:chatId', async (req, res) => {
 });
 
 // GET /:accountId/contacts
-router.get('/:accountId/contacts', async (req, res) => {
+router.get("/:accountId/contacts", async (req, res) => {
   const accountId = Number(req.params.accountId);
   try {
     const entry = await getLiveClient(accountId);
@@ -85,14 +88,24 @@ router.get('/:accountId/contacts', async (req, res) => {
 });
 
 // POST /:accountId/contacts -- add by phone number
-router.post('/:accountId/contacts', async (req, res) => {
+router.post("/:accountId/contacts", async (req, res) => {
   const accountId = Number(req.params.accountId);
-  const { phone, firstName, lastName } = req.body as { phone?: string; firstName?: string; lastName?: string };
-  if (!phone || !firstName) { res.status(400).json({ error: 'phone and firstName are required' }); return; }
+  const { phone, firstName, lastName } = req.body as {
+    phone?: string;
+    firstName?: string;
+    lastName?: string;
+  };
+  if (!phone || !firstName) {
+    res.status(400).json({ error: "phone and firstName are required" });
+    return;
+  }
   try {
     const entry = await getLiveClient(accountId);
-    const contact = await addContact(entry, phone, firstName, lastName ?? '');
-    if (!contact) { res.status(404).json({ error: 'Phone number not found on Telegram' }); return; }
+    const contact = await addContact(entry, phone, firstName, lastName ?? "");
+    if (!contact) {
+      res.status(404).json({ error: "Phone number not found on Telegram" });
+      return;
+    }
     res.json(contact);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -100,10 +113,13 @@ router.post('/:accountId/contacts', async (req, res) => {
 });
 
 // GET /:accountId/search?q=
-router.get('/:accountId/search', async (req, res) => {
+router.get("/:accountId/search", async (req, res) => {
   const accountId = Number(req.params.accountId);
-  const q = String(req.query.q ?? '').trim();
-  if (!q) { res.json([]); return; }
+  const q = String(req.query.q ?? "").trim();
+  if (!q) {
+    res.json([]);
+    return;
+  }
   try {
     const entry = await getLiveClient(accountId);
     const results = await searchPeers(entry, q);
@@ -114,7 +130,7 @@ router.get('/:accountId/search', async (req, res) => {
 });
 
 // POST /:accountId/mute/:chatId -- mute (muteSecs>0) or unmute (muteSecs=0)
-router.post('/:accountId/mute/:chatId', async (req, res) => {
+router.post("/:accountId/mute/:chatId", async (req, res) => {
   const accountId = Number(req.params.accountId);
   const chatId = decodeURIComponent(req.params.chatId);
   const { muteSecs = 0 } = req.body as { muteSecs?: number };
@@ -128,7 +144,7 @@ router.post('/:accountId/mute/:chatId', async (req, res) => {
 });
 
 // POST /:accountId/pin/:chatId -- pin or unpin
-router.post('/:accountId/pin/:chatId', async (req, res) => {
+router.post("/:accountId/pin/:chatId", async (req, res) => {
   const accountId = Number(req.params.accountId);
   const chatId = decodeURIComponent(req.params.chatId);
   const { pinned = true } = req.body as { pinned?: boolean };
@@ -142,15 +158,18 @@ router.post('/:accountId/pin/:chatId', async (req, res) => {
 });
 
 // GET /:accountId/avatar/:chatId -- profile photo
-router.get('/:accountId/avatar/:chatId', async (req, res) => {
+router.get("/:accountId/avatar/:chatId", async (req, res) => {
   const accountId = Number(req.params.accountId);
   const chatId = decodeURIComponent(req.params.chatId);
   try {
     const entry = await getLiveClient(accountId);
     const buf = await fetchAvatar(entry, chatId);
-    if (!buf) { res.status(404).end(); return; }
-    res.set('Content-Type', 'image/jpeg');
-    res.set('Cache-Control', 'public, max-age=86400');
+    if (!buf) {
+      res.status(404).end();
+      return;
+    }
+    res.set("Content-Type", "image/jpeg");
+    res.set("Cache-Control", "public, max-age=86400");
     res.send(buf);
   } catch {
     res.status(404).end();
@@ -158,7 +177,7 @@ router.get('/:accountId/avatar/:chatId', async (req, res) => {
 });
 
 // GET /:accountId/profile/:chatId -- full entity details
-router.get('/:accountId/profile/:chatId', async (req, res) => {
+router.get("/:accountId/profile/:chatId", async (req, res) => {
   const accountId = Number(req.params.accountId);
   const chatId = decodeURIComponent(req.params.chatId);
   try {
@@ -170,12 +189,15 @@ router.get('/:accountId/profile/:chatId', async (req, res) => {
 });
 
 // POST /:accountId/messages/:chatId/:msgId/button -- trigger inline keyboard callback
-router.post('/:accountId/messages/:chatId/:msgId/button', async (req, res) => {
+router.post("/:accountId/messages/:chatId/:msgId/button", async (req, res) => {
   const accountId = Number(req.params.accountId);
   const chatId = decodeURIComponent(req.params.chatId);
   const msgId = Number(req.params.msgId);
   const { data } = req.body as { data?: string };
-  if (!data) { res.status(400).json({ error: 'data is required' }); return; }
+  if (!data) {
+    res.status(400).json({ error: "data is required" });
+    return;
+  }
   try {
     const entry = await getLiveClient(accountId);
     const result = await clickButton(entry, chatId, msgId, data);
@@ -186,16 +208,19 @@ router.post('/:accountId/messages/:chatId/:msgId/button', async (req, res) => {
 });
 
 // GET /:accountId/messages/:chatId/:msgId/photo -- fetch photo for a message
-router.get('/:accountId/messages/:chatId/:msgId/photo', async (req, res) => {
+router.get("/:accountId/messages/:chatId/:msgId/photo", async (req, res) => {
   const accountId = Number(req.params.accountId);
   const chatId = req.params.chatId;
   const msgId = Number(req.params.msgId);
   try {
     const entry = await getLiveClient(accountId);
     const buf = await fetchPhoto(entry, chatId, msgId);
-    if (!buf) { res.status(404).json({ error: 'Photo not found' }); return; }
-    res.set('Content-Type', 'image/jpeg');
-    res.set('Cache-Control', 'private, max-age=3600');
+    if (!buf) {
+      res.status(404).json({ error: "Photo not found" });
+      return;
+    }
+    res.set("Content-Type", "image/jpeg");
+    res.set("Cache-Control", "private, max-age=3600");
     res.send(buf);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -203,16 +228,16 @@ router.get('/:accountId/messages/:chatId/:msgId/photo', async (req, res) => {
 });
 
 // GET /:accountId/events -- SSE stream for real-time messages
-router.get('/:accountId/events', async (req, res) => {
+router.get("/:accountId/events", async (req, res) => {
   const accountId = Number(req.params.accountId);
 
   res.writeHead(200, {
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
-    'Connection': 'keep-alive',
-    'X-Accel-Buffering': 'no',
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    Connection: "keep-alive",
+    "X-Accel-Buffering": "no",
   });
-  res.write(':\n\n');
+  res.write(":\n\n");
 
   const send = (data: object) => {
     res.write(`data: ${JSON.stringify(data)}\n\n`);
@@ -222,18 +247,18 @@ router.get('/:accountId/events', async (req, res) => {
     // Ensure client is alive so the event handler is registered
     await getLiveClient(accountId);
 
-    const heartbeat = setInterval(() => res.write(':\n\n'), 25_000);
+    const heartbeat = setInterval(() => res.write(":\n\n"), 25_000);
 
     const unsubscribe = subscribeToMessages(accountId, (msg) => {
-      send({ type: 'message', ...msg });
+      send({ type: "message", ...msg });
     });
 
-    req.on('close', () => {
+    req.on("close", () => {
       clearInterval(heartbeat);
       unsubscribe();
     });
   } catch (err: any) {
-    send({ type: 'error', error: err.message });
+    send({ type: "error", error: err.message });
     res.end();
   }
 });

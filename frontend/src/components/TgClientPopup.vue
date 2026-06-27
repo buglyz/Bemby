@@ -239,8 +239,8 @@
               </button>
               <button
                 class="tgc-icon-btn tgc-chat-close-btn"
-                @click="$emit('close')"
-                title="Close"
+                @click="closeChat"
+                title="Close chat"
               >
                 <i class="fa-solid fa-xmark"></i>
               </button>
@@ -270,14 +270,6 @@
             >
               <div v-if="loadingOlder" class="tgc-load-more">
                 <span class="tgc-spinner"></span>
-              </div>
-              <div
-                v-if="canLoadMore && !loadingOlder && messages.length >= 50"
-                class="tgc-load-more"
-              >
-                <button class="tgc-load-more-btn" @click="loadOlderMessages">
-                  Load older messages
-                </button>
               </div>
               <div
                 v-if="loadingMessages"
@@ -2223,6 +2215,9 @@ function onMsgScroll() {
   const el = messagesEl.value;
   if (!el) return;
   scrolledToBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 40;
+  if (el.scrollTop <= 60 && canLoadMore.value && !loadingOlder.value && messages.value.length >= 30) {
+    loadOlderMessages();
+  }
 }
 
 function autoResize() {
@@ -2505,13 +2500,13 @@ async function jumpToPinned() {
   }
 }
 
-function backToDialogs() {
+async function backToDialogs() {
   const prev = chatNavStack.value.pop();
   if (prev) {
     const remainingStack = [...chatNavStack.value];
     // Save before openChat clears join state
     const savedPendingId = pendingJoinChatId.value;
-    openChat(prev);
+    await openChat(prev);
     chatNavStack.value = remainingStack;
     // If navigating back to the group that has a pending join, restore the pending state
     if (savedPendingId && prev.chatId === savedPendingId) {
@@ -2520,7 +2515,34 @@ function backToDialogs() {
       startMembershipPoll();
     }
   } else {
+    // No nav history -- on mobile this returns to the dialog list; on desktop it's a no-op
     showMobileChat.value = false;
+  }
+}
+
+function closeChat() {
+  const prev = chatNavStack.value.pop();
+  if (prev) {
+    // Has history -- navigate back (same as Back button)
+    const remainingStack = [...chatNavStack.value];
+    const savedPendingId = pendingJoinChatId.value;
+    openChat(prev).then(() => {
+      chatNavStack.value = remainingStack;
+      if (savedPendingId && prev.chatId === savedPendingId) {
+        joinRequestSent.value = true;
+        pendingJoinChatId.value = savedPendingId;
+        startMembershipPoll();
+      }
+    });
+  } else {
+    // No history -- fully deselect the chat
+    showMobileChat.value = false;
+    activeChatId.value = null;
+    activeChat.value = null;
+    messages.value = [];
+    pinnedMsg.value = null;
+    stopBotMsgWatch();
+    stopMembershipPoll();
   }
 }
 

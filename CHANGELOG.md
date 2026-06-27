@@ -4,6 +4,24 @@ All notable changes to Bemby are documented here.
 
 ---
 
+## v0.9.25
+
+### 中文
+
+- **账号页面新增 TG 账号列** -- 账号列表新增"TG 账号"列，显示每个 Telegram 账号的显示名称和用户名；数据存储于数据库，首次访问时自动获取已认证账号的信息，可通过悬停显示的刷新按钮手动更新；移动端隐藏该列，刷新操作合并至 ⋯ 操作菜单；查看账号状态时同步更新数据库中的显示名称
+- **消息客户端导航修复** -- 修复返回按钮和关闭按钮的导航问题；返回按钮现可正确跳转至历史记录中的上一个聊天；关闭 (X) 按钮无导航历史时正确取消选中当前聊天（显示空状态），移动端返回对话列表
+- **滚动至顶部自动加载历史消息** -- 消息区域滚动至顶部时自动加载更早的消息，不再需要手动点击"加载更早消息"按钮；同时修复固定消息横幅遮挡该按钮的问题
+- **头像加载队列优化** -- 头像改为按需逐个加载，最多 3 个并发请求；按用户 ID 缓存（跨账号共享），已缓存的头像不再重复请求
+
+### English
+
+- **TG Name column on Accounts page** -- a new "TG Name" column shows each account's Telegram display name and username; data is stored in the database, auto-fetched on first visit for authenticated accounts with no stored name, and refreshable on demand via a hover-revealed button; the column is hidden on mobile with a "TG Name" refresh option in the ⋯ action sheet; checking account status also updates the stored display name
+- **Messenger back/close navigation fixed** -- the Back button now correctly navigates to the previous chat when history exists; the close (X) button deselects the current chat (shows empty state) when there is no navigation history, or navigates back if there is; on mobile Back still returns to the dialog list
+- **Auto-load older messages on scroll** -- scrolling to the top of the messages area now automatically loads older messages, replacing the manual "Load older messages" button; also fixes the pinned message banner blocking that button
+- **Avatar loading queue** -- avatars now load on demand one at a time with a maximum of 3 concurrent requests; cached by user ID and shared across all accounts so already-fetched avatars are never re-requested
+
+---
+
 ## v0.9.24
 
 ### 中文

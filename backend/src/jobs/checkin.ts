@@ -530,6 +530,71 @@ export function waitForNewBotMessage(
   });
 }
 
+export type SpamStatus = "free" | "limited" | "blocked" | "frozen" | "unknown";
+
+function parseSpamStatus(text: string): SpamStatus {
+  const lower = text.toLowerCase();
+  if (lower.includes("good news") || lower.includes("no limits") || lower.includes("free as a bird")) return "free";
+  if (lower.includes("permanently") || lower.includes("banned") || lower.includes("suspended")) return "blocked";
+  // SpamBot says "blocked" for frozen accounts (temporary restriction, not a permanent ban)
+  if (lower.includes("frozen") || lower.includes("blocked")) return "frozen";
+  if (lower.includes("limited")) return "limited";
+  return "unknown";
+}
+
+export async function checkSpamStatus(
+  apiId: number,
+  apiHash: string,
+  sessionString: string,
+  proxy?: TgProxy,
+  deviceParams?: TgDeviceParams,
+): Promise<{ spamStatus: SpamStatus; rawMessage: string }> {
+  const SPAM_BOT = "SpamBot";
+  const TIMEOUT_MS = 25_000;
+
+  const client = new TelegramClient(new StringSession(sessionString), apiId, apiHash, {
+    connectionRetries: 5,
+    autoReconnect: false,
+    baseLogger: new Logger(LogLevel.NONE),
+    ...(proxy ? { proxy } : {}),
+    ...(deviceParams ?? {}),
+  });
+
+  await client.connect();
+
+  try {
+    // Set up listener BEFORE sending to avoid missing a fast reply
+    const replyPromise = new Promise<string>((resolve, reject) => {
+      let done = false;
+
+      const finish = (result: string | Error) => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        client.removeEventHandler(handler, new NewMessage({}));
+        if (result instanceof Error) reject(result);
+        else resolve(result);
+      };
+
+      const timer = setTimeout(() => finish(new Error("SpamBot did not reply in time")), TIMEOUT_MS);
+
+      const handler = async (event: NewMessageEvent) => {
+        const msg = event.message as Api.Message;
+        const text = (msg.message ?? "").trim();
+        if (text) finish(text);
+      };
+
+      client.addEventHandler(handler, new NewMessage({ fromUsers: [SPAM_BOT] }));
+    });
+
+    await client.sendMessage(SPAM_BOT, { message: "/start" });
+    const rawMessage = await replyPromise;
+    return { spamStatus: parseSpamStatus(rawMessage), rawMessage };
+  } finally {
+    try { await client.disconnect(); } catch { /* ignore */ }
+  }
+}
+
 export async function runCheckin(
   apiId: number,
   apiHash: string,

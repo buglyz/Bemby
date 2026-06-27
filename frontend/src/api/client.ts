@@ -75,6 +75,11 @@ export type AccountExportPayload = {
   accounts: AccountExportItem[];
 };
 
+export type TgSpamStatus = {
+  spamStatus: "free" | "limited" | "blocked" | "frozen" | "unknown";
+  rawMessage: string;
+};
+
 export type TgAccountStatus = {
   isActive: boolean;
   isDeleted: boolean;
@@ -346,6 +351,8 @@ export const accountsApi = {
         accounts,
       })
       .then((r) => r.data),
+  checkSpam: (id: number) =>
+    api.post<TgSpamStatus>(`/accounts/${id}/check-spam`).then((r) => r.data),
   checkEnabledSessions: () =>
     api
       .post<{

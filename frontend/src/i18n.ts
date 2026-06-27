@@ -123,6 +123,17 @@ const zh = {
     importFileLabel: "选择从 Bemby 导出的 JSON 文件",
     importDoing: "导入中...",
     importFailed: "导入失败",
+    checkSpam: "检测消息状态",
+    checkSpamSelected: "批量检测消息状态",
+    spamChecking: "检测中...",
+
+    spam: {
+      free: "正常",
+      limited: "受限",
+      blocked: "已封禁",
+      frozen: "已冻结",
+      unknown: "未知",
+    },
     errors: {
       sendFailed: "验证码发送失败",
       verifyFailed: "验证失败",
@@ -594,6 +605,16 @@ const en: typeof zh = {
     importFileLabel: "Select a JSON file exported from Bemby",
     importDoing: "Importing...",
     importFailed: "Import failed",
+    checkSpam: "Check Spam Status",
+    checkSpamSelected: "Check Spam",
+    spamChecking: "Checking...",
+    spam: {
+      free: "Free",
+      limited: "Limited",
+      blocked: "Blocked",
+      frozen: "Frozen",
+      unknown: "Unknown",
+    },
     errors: {
       sendFailed: "Failed to send code",
       verifyFailed: "Verification failed",

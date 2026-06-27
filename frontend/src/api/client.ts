@@ -777,6 +777,11 @@ export const tgClientApi = {
       )
       .then((r) => r.data),
 
+  clearCache: (accountId: number, chatId: string) =>
+    api
+      .delete(`/tg-client/${accountId}/messages/${encodeURIComponent(chatId)}/cache`)
+      .then((r) => r.data),
+
   sendReaction: (
     accountId: number,
     chatId: string,

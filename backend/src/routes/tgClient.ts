@@ -27,6 +27,7 @@ import {
   markSessionExpired,
   getCachedMessages,
   cacheMessages,
+  clearCachedMessages,
   syncMessagesInBackground,
   joinChannel,
   getCachedDialogs,
@@ -112,6 +113,14 @@ router.get("/:accountId/messages/:chatId", async (req, res) => {
   } catch (err: any) {
     tgError(err, accountId, res);
   }
+});
+
+// DELETE /:accountId/messages/:chatId/cache -- clear the local message cache for a chat
+router.delete("/:accountId/messages/:chatId/cache", (req, res) => {
+  const accountId = Number(req.params.accountId);
+  const chatId = decodeURIComponent(req.params.chatId);
+  clearCachedMessages(accountId, chatId);
+  res.json({ ok: true });
 });
 
 // POST /:accountId/messages/:chatId -- send a message

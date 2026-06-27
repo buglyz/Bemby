@@ -231,6 +231,13 @@
                 </div>
               </div>
               <button
+                class="tgc-icon-btn"
+                @click="clearChatCache"
+                title="Clear cache and reload messages"
+              >
+                <i class="fa-solid fa-arrows-rotate"></i>
+              </button>
+              <button
                 class="tgc-icon-btn tgc-chat-close-btn"
                 @click="$emit('close')"
                 title="Close"
@@ -2413,6 +2420,12 @@ function markChatRead(chatId: string) {
     dialogs.value[idx] = { ...dialogs.value[idx], unreadCount: 0 };
   // Fire-and-forget -- non-blocking
   tgClientApi.markRead(selectedAccountId.value, chatId, maxId).catch(() => {});
+}
+
+async function clearChatCache() {
+  if (!selectedAccountId.value || !activeChatId.value) return;
+  await tgClientApi.clearCache(selectedAccountId.value, activeChatId.value);
+  await fetchMessages(true);
 }
 
 function backToDialogs() {

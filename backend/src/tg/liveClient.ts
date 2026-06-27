@@ -1392,6 +1392,12 @@ export function cacheMessages(
   ).run(accountId, chatId, accountId, chatId, MSG_CACHE_MAX);
 }
 
+export function clearCachedMessages(accountId: number, chatId: string): void {
+  db.prepare(
+    "DELETE FROM tg_message_cache WHERE account_id = ? AND chat_id = ?",
+  ).run(accountId, chatId);
+}
+
 // Fetches messages newer than the last cached msg and pushes them to subscribers.
 // Pass afterId to override the cache-based baseline (used by WS periodic sync).
 export async function syncMessagesInBackground(

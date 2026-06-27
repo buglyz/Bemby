@@ -84,7 +84,7 @@ docker run -d \
 
 ### Railway（推荐）
 
-Railway 支持直接从 Docker Hub 镜像部署，无需 Fork 或连接 GitHub。新账户每月赠送 **$5 免费额度**，无需绑定信用卡。
+Railway 支持直接从 Docker Hub 镜像部署，无需 Fork 或连接 GitHub。新账户首月赠送 **$5 免费额度**，无需绑定信用卡，之后每月赠送1 美元。
 
 [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/bemby?referralCode=o7RbM-&utm_medium=integration&utm_source=template&utm_campaign=generic)
 
@@ -359,7 +359,7 @@ Not comfortable with the command line or Docker? Deploy Bemby to a cloud platfor
 
 #### Railway *(recommended)*
 
-Railway can deploy directly from the Docker Hub image — no GitHub fork or account connection needed. New accounts get **$5 free credit per month** with no credit card required.
+Railway can deploy directly from the Docker Hub image — no GitHub fork or account connection needed. New accounts get **$5 free credit 1st month** with no credit card required, then you get $1 per month after.
 
 [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/bemby?referralCode=o7RbM-&utm_medium=integration&utm_source=template&utm_campaign=generic)
 

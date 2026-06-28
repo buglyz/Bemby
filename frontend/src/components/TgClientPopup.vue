@@ -1853,6 +1853,8 @@ async function clickInlineButton(
         copyToast.value = "Message was updated by the bot -- refreshing...";
         refreshMessages();
       }
+    } else if (raw.includes("BOT_RESPONSE_TIMEOUT")) {
+      // Bot received the click but didn't answer the callback -- action was likely still processed
     } else {
       copyToast.value = friendlyTgError(raw);
     }

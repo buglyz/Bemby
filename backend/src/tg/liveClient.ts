@@ -97,6 +97,16 @@ export function peerToChatId(peer: Api.TypePeer): string {
   return "";
 }
 
+// Reverse of peerToChatId -- used as a fallback entity lookup key
+function chatIdToPeer(chatId: string): Api.TypePeer | null {
+  try {
+    if (chatId.startsWith('u')) return new Api.PeerUser({ userId: BigInt(chatId.slice(1)) as any });
+    if (chatId.startsWith('c')) return new Api.PeerChannel({ channelId: BigInt(chatId.slice(1)) as any });
+    if (chatId.startsWith('g')) return new Api.PeerChat({ chatId: BigInt(chatId.slice(1)) as any });
+  } catch { /* ignore malformed ids */ }
+  return null;
+}
+
 function escHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
@@ -460,6 +470,17 @@ export async function ensureEntityCached(
 ): Promise<void> {
   if (entry.entityCache.has(chatId)) return;
   await loadDialogs(entry);
+  if (entry.entityCache.has(chatId)) return;
+  // Fallback for group members not in the user's dialogs (e.g. other participants).
+  // GramJS keeps these in its internal session store after messages are fetched,
+  // so getEntity resolves them without an extra network round-trip in most cases.
+  try {
+    const peer = chatIdToPeer(chatId);
+    if (peer) {
+      const entity = await entry.client.getEntity(peer) as Api.User | Api.Chat | Api.Channel;
+      if (entity) entry.entityCache.set(chatId, entity);
+    }
+  } catch { /* not resolvable -- fetchAvatar will cache null and won't retry */ }
 }
 
 export async function getMessages(

@@ -318,10 +318,16 @@
                       <div
                         v-if="showSenderAvatar(idx)"
                         class="tgc-sender-av"
-                        :style="{ background: senderColor(msg.fromId) }"
+                        :style="!avatarSrc(msg.fromId) ? { background: senderColor(msg.fromId) } : {}"
                         :title="msg.fromName || ''"
                       >
-                        {{ avatarLetter(msg.fromName || "?") }}
+                        <img
+                          v-if="avatarSrc(msg.fromId)"
+                          :src="avatarSrc(msg.fromId)"
+                          class="tgc-sender-av-photo"
+                          alt=""
+                        />
+                        <template v-else>{{ avatarLetter(msg.fromName || "?") }}</template>
                       </div>
                       <div v-else class="tgc-sender-av-ph"></div>
                     </template>
@@ -3425,6 +3431,14 @@ async function addContactSubmit() {
   font-weight: 700;
   color: #fff;
   user-select: none;
+  overflow: hidden;
+}
+
+.tgc-sender-av-photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
 }
 
 .tgc-msg-out {

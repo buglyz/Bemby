@@ -561,6 +561,17 @@ export type ExportPayload = {
     startCommand: string;
     checkinButton: string;
   }>;
+  aiSuppliers?: Array<{
+    name: string;
+    baseUrl: string;
+    apiKey: string;
+    timeoutMs: number;
+  }>;
+  aiModels?: Array<{
+    supplierIndex: number;
+    modelId: string;
+    label: string | null;
+  }>;
   settings: Record<string, string>;
 };
 
@@ -579,6 +590,8 @@ export type ImportResult = {
   accountsSkipped: number;
   templatesImported: number;
   jobsImported: number;
+  aiSuppliersImported: number;
+  aiModelsImported: number;
   settingsUpdated: number;
 };
 

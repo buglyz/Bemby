@@ -478,7 +478,7 @@ const zh = {
       replaceWarning: "替换模式将删除所有现有账户和任务。是否继续？",
       importing: "导入中...",
       importSuccess:
-        "导入完成：账户 {a} 个，模板 {t} 个，任务 {j} 个，设置 {s} 项",
+        "导入完成：账户 {a} 个，模板 {t} 个，任务 {j} 个，AI 供应商 {sup} 个，AI 模型 {mod} 个，设置 {s} 项",
       importFailed: "导入失败",
       noFileSelected: "请选择文件",
       invalidFile: "文件格式无效",
@@ -982,7 +982,7 @@ const en: typeof zh = {
         "Replace mode will delete all existing accounts and jobs. Proceed?",
       importing: "Importing...",
       importSuccess:
-        "Import complete: {a} account(s), {t} template(s), {j} job(s), {s} setting(s)",
+        "Import complete: {a} account(s), {t} template(s), {j} job(s), {sup} AI supplier(s), {mod} AI model(s), {s} setting(s)",
       importFailed: "Import failed",
       noFileSelected: "Please select a file",
       invalidFile: "Invalid file format",

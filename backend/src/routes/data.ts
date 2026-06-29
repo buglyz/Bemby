@@ -84,6 +84,21 @@ type TemplateRow = {
 
 type SettingRow = { key: string; value: string };
 
+type AiSupplierRow = {
+  id: number;
+  name: string;
+  base_url: string;
+  api_key: string;
+  timeout_ms: number;
+};
+
+type AiModelRow = {
+  id: number;
+  supplier_id: number;
+  model_id: string;
+  label: string | null;
+};
+
 export type ExportPayload = {
   version: '1';
   exportedAt: string;
@@ -125,6 +140,18 @@ export type ExportPayload = {
     startCommand: string;
     checkinButton: string;
   }>;
+  aiSuppliers?: Array<{
+    name: string;
+    baseUrl: string;
+    apiKey: string;
+    timeoutMs: number;
+  }>;
+  aiModels?: Array<{
+    /** Index into the aiSuppliers array */
+    supplierIndex: number;
+    modelId: string;
+    label: string | null;
+  }>;
   settings: Record<string, string>;
 };
 
@@ -132,10 +159,13 @@ router.get('/export', (req, res) => {
   const accounts = db.prepare('SELECT * FROM tg_accounts ORDER BY id').all() as AccountRow[];
   const templates = db.prepare('SELECT * FROM job_templates ORDER BY id').all() as TemplateRow[];
   const jobs = db.prepare('SELECT * FROM jobs ORDER BY id').all() as JobRow[];
+  const aiSuppliers = db.prepare('SELECT * FROM ai_suppliers ORDER BY id').all() as AiSupplierRow[];
+  const aiModels = db.prepare('SELECT * FROM ai_models ORDER BY id').all() as AiModelRow[];
   const settings = db.prepare('SELECT key, value FROM settings').all() as SettingRow[];
 
   const accountIdToIndex = new Map(accounts.map((a, i) => [a.id, i]));
   const templateIdToIndex = new Map(templates.map((t, i) => [t.id, i]));
+  const supplierIdToIndex = new Map(aiSuppliers.map((s, i) => [s.id, i]));
 
   const payload: ExportPayload = {
     version: '1',
@@ -176,6 +206,19 @@ router.get('/export', (req, res) => {
       startCommand: j.start_command,
       checkinButton: j.checkin_button,
     })),
+    aiSuppliers: aiSuppliers.map(s => ({
+      name: s.name,
+      baseUrl: s.base_url,
+      apiKey: s.api_key,
+      timeoutMs: s.timeout_ms,
+    })),
+    aiModels: aiModels
+      .filter(m => supplierIdToIndex.has(m.supplier_id))
+      .map(m => ({
+        supplierIndex: supplierIdToIndex.get(m.supplier_id)!,
+        modelId: m.model_id,
+        label: m.label,
+      })),
     settings: Object.fromEntries(settings.map(s => [s.key, s.value])),
   };
 
@@ -215,11 +258,13 @@ router.post('/import', (req, res) => {
     return;
   }
 
-  const results = { accountsImported: 0, accountsSkipped: 0, templatesImported: 0, jobsImported: 0, settingsUpdated: 0 };
+  const results = { accountsImported: 0, accountsSkipped: 0, templatesImported: 0, jobsImported: 0, aiSuppliersImported: 0, aiModelsImported: 0, settingsUpdated: 0 };
 
   db.transaction(() => {
     if (mode === 'replace') {
-      // Jobs must be deleted first due to FK references
+      // FK order: models -> suppliers, jobs -> templates/accounts
+      db.prepare('DELETE FROM ai_models').run();
+      db.prepare('DELETE FROM ai_suppliers').run();
       db.prepare('DELETE FROM jobs').run();
       db.prepare('DELETE FROM job_templates').run();
       db.prepare('DELETE FROM tg_accounts').run();
@@ -312,6 +357,43 @@ router.post('/import', (req, res) => {
         j.checkinButton ?? '签到',
       );
       results.jobsImported++;
+    }
+
+    // Import AI suppliers and build supplierIndex -> new db id mapping
+    const supplierIndexToId = new Map<number, number>();
+
+    if (Array.isArray(payload.aiSuppliers)) {
+      for (let i = 0; i < payload.aiSuppliers.length; i++) {
+        const s = payload.aiSuppliers[i];
+
+        if (mode === 'merge') {
+          const existing = db.prepare('SELECT id FROM ai_suppliers WHERE name = ?').get(s.name) as { id: number } | undefined;
+          if (existing) {
+            supplierIndexToId.set(i, existing.id);
+            continue;
+          }
+        }
+
+        const result = db.prepare(
+          'INSERT INTO ai_suppliers (name, base_url, api_key, timeout_ms) VALUES (?, ?, ?, ?)',
+        ).run(s.name, s.baseUrl, s.apiKey, s.timeoutMs ?? 25000);
+
+        supplierIndexToId.set(i, result.lastInsertRowid as number);
+        results.aiSuppliersImported++;
+      }
+    }
+
+    // Import AI models
+    if (Array.isArray(payload.aiModels)) {
+      for (const m of payload.aiModels) {
+        const resolvedSupplierId = supplierIndexToId.get(m.supplierIndex);
+        if (resolvedSupplierId == null) continue;
+
+        db.prepare(
+          'INSERT INTO ai_models (supplier_id, model_id, label) VALUES (?, ?, ?)',
+        ).run(resolvedSupplierId, m.modelId, m.label ?? null);
+        results.aiModelsImported++;
+      }
     }
 
     // Merge settings

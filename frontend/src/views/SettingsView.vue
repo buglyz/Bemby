@@ -1752,6 +1752,8 @@ async function doImport() {
       .replace("{a}", String(result.accountsImported))
       .replace("{t}", String(result.templatesImported))
       .replace("{j}", String(result.jobsImported))
+      .replace("{sup}", String(result.aiSuppliersImported))
+      .replace("{mod}", String(result.aiModelsImported))
       .replace("{s}", String(result.settingsUpdated));
     if (fileInput.value) fileInput.value.value = "";
     importFile.value = null;

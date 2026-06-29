@@ -564,6 +564,15 @@ export type ExportPayload = {
   settings: Record<string, string>;
 };
 
+export type EncryptedEnvelope = {
+  encrypted: true;
+  version: "1";
+  salt: string;
+  iv: string;
+  tag: string;
+  data: string;
+};
+
 export type ImportResult = {
   message: string;
   accountsImported: number;
@@ -574,9 +583,20 @@ export type ImportResult = {
 };
 
 export const dataApi = {
-  export: () => api.get<ExportPayload>("/data/export").then((r) => r.data),
-  import: (data: ExportPayload, mode: "merge" | "replace") =>
-    api.post<ImportResult>("/data/import", { data, mode }).then((r) => r.data),
+  export: (secret?: string) => {
+    const params = secret ? { secret } : undefined;
+    return api
+      .get<ExportPayload | EncryptedEnvelope>("/data/export", { params })
+      .then((r) => r.data);
+  },
+  import: (
+    data: ExportPayload | EncryptedEnvelope,
+    mode: "merge" | "replace",
+    secret?: string,
+  ) =>
+    api
+      .post<ImportResult>("/data/import", { data, mode, secret })
+      .then((r) => r.data),
 };
 
 // ── TG Live Client ────────────────────────────────────────────────────────────

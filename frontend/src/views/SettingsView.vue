@@ -681,6 +681,28 @@
             <p style="font-size: 12px; color: #888; margin: 0 0 8px">
               {{ t("settings.importExport.exportHint") }}
             </p>
+            <label class="form-label">{{
+              t("settings.importExport.exportSecretLabel")
+            }}</label>
+            <div class="input-with-toggle">
+              <input
+                v-model="exportSecret"
+                :type="showExportSecret ? 'text' : 'password'"
+                class="form-input"
+                :placeholder="t('settings.importExport.exportSecretPlaceholder')"
+                autocomplete="new-password"
+              />
+              <button
+                type="button"
+                class="toggle-secret-btn"
+                @click="showExportSecret = !showExportSecret"
+              >
+                <i :class="showExportSecret ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye'"></i>
+              </button>
+            </div>
+            <p style="font-size: 11px; color: #888; margin: 4px 0 8px">
+              {{ t("settings.importExport.exportSecretHint") }}
+            </p>
             <button class="btn btn-secondary" @click="doExport">
               <i class="fa-solid fa-file-export"></i>
               {{ t("settings.importExport.exportBtn") }}
@@ -700,6 +722,28 @@
               class="form-input"
               @change="onFileChange"
             />
+          </div>
+
+          <div v-if="importFileEncrypted" class="form-group">
+            <label class="form-label">{{
+              t("settings.importExport.importSecretLabel")
+            }}</label>
+            <div class="input-with-toggle">
+              <input
+                v-model="importSecret"
+                :type="showImportSecret ? 'text' : 'password'"
+                class="form-input"
+                :placeholder="t('settings.importExport.importSecretPlaceholder')"
+                autocomplete="current-password"
+              />
+              <button
+                type="button"
+                class="toggle-secret-btn"
+                @click="showImportSecret = !showImportSecret"
+              >
+                <i :class="showImportSecret ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye'"></i>
+              </button>
+            </div>
           </div>
 
           <div class="form-group">
@@ -1040,6 +1084,7 @@ import { ref, reactive, computed, onMounted } from "vue";
 import { settingsApi, authApi, dataApi, aiSuppliersApi } from "../api/client";
 import type {
   ExportPayload,
+  EncryptedEnvelope,
   UAPreset,
   AiSupplier,
   Proxy,
@@ -1632,16 +1677,38 @@ const importMode = ref<"merge" | "replace">("merge");
 const importing = ref(false);
 const importMsg = ref("");
 const importError = ref("");
+const exportSecret = ref("");
+const showExportSecret = ref(false);
+const importSecret = ref("");
+const showImportSecret = ref(false);
+// Set when a loaded file is detected as encrypted
+const importFileEncrypted = ref(false);
 
 function onFileChange(e: Event) {
-  importFile.value = (e.target as HTMLInputElement).files?.[0] ?? null;
+  const file = (e.target as HTMLInputElement).files?.[0] ?? null;
+  importFile.value = file;
+  importFileEncrypted.value = false;
+  importSecret.value = "";
+  if (!file) return;
+  // Peek at the file to detect encryption without a server round-trip
+  file.text().then((text) => {
+    try {
+      const parsed = JSON.parse(text);
+      importFileEncrypted.value = parsed?.encrypted === true;
+    } catch {
+      // Invalid JSON -- will be caught on actual import
+    }
+  });
 }
 
 async function doExport() {
-  const ok = confirm(t("settings.importExport.exportWarning"));
-  if (!ok) return;
+  const secret = exportSecret.value.trim() || undefined;
+  if (!secret) {
+    const ok = confirm(t("settings.importExport.exportWarning"));
+    if (!ok) return;
+  }
   try {
-    const data = await dataApi.export();
+    const data = await dataApi.export(secret);
     const blob = new Blob([JSON.stringify(data, null, 2)], {
       type: "application/json",
     });
@@ -1672,14 +1739,15 @@ async function doImport() {
   importing.value = true;
   try {
     const text = await importFile.value.text();
-    let parsed: ExportPayload;
+    let parsed: ExportPayload | EncryptedEnvelope;
     try {
       parsed = JSON.parse(text);
     } catch {
       importError.value = t("settings.importExport.invalidFile");
       return;
     }
-    const result = await dataApi.import(parsed, importMode.value);
+    const secret = importSecret.value.trim() || undefined;
+    const result = await dataApi.import(parsed, importMode.value, secret);
     importMsg.value = t("settings.importExport.importSuccess")
       .replace("{a}", String(result.accountsImported))
       .replace("{t}", String(result.templatesImported))
@@ -1687,9 +1755,14 @@ async function doImport() {
       .replace("{s}", String(result.settingsUpdated));
     if (fileInput.value) fileInput.value.value = "";
     importFile.value = null;
+    importFileEncrypted.value = false;
+    importSecret.value = "";
   } catch (err: any) {
+    const code = err.response?.data?.code;
     importError.value =
-      err.response?.data?.error ?? t("settings.importExport.importFailed");
+      code === "WRONG_SECRET"
+        ? t("settings.importExport.wrongSecret")
+        : (err.response?.data?.error ?? t("settings.importExport.importFailed"));
   } finally {
     importing.value = false;
   }
@@ -1804,6 +1877,33 @@ async function saveCredentials() {
 .import-mode-label {
   font-size: 13px;
   font-weight: 500;
+}
+
+.input-with-toggle {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.input-with-toggle .form-input {
+  padding-right: 36px;
+  flex: 1;
+}
+
+.toggle-secret-btn {
+  position: absolute;
+  right: 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #888;
+  padding: 0;
+  display: flex;
+  align-items: center;
+}
+
+.toggle-secret-btn:hover {
+  color: #444;
 }
 
 .import-mode-hint {

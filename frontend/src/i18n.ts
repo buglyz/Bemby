@@ -467,7 +467,7 @@ const zh = {
       exportBtn: "导出数据",
       exportHint: "导出所有账户、任务和设置（含敏感信息）",
       exportWarning:
-        "导出文件包含敏感信息（Telegram 会话 Token、API Hash、API 密钥等）。请妥善保管，切勿分享。是否继续导出？",
+        "导出文件包含敏感信息（Telegram 会话 Token、API Hash、API 密钥等）。\n\n建议设置加密密钥以保护备份文件，这样即使文件泄露也无法被读取。\n\n确定不加密直接导出吗？",
       importBtn: "导入",
       importLabel: "选择备份文件（.json）",
       importMode: "导入模式",
@@ -482,6 +482,12 @@ const zh = {
       importFailed: "导入失败",
       noFileSelected: "请选择文件",
       invalidFile: "文件格式无效",
+      exportSecretLabel: "加密密钥（可选）",
+      exportSecretPlaceholder: "留空则不加密",
+      exportSecretHint: "设置密钥后，导出文件将被加密，导入时需输入相同密钥",
+      importSecretLabel: "解密密钥",
+      importSecretPlaceholder: "输入导出时使用的密钥",
+      wrongSecret: "密钥错误或文件损坏",
     },
   },
 };
@@ -963,7 +969,7 @@ const en: typeof zh = {
       exportHint:
         "Export all accounts, jobs and settings (includes sensitive data)",
       exportWarning:
-        "The export file contains sensitive data (Telegram session tokens, API hashes, API keys). Keep it safe and do not share it. Proceed?",
+        "The export file contains sensitive data (Telegram session tokens, API hashes, API keys).\n\nConsider setting an encryption secret to protect the backup — without one, anyone with the file can read your credentials.\n\nExport without encryption?",
       importBtn: "Import",
       importLabel: "Select backup file (.json)",
       importMode: "Import mode",
@@ -980,6 +986,12 @@ const en: typeof zh = {
       importFailed: "Import failed",
       noFileSelected: "Please select a file",
       invalidFile: "Invalid file format",
+      exportSecretLabel: "Encryption secret (optional)",
+      exportSecretPlaceholder: "Leave blank for no encryption",
+      exportSecretHint: "If set, the export file will be encrypted and the same secret will be required on import",
+      importSecretLabel: "Decryption secret",
+      importSecretPlaceholder: "Enter the secret used when exporting",
+      wrongSecret: "Incorrect secret or corrupted file",
     },
   },
 };

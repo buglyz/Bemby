@@ -1,6 +1,42 @@
 import { Router } from 'express';
+import crypto from 'crypto';
 import { db } from '../db/database';
 import { refreshScheduler } from '../scheduler';
+
+type EncryptedEnvelope = {
+  encrypted: true;
+  version: '1';
+  salt: string;
+  iv: string;
+  tag: string;
+  data: string;
+};
+
+function encryptPayload(plaintext: string, secret: string): EncryptedEnvelope {
+  const salt = crypto.randomBytes(16);
+  const key = crypto.scryptSync(secret, salt, 32);
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
+  return {
+    encrypted: true,
+    version: '1',
+    salt: salt.toString('hex'),
+    iv: iv.toString('hex'),
+    tag: cipher.getAuthTag().toString('hex'),
+    data: encrypted.toString('base64'),
+  };
+}
+
+function decryptPayload(envelope: EncryptedEnvelope, secret: string): string {
+  const salt = Buffer.from(envelope.salt, 'hex');
+  const key = crypto.scryptSync(secret, salt, 32);
+  const iv = Buffer.from(envelope.iv, 'hex');
+  const tag = Buffer.from(envelope.tag, 'hex');
+  const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+  decipher.setAuthTag(tag);
+  return decipher.update(Buffer.from(envelope.data, 'base64')) + decipher.final('utf8');
+}
 
 const router = Router();
 
@@ -92,7 +128,7 @@ export type ExportPayload = {
   settings: Record<string, string>;
 };
 
-router.get('/export', (_req, res) => {
+router.get('/export', (req, res) => {
   const accounts = db.prepare('SELECT * FROM tg_accounts ORDER BY id').all() as AccountRow[];
   const templates = db.prepare('SELECT * FROM job_templates ORDER BY id').all() as TemplateRow[];
   const jobs = db.prepare('SELECT * FROM jobs ORDER BY id').all() as JobRow[];
@@ -143,18 +179,38 @@ router.get('/export', (_req, res) => {
     settings: Object.fromEntries(settings.map(s => [s.key, s.value])),
   };
 
-  res.json(payload);
+  const secret = typeof req.query.secret === 'string' && req.query.secret ? req.query.secret : null;
+  if (secret) {
+    res.json(encryptPayload(JSON.stringify(payload), secret));
+  } else {
+    res.json(payload);
+  }
 });
 
 router.post('/import', (req, res) => {
-  const { data, mode } = req.body as { data: ExportPayload; mode: 'merge' | 'replace' };
+  let { data, mode, secret } = req.body as { data: ExportPayload | EncryptedEnvelope; mode: 'merge' | 'replace'; secret?: string };
 
-  if (!data || data.version !== '1') {
+  if (data && (data as EncryptedEnvelope).encrypted === true) {
+    if (!secret) {
+      res.status(400).json({ error: 'This backup is encrypted. Please provide the secret to decrypt it.' });
+      return;
+    }
+    try {
+      data = JSON.parse(decryptPayload(data as EncryptedEnvelope, secret)) as ExportPayload;
+    } catch {
+      res.status(400).json({ error: 'Incorrect secret or corrupted backup file', code: 'WRONG_SECRET' });
+      return;
+    }
+  }
+
+  const payload = data as ExportPayload;
+
+  if (!payload || payload.version !== '1') {
     res.status(400).json({ error: 'Invalid or unsupported export file' });
     return;
   }
 
-  if (!Array.isArray(data.accounts) || !Array.isArray(data.jobs)) {
+  if (!Array.isArray(payload.accounts) || !Array.isArray(payload.jobs)) {
     res.status(400).json({ error: 'Malformed export file: missing accounts or jobs' });
     return;
   }
@@ -172,8 +228,8 @@ router.post('/import', (req, res) => {
     // Import accounts and build accountIndex -> new db id mapping
     const accountIndexToId = new Map<number, number>();
 
-    for (let i = 0; i < data.accounts.length; i++) {
-      const a = data.accounts[i];
+    for (let i = 0; i < payload.accounts.length; i++) {
+      const a = payload.accounts[i];
 
       if (mode === 'merge') {
         const existing = db.prepare('SELECT id FROM tg_accounts WHERE phone_number = ?').get(a.phoneNumber) as { id: number } | undefined;
@@ -196,9 +252,9 @@ router.post('/import', (req, res) => {
     // Import templates and build templateIndex -> new db id mapping
     const templateIndexToId = new Map<number, number>();
 
-    if (Array.isArray(data.templates)) {
-      for (let i = 0; i < data.templates.length; i++) {
-        const t = data.templates[i];
+    if (Array.isArray(payload.templates)) {
+      for (let i = 0; i < payload.templates.length; i++) {
+        const t = payload.templates[i];
 
         if (mode === 'merge') {
           const existing = db.prepare('SELECT id FROM job_templates WHERE name = ?').get(t.name) as { id: number } | undefined;
@@ -230,7 +286,7 @@ router.post('/import', (req, res) => {
     }
 
     // Import jobs
-    for (const j of data.jobs) {
+    for (const j of payload.jobs) {
       const resolvedAccountId = j.accountIndex != null ? (accountIndexToId.get(j.accountIndex) ?? null) : null;
       const resolvedTemplateId = j.templateIndex != null ? (templateIndexToId.get(j.templateIndex) ?? null) : null;
 
@@ -259,9 +315,9 @@ router.post('/import', (req, res) => {
     }
 
     // Merge settings
-    if (data.settings && typeof data.settings === 'object') {
+    if (payload.settings && typeof payload.settings === 'object') {
       const stmt = db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
-      for (const [key, value] of Object.entries(data.settings)) {
+      for (const [key, value] of Object.entries(payload.settings)) {
         if (typeof value === 'string') { stmt.run(key, value); results.settingsUpdated++; }
       }
     }

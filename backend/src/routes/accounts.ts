@@ -7,6 +7,10 @@ import {
   submitPassword,
   checkAccountStatus,
   resendCodeAsSms,
+  updateTwoFa,
+  getSessions,
+  terminateSession,
+  terminateOtherSessions,
 } from "../auth/tgAuth";
 import { checkSpamStatus } from "../jobs/checkin";
 import type { AuthStatus, TgAppClient } from "../types";
@@ -511,6 +515,127 @@ router.post("/:id/check-spam", async (req, res) => {
       deviceParams,
     );
     res.json(result);
+  } catch (err: any) {
+    if (isAuthError(err?.message ?? "")) markSessionExpired(account.id);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /:id/update-2fa -- set, change, or remove the account's 2FA password
+router.post("/:id/update-2fa", async (req, res) => {
+  const account = db
+    .prepare("SELECT * FROM tg_accounts WHERE id = ?")
+    .get(req.params.id) as AccountRow | undefined;
+  if (!account) { res.status(404).json({ error: "Not found" }); return; }
+  if (!account.session_string) {
+    res.status(400).json({ error: "Account not authenticated" });
+    return;
+  }
+  const { currentPassword, newPassword, hint } = req.body as {
+    currentPassword?: string;
+    newPassword?: string;
+    hint?: string;
+  };
+  try {
+    const proxyUrl = resolveProxyUrl(account.proxy_id);
+    const proxy = parseTgProxy(proxyUrl);
+    const deviceParams = resolveAppClientParams(account.app_client_id);
+    await updateTwoFa(
+      account.api_id,
+      account.api_hash,
+      account.session_string,
+      { currentPassword, newPassword, hint },
+      proxy,
+      deviceParams,
+    );
+    res.json({ success: true });
+  } catch (err: any) {
+    if (isAuthError(err?.message ?? "")) markSessionExpired(account.id);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /:id/sessions -- list all active Telegram sessions for this account
+router.get("/:id/sessions", async (req, res) => {
+  const account = db
+    .prepare("SELECT * FROM tg_accounts WHERE id = ?")
+    .get(req.params.id) as AccountRow | undefined;
+  if (!account) { res.status(404).json({ error: "Not found" }); return; }
+  if (!account.session_string) {
+    res.status(400).json({ error: "Account not authenticated" });
+    return;
+  }
+  try {
+    const proxyUrl = resolveProxyUrl(account.proxy_id);
+    const proxy = parseTgProxy(proxyUrl);
+    const deviceParams = resolveAppClientParams(account.app_client_id);
+    const sessions = await getSessions(
+      account.api_id,
+      account.api_hash,
+      account.session_string,
+      proxy,
+      deviceParams,
+    );
+    res.json(sessions);
+  } catch (err: any) {
+    if (isAuthError(err?.message ?? "")) markSessionExpired(account.id);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /:id/terminate-session -- revoke a specific session by hash
+router.post("/:id/terminate-session", async (req, res) => {
+  const account = db
+    .prepare("SELECT * FROM tg_accounts WHERE id = ?")
+    .get(req.params.id) as AccountRow | undefined;
+  if (!account) { res.status(404).json({ error: "Not found" }); return; }
+  if (!account.session_string) {
+    res.status(400).json({ error: "Account not authenticated" });
+    return;
+  }
+  const { hash } = req.body as { hash?: string };
+  if (!hash) { res.status(400).json({ error: "hash required" }); return; }
+  try {
+    const proxyUrl = resolveProxyUrl(account.proxy_id);
+    const proxy = parseTgProxy(proxyUrl);
+    const deviceParams = resolveAppClientParams(account.app_client_id);
+    await terminateSession(
+      account.api_id,
+      account.api_hash,
+      account.session_string,
+      hash,
+      proxy,
+      deviceParams,
+    );
+    res.json({ success: true });
+  } catch (err: any) {
+    if (isAuthError(err?.message ?? "")) markSessionExpired(account.id);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /:id/terminate-other-sessions -- revoke all sessions except the current one
+router.post("/:id/terminate-other-sessions", async (req, res) => {
+  const account = db
+    .prepare("SELECT * FROM tg_accounts WHERE id = ?")
+    .get(req.params.id) as AccountRow | undefined;
+  if (!account) { res.status(404).json({ error: "Not found" }); return; }
+  if (!account.session_string) {
+    res.status(400).json({ error: "Account not authenticated" });
+    return;
+  }
+  try {
+    const proxyUrl = resolveProxyUrl(account.proxy_id);
+    const proxy = parseTgProxy(proxyUrl);
+    const deviceParams = resolveAppClientParams(account.app_client_id);
+    await terminateOtherSessions(
+      account.api_id,
+      account.api_hash,
+      account.session_string,
+      proxy,
+      deviceParams,
+    );
+    res.json({ success: true });
   } catch (err: any) {
     if (isAuthError(err?.message ?? "")) markSessionExpired(account.id);
     res.status(500).json({ error: err.message });

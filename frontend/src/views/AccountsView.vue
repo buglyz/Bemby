@@ -302,97 +302,161 @@
         <h3 class="modal-title">
           {{ t(editTarget ? "accounts.editTitle" : "accounts.addTitle") }}
         </h3>
-        <div v-if="formError" class="error-msg">{{ formError }}</div>
-        <div class="form-group">
-          <label class="form-label">{{ t("accounts.labelName") }}</label>
-          <input
-            v-model.trim="form.name"
-            class="form-input"
-            placeholder="e.g. My Account"
-          />
+
+        <!-- Tabs: only shown when editing an authenticated account -->
+        <div v-if="editTarget?.authStatus === 'authenticated'" class="edit-tabs">
+          <button :class="['edit-tab', editTab === 'basic' ? 'active' : '']" @click="editTab = 'basic'">
+            {{ t("accounts.tabBasic") }}
+          </button>
+          <button :class="['edit-tab', editTab === 'advanced' ? 'active' : '']" @click="editTab = 'advanced'">
+            {{ t("accounts.tabAdvanced") }}
+          </button>
         </div>
-        <div class="form-group">
-          <label class="form-label">{{ t("accounts.labelPhone") }}</label>
-          <input
-            v-model.trim="form.phoneNumber"
-            class="form-input"
-            placeholder="+61412345678"
-          />
+
+        <!-- Basic tab -->
+        <div v-show="editTab === 'basic'">
+          <div v-if="formError" class="error-msg">{{ formError }}</div>
+          <div class="form-group">
+            <label class="form-label">{{ t("accounts.labelName") }}</label>
+            <input v-model.trim="form.name" class="form-input" placeholder="e.g. My Account" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">{{ t("accounts.labelPhone") }}</label>
+            <input v-model.trim="form.phoneNumber" class="form-input" placeholder="+61412345678" />
+          </div>
+          <div class="form-group" style="max-width: 140px">
+            <label class="form-label">{{ t("accounts.labelApiId") }}</label>
+            <input v-model.trim="form.apiId" class="form-input" type="number" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">{{ t("accounts.labelApiHash") }}</label>
+            <input
+              v-model.trim="form.apiHash"
+              class="form-input"
+              placeholder="32-char hex"
+              style="font-family: monospace"
+            />
+          </div>
+          <p style="font-size: 12px; color: #888; margin-top: -8px; margin-bottom: 14px">
+            {{ t("accounts.apiHint") }}
+            <a href="https://my.telegram.org/apps" target="_blank">my.telegram.org/apps</a>
+          </p>
+          <div v-if="proxiesList.length" class="form-group">
+            <label class="form-label">{{ t("accounts.labelProxy") }}</label>
+            <select v-model="form.proxyId" class="form-select">
+              <option value="">{{ t("accounts.proxyNone") }}</option>
+              <option v-for="p in proxiesList" :key="p.id" :value="p.id">{{ p.name }}</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">{{ t("accounts.labelAppClient") }}</label>
+            <select v-model="form.appClientId" class="form-select">
+              <option value="">
+                {{
+                  tgClientMode === "random"
+                    ? t("accounts.appClientRandom")
+                    : `${t("accounts.appClientDefault")}${defaultClientName ? ` (${defaultClientName})` : ""}`
+                }}
+              </option>
+              <option v-for="c in appClientsList" :key="c.id" :value="c.id">{{ c.name }}</option>
+            </select>
+          </div>
         </div>
-        <div class="form-group" style="max-width: 140px">
-          <label class="form-label">{{ t("accounts.labelApiId") }}</label>
-          <input v-model.trim="form.apiId" class="form-input" type="number" />
+
+        <!-- Advanced tab (authenticated accounts only) -->
+        <div v-if="editTarget?.authStatus === 'authenticated'" v-show="editTab === 'advanced'">
+          <div class="form-section-label" style="margin-bottom: 12px">{{ t("accounts.twoFaSection") }}</div>
+          <div class="form-group">
+            <label class="form-label">{{ t("accounts.twoFaCurrentPassword") }}</label>
+            <p class="form-hint">{{ t("accounts.twoFaCurrentPasswordHint") }}</p>
+            <input v-model="twoFaCurrentPwd" type="password" class="form-input" autocomplete="current-password" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">{{ t("accounts.twoFaNewPassword") }}</label>
+            <p class="form-hint">{{ t("accounts.twoFaNewPasswordHint") }}</p>
+            <input v-model="twoFaNewPwd" type="password" class="form-input" autocomplete="new-password" />
+          </div>
+          <div v-if="twoFaNewPwd" class="form-group">
+            <label class="form-label">{{ t("accounts.twoFaNewPasswordConfirm") }}</label>
+            <input v-model="twoFaNewPwdConfirm" type="password" class="form-input" autocomplete="new-password" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">{{ t("accounts.twoFaHint") }}</label>
+            <input v-model="twoFaHint" class="form-input" />
+          </div>
+          <div v-if="twoFaError" class="error-msg">{{ twoFaError }}</div>
+          <div v-if="twoFaMsg" class="success-msg">{{ twoFaMsg }}</div>
+          <button class="btn btn-secondary btn-inline" :disabled="twoFaBusy" @click="doUpdateTwoFa">
+            <i class="fa-solid fa-lock"></i>
+            {{ twoFaBusy ? t("common.saving") : t("accounts.twoFaUpdate") }}
+          </button>
+
+          <hr class="section-divider" />
+
+          <div class="sessions-header">
+            <div class="form-section-label">{{ t("accounts.sessionsSection") }}</div>
+            <button class="btn btn-xs btn-ghost" :disabled="sessionsLoading" @click="loadSessions">
+              <i class="fa-solid fa-arrows-rotate" :class="sessionsLoading ? 'fa-spin' : ''"></i>
+              {{ t("accounts.sessionsRefresh") }}
+            </button>
+          </div>
+
+          <div v-if="sessionsLoading && !sessions.length" class="sessions-empty">
+            <i class="fa-solid fa-spinner fa-spin"></i> {{ t("accounts.sessionsLoading") }}
+          </div>
+          <div v-if="sessionsError" class="error-msg">{{ sessionsError }}</div>
+          <div v-if="terminateError" class="error-msg">{{ terminateError }}</div>
+          <div v-if="terminateMsg" class="success-msg">{{ terminateMsg }}</div>
+
+          <div class="sessions-list">
+            <div v-for="s in sessions" :key="s.hash" :class="['session-item', s.current ? 'session-current' : '']">
+              <div class="session-info">
+                <div class="session-device">
+                  {{ s.deviceModel }}
+                  <span v-if="s.current" class="badge badge-green" style="font-size: 10px; margin-left: 6px">{{ t("accounts.sessionsCurrent") }}</span>
+                </div>
+                <div class="session-meta">{{ s.appName }} · {{ s.ip }} · {{ s.country }}</div>
+                <div class="session-meta">{{ t("accounts.sessionsLastActive") }}: {{ fmtSessionDate(s.dateActive) }}</div>
+              </div>
+              <button
+                v-if="!s.current"
+                class="btn btn-xs btn-danger"
+                :disabled="terminatingHash === s.hash"
+                @click="doTerminateSession(s.hash)"
+              >
+                {{ terminatingHash === s.hash ? t("accounts.sessionTerminating") : t("accounts.sessionTerminate") }}
+              </button>
+            </div>
+          </div>
+
+          <div v-if="sessions.length > 1" style="margin-top: 10px">
+            <button class="btn btn-ghost btn-inline" :disabled="terminateBusy" @click="doTerminateAllSessions">
+              <i class="fa-solid fa-right-from-bracket"></i>
+              {{ terminateBusy ? t("common.saving") : t("accounts.terminateSessions") }}
+            </button>
+          </div>
         </div>
-        <div class="form-group">
-          <label class="form-label">{{ t("accounts.labelApiHash") }}</label>
-          <input
-            v-model.trim="form.apiHash"
-            class="form-input"
-            placeholder="32-char hex"
-            style="font-family: monospace"
-          />
-        </div>
-        <p
-          style="
-            font-size: 12px;
-            color: #888;
-            margin-top: -8px;
-            margin-bottom: 14px;
-          "
-        >
-          {{ t("accounts.apiHint") }}
-          <a href="https://my.telegram.org/apps" target="_blank"
-            >my.telegram.org/apps</a
-          >
-        </p>
-        <div v-if="proxiesList.length" class="form-group">
-          <label class="form-label">{{ t("accounts.labelProxy") }}</label>
-          <select v-model="form.proxyId" class="form-select">
-            <option value="">{{ t("accounts.proxyNone") }}</option>
-            <option v-for="p in proxiesList" :key="p.id" :value="p.id">
-              {{ p.name }}
-            </option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">{{ t("accounts.labelAppClient") }}</label>
-          <select v-model="form.appClientId" class="form-select">
-            <option value="">
-              {{
-                tgClientMode === "random"
-                  ? t("accounts.appClientRandom")
-                  : `${t("accounts.appClientDefault")}${defaultClientName ? ` (${defaultClientName})` : ""}`
-              }}
-            </option>
-            <option v-for="c in appClientsList" :key="c.id" :value="c.id">
-              {{ c.name }}
-            </option>
-          </select>
-        </div>
+
         <div class="modal-footer">
           <button class="btn btn-ghost" @click="showForm = false">
             <i class="fa-solid fa-xmark"></i> {{ t("common.cancel") }}
           </button>
-          <button
-            v-if="editTarget && editTarget.authStatus !== 'unauthenticated'"
-            class="btn btn-danger"
-            :disabled="forceReauthBusy"
-            @click="doForceReauth"
-            style="margin-right: auto"
-          >
-            <i class="fa-solid fa-rotate-right"></i>
-            {{
-              forceReauthBusy ? t("common.saving") : t("accounts.forceReauth")
-            }}
-          </button>
-          <button
-            class="btn btn-primary"
-            :disabled="saving"
-            @click="saveAccount"
-          >
-            <i class="fa-solid fa-floppy-disk"></i>
-            {{ saving ? t("common.saving") : t("common.save") }}
-          </button>
+          <template v-if="editTab === 'basic'">
+            <button
+              v-if="editTarget && editTarget.authStatus !== 'unauthenticated'"
+              class="btn btn-danger"
+              :disabled="forceReauthBusy"
+              @click="doForceReauth"
+              style="margin-right: auto"
+            >
+              <i class="fa-solid fa-rotate-right"></i>
+              {{ forceReauthBusy ? t("common.saving") : t("accounts.forceReauth") }}
+            </button>
+            <button class="btn btn-primary" :disabled="saving" @click="saveAccount">
+              <i class="fa-solid fa-floppy-disk"></i>
+              {{ saving ? t("common.saving") : t("common.save") }}
+            </button>
+          </template>
         </div>
       </div>
     </div>
@@ -627,7 +691,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from "vue";
+import { ref, reactive, computed, onMounted, watch } from "vue";
 import {
   accountsApi,
   settingsApi,
@@ -636,6 +700,7 @@ import {
   type TgAppClient,
   type TgAccountStatus,
   type TgSpamStatus,
+  type SessionInfo,
 } from "../api/client";
 import { t, locale } from "../i18n";
 
@@ -694,6 +759,7 @@ const defaultClientName = computed(() => {
 
 // ── Form state ────────────────────────────────────────────────────────────────
 const showForm = ref(false);
+const editTab = ref<"basic" | "advanced">("basic");
 const editTarget = ref<Account | null>(null);
 const form = reactive({
   name: "",
@@ -705,6 +771,24 @@ const form = reactive({
 });
 const formError = ref("");
 const saving = ref(false);
+
+// ── 2FA state ─────────────────────────────────────────────────────────────────
+const twoFaCurrentPwd = ref("");
+const twoFaNewPwd = ref("");
+const twoFaNewPwdConfirm = ref("");
+const twoFaHint = ref("");
+const twoFaBusy = ref(false);
+const twoFaError = ref("");
+const twoFaMsg = ref("");
+
+// ── Sessions state ────────────────────────────────────────────────────────────
+const sessions = ref<SessionInfo[]>([]);
+const sessionsLoading = ref(false);
+const sessionsError = ref("");
+const terminatingHash = ref<string | null>(null);
+const terminateBusy = ref(false);
+const terminateError = ref("");
+const terminateMsg = ref("");
 
 // ── TG meta refresh (display name + username stored in DB, loaded with accounts list) ──
 const metaLoading = reactive(new Set<number>());
@@ -927,6 +1011,13 @@ const authBusy = ref(false);
 const isCodeViaApp = ref(false);
 const resendBusy = ref(false);
 
+// Load sessions when Advanced tab is first opened
+watch(editTab, (tab) => {
+  if (tab === "advanced" && editTarget.value?.authStatus === "authenticated" && sessions.value.length === 0) {
+    loadSessions();
+  }
+});
+
 // ── Lifecycle ──────────────────────────────────────────────────────────────────
 onMounted(async () => {
   await load();
@@ -976,6 +1067,7 @@ function fmtDate(iso: string) {
 // ── Add / Edit ─────────────────────────────────────────────────────────────────
 function openAdd() {
   editTarget.value = null;
+  editTab.value = "basic";
   Object.assign(form, {
     name: "",
     phoneNumber: "",
@@ -999,6 +1091,21 @@ function openEdit(a: Account) {
     appClientId: a.appClientId ?? "",
   });
   formError.value = "";
+  editTab.value = "basic";
+  twoFaCurrentPwd.value = "";
+  twoFaNewPwd.value = "";
+  twoFaNewPwdConfirm.value = "";
+  twoFaHint.value = "";
+  twoFaBusy.value = false;
+  twoFaError.value = "";
+  twoFaMsg.value = "";
+  sessions.value = [];
+  sessionsLoading.value = false;
+  sessionsError.value = "";
+  terminatingHash.value = null;
+  terminateBusy.value = false;
+  terminateError.value = "";
+  terminateMsg.value = "";
   showForm.value = true;
 }
 
@@ -1032,6 +1139,92 @@ async function saveAccount() {
   } finally {
     saving.value = false;
   }
+}
+
+// ── 2FA update ────────────────────────────────────────────────────────────────
+async function doUpdateTwoFa() {
+  if (!editTarget.value) return;
+  if (twoFaNewPwd.value && twoFaNewPwd.value !== twoFaNewPwdConfirm.value) {
+    twoFaError.value = t("accounts.twoFaPasswordMismatch");
+    return;
+  }
+  twoFaBusy.value = true;
+  twoFaError.value = "";
+  twoFaMsg.value = "";
+  try {
+    await accountsApi.updateTwoFa(editTarget.value.id, {
+      currentPassword: twoFaCurrentPwd.value || undefined,
+      newPassword: twoFaNewPwd.value || undefined,
+      hint: twoFaHint.value || undefined,
+    });
+    const removed = !twoFaNewPwd.value;
+    twoFaMsg.value = removed ? t("accounts.twoFaRemoved") : t("accounts.twoFaUpdated");
+    twoFaCurrentPwd.value = "";
+    twoFaNewPwd.value = "";
+    twoFaNewPwdConfirm.value = "";
+    twoFaHint.value = "";
+  } catch (err: any) {
+    const msg: string = err.response?.data?.error ?? err.message ?? "";
+    twoFaError.value = msg.includes("PASSWORD_HASH_INVALID")
+      ? t("accounts.twoFaWrongPassword")
+      : msg;
+  } finally {
+    twoFaBusy.value = false;
+  }
+}
+
+// ── Sessions ──────────────────────────────────────────────────────────────────
+async function loadSessions() {
+  if (!editTarget.value) return;
+  sessionsLoading.value = true;
+  sessionsError.value = "";
+  terminateMsg.value = "";
+  try {
+    sessions.value = await accountsApi.getSessions(editTarget.value.id);
+  } catch (err: any) {
+    sessionsError.value = err.response?.data?.error ?? err.message;
+  } finally {
+    sessionsLoading.value = false;
+  }
+}
+
+async function doTerminateSession(hash: string) {
+  if (!editTarget.value) return;
+  terminatingHash.value = hash;
+  terminateError.value = "";
+  try {
+    await accountsApi.terminateSession(editTarget.value.id, hash);
+    sessions.value = sessions.value.filter((s) => s.hash !== hash);
+  } catch (err: any) {
+    terminateError.value = err.response?.data?.error ?? err.message;
+  } finally {
+    terminatingHash.value = null;
+  }
+}
+
+async function doTerminateAllSessions() {
+  if (!editTarget.value) return;
+  if (!confirm(t("accounts.terminateSessionsConfirm"))) return;
+  terminateBusy.value = true;
+  terminateError.value = "";
+  terminateMsg.value = "";
+  try {
+    await accountsApi.terminateOtherSessions(editTarget.value.id);
+    terminateMsg.value = t("accounts.terminateSessionsDone");
+    // Reload so the list shows only the current session
+    await loadSessions();
+  } catch (err: any) {
+    terminateError.value = err.response?.data?.error ?? err.message;
+  } finally {
+    terminateBusy.value = false;
+  }
+}
+
+function fmtSessionDate(unix: number) {
+  return new Date(unix * 1000).toLocaleString(
+    locale.value === "zh" ? "zh-CN" : "en-AU",
+    { dateStyle: "medium", timeStyle: "short" },
+  );
 }
 
 // ── Force Re-auth ─────────────────────────────────────────────────────────────
@@ -1252,6 +1445,123 @@ tr:hover .tg-name-refresh {
   font-size: 13px;
   color: #92400e;
   line-height: 1.5;
+}
+
+.edit-tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 2px solid #e5e7eb;
+  margin-bottom: 16px;
+}
+
+.edit-tab {
+  padding: 6px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #6b7280;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.edit-tab:hover {
+  color: #374151;
+}
+
+.edit-tab.active {
+  color: #4f46e5;
+  border-bottom-color: #4f46e5;
+}
+
+.btn-inline {
+  width: auto;
+  display: inline-flex;
+}
+
+.sessions-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.sessions-header .form-section-label {
+  margin-bottom: 0;
+}
+
+.sessions-empty {
+  font-size: 13px;
+  color: #9ca3af;
+  padding: 12px 0;
+}
+
+.sessions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.session-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #fafafa;
+}
+
+.session-current {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.session-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.session-device {
+  font-size: 13px;
+  font-weight: 500;
+  color: #111827;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.session-meta {
+  font-size: 11px;
+  color: #6b7280;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.section-divider {
+  border: none;
+  border-top: 1px solid #e5e7eb;
+  margin: 16px 0 12px;
+}
+
+.form-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #888;
+  margin-bottom: 12px;
+}
+
+.form-hint {
+  font-size: 11px;
+  color: #9ca3af;
+  margin: 0 0 4px;
 }
 
 .input-with-toggle {

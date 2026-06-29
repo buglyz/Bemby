@@ -233,6 +233,145 @@ export async function checkAccountStatus(
   }
 }
 
+export async function updateTwoFa(
+  apiId: number,
+  apiHash: string,
+  sessionString: string,
+  opts: { currentPassword?: string; newPassword?: string; hint?: string },
+  proxy?: TgProxy,
+  deviceParams?: TgDeviceParams,
+): Promise<void> {
+  const client = new TelegramClient(
+    new StringSession(sessionString),
+    apiId,
+    apiHash,
+    {
+      connectionRetries: 3,
+      baseLogger: new Logger(LogLevel.NONE),
+      ...(proxy ? { proxy } : {}),
+      ...(deviceParams ?? {}),
+    },
+  );
+  try {
+    await client.connect();
+    await client.updateTwoFaSettings({
+      currentPassword: opts.currentPassword || undefined,
+      newPassword: opts.newPassword || undefined,
+      hint: opts.hint ?? "",
+    });
+  } finally {
+    await client.disconnect().catch(() => undefined);
+  }
+}
+
+export type SessionInfo = {
+  hash: string;
+  current: boolean;
+  deviceModel: string;
+  platform: string;
+  systemVersion: string;
+  appName: string;
+  appVersion: string;
+  dateCreated: number;
+  dateActive: number;
+  ip: string;
+  country: string;
+  region: string;
+};
+
+export async function getSessions(
+  apiId: number,
+  apiHash: string,
+  sessionString: string,
+  proxy?: TgProxy,
+  deviceParams?: TgDeviceParams,
+): Promise<SessionInfo[]> {
+  const client = new TelegramClient(
+    new StringSession(sessionString),
+    apiId,
+    apiHash,
+    {
+      connectionRetries: 3,
+      baseLogger: new Logger(LogLevel.NONE),
+      ...(proxy ? { proxy } : {}),
+      ...(deviceParams ?? {}),
+    },
+  );
+  try {
+    await client.connect();
+    const result = await client.invoke(new Api.account.GetAuthorizations());
+    return result.authorizations.map((a) => ({
+      hash: a.hash.toString(),
+      current: Boolean(a.current),
+      deviceModel: a.deviceModel,
+      platform: a.platform,
+      systemVersion: a.systemVersion,
+      appName: a.appName,
+      appVersion: a.appVersion,
+      dateCreated: a.dateCreated,
+      dateActive: a.dateActive,
+      ip: a.ip,
+      country: a.country,
+      region: a.region,
+    }));
+  } finally {
+    await client.disconnect().catch(() => undefined);
+  }
+}
+
+export async function terminateSession(
+  apiId: number,
+  apiHash: string,
+  sessionString: string,
+  hash: string,
+  proxy?: TgProxy,
+  deviceParams?: TgDeviceParams,
+): Promise<void> {
+  const client = new TelegramClient(
+    new StringSession(sessionString),
+    apiId,
+    apiHash,
+    {
+      connectionRetries: 3,
+      baseLogger: new Logger(LogLevel.NONE),
+      ...(proxy ? { proxy } : {}),
+      ...(deviceParams ?? {}),
+    },
+  );
+  try {
+    await client.connect();
+    await client.invoke(new Api.account.ResetAuthorization({ hash: BigInt(hash) as any }));
+  } finally {
+    await client.disconnect().catch(() => undefined);
+  }
+}
+
+export async function terminateOtherSessions(
+  apiId: number,
+  apiHash: string,
+  sessionString: string,
+  proxy?: TgProxy,
+  deviceParams?: TgDeviceParams,
+): Promise<void> {
+  const client = new TelegramClient(
+    new StringSession(sessionString),
+    apiId,
+    apiHash,
+    {
+      connectionRetries: 3,
+      baseLogger: new Logger(LogLevel.NONE),
+      ...(proxy ? { proxy } : {}),
+      ...(deviceParams ?? {}),
+    },
+  );
+  try {
+    await client.connect();
+    await client.invoke(new Api.auth.ResetAuthorizations());
+  } finally {
+    await client.disconnect().catch(() => undefined);
+  }
+}
+
 export async function submitPassword(
   accountId: number,
   password: string,

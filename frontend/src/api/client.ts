@@ -75,6 +75,21 @@ export type AccountExportPayload = {
   accounts: AccountExportItem[];
 };
 
+export type SessionInfo = {
+  hash: string;
+  current: boolean;
+  deviceModel: string;
+  platform: string;
+  systemVersion: string;
+  appName: string;
+  appVersion: string;
+  dateCreated: number;
+  dateActive: number;
+  ip: string;
+  country: string;
+  region: string;
+};
+
 export type TgSpamStatus = {
   spamStatus: "free" | "limited" | "blocked" | "frozen" | "unknown";
   rawMessage: string;
@@ -351,6 +366,23 @@ export const accountsApi = {
         data,
         secret: secret || undefined,
       })
+      .then((r) => r.data),
+  updateTwoFa: (
+    id: number,
+    opts: { currentPassword?: string; newPassword?: string; hint?: string },
+  ) =>
+    api
+      .post<{ success: true }>(`/accounts/${id}/update-2fa`, opts)
+      .then((r) => r.data),
+  getSessions: (id: number) =>
+    api.get<SessionInfo[]>(`/accounts/${id}/sessions`).then((r) => r.data),
+  terminateSession: (id: number, hash: string) =>
+    api
+      .post<{ success: true }>(`/accounts/${id}/terminate-session`, { hash })
+      .then((r) => r.data),
+  terminateOtherSessions: (id: number) =>
+    api
+      .post<{ success: true }>(`/accounts/${id}/terminate-other-sessions`)
       .then((r) => r.data),
   checkSpam: (id: number) =>
     api.post<TgSpamStatus>(`/accounts/${id}/check-spam`).then((r) => r.data),

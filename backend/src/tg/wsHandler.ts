@@ -7,6 +7,7 @@ import {
   getLiveClient,
   subscribeToMessages,
   subscribeToDialogs,
+  subscribeToReadOutbox,
   syncMessagesInBackground,
 } from "./liveClient";
 
@@ -49,6 +50,12 @@ export function attachWebSocket(server: Server): void {
     const unsubscribeDialogs = subscribeToDialogs(accountId, (dialogs) => {
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: "dialogs", dialogs }));
+      }
+    });
+
+    const unsubscribeReadOutbox = subscribeToReadOutbox(accountId, (chatId, maxId) => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: "readOutbox", chatId, maxId }));
       }
     });
 
@@ -96,6 +103,7 @@ export function attachWebSocket(server: Server): void {
       clearInterval(syncInterval);
       unsubscribeMsgs();
       unsubscribeDialogs();
+      unsubscribeReadOutbox();
     };
 
     ws.on("close", cleanup);

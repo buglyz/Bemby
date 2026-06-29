@@ -38,6 +38,7 @@ import {
   resolveWebApp,
   startBot,
   getPinnedMessage,
+  getReadOutboxMaxId,
 } from "../tg/liveClient";
 import type { Response } from "express";
 
@@ -213,11 +214,20 @@ router.get("/:accountId/messages/:chatId", async (req, res) => {
   try {
     const entry = await getLiveClient(accountId);
 
+    // Apply current readOutboxMaxId so cached blobs always reflect latest read state
+    const applyReadStatus = <T extends { fromMe: boolean; id: number; isRead: boolean }>(
+      msgs: T[],
+    ): T[] => {
+      const readMaxId = getReadOutboxMaxId(accountId, chatId);
+      if (!readMaxId) return msgs;
+      return msgs.map((m) => m.fromMe ? { ...m, isRead: m.id <= readMaxId } : m);
+    };
+
     if (offsetId === 0 && !fresh) {
       // Initial load: serve from cache instantly, sync new messages in the background
       const cached = getCachedMessages(accountId, chatId, limit);
       if (cached.length > 0) {
-        res.json(cached);
+        res.json(applyReadStatus(cached));
         syncMessagesInBackground(accountId, chatId).catch(() => {});
         return;
       }
@@ -225,7 +235,7 @@ router.get("/:accountId/messages/:chatId", async (req, res) => {
       // Pagination: serve from cache if it covers a full page
       const cached = getCachedMessages(accountId, chatId, limit, offsetId);
       if (cached.length >= limit) {
-        res.json(cached);
+        res.json(applyReadStatus(cached));
         return;
       }
     }
@@ -287,6 +297,7 @@ router.post("/:accountId/messages/:chatId", async (req, res) => {
         html: null,
         date: result.date,
         fromMe: true,
+        isRead: false,
         fromId: null,
         fromName: null,
         hasPhoto: false,

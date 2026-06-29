@@ -1,7 +1,7 @@
 import { TelegramClient, Api, Logger } from "telegram";
 import { LogLevel } from "telegram/extensions/Logger";
 import { StringSession } from "telegram/sessions";
-import { NewMessage, type NewMessageEvent } from "telegram/events";
+import { NewMessage, Raw, type NewMessageEvent } from "telegram/events";
 import { db } from "../db/database";
 import { parseTgProxy } from "../jobs/runner";
 import type { TgDeviceParams } from "../auth/tgAuth";
@@ -30,6 +30,7 @@ export type TgMsgPayload = {
   html: string | null; // safe HTML with entity markup; null = plain text
   date: number;
   fromMe: boolean;
+  isRead: boolean; // true when recipient has read this outgoing message
   fromId: string | null;
   fromName: string | null;
   hasPhoto: boolean;
@@ -67,6 +68,9 @@ type LiveEntry = {
   dialogSubscribers: Set<(dialogs: TgDialogItem[]) => void>;
   // Per-entry avatar cache: chatId -> Buffer (has avatar) | null (no avatar) | undefined (not fetched)
   avatarCache: Map<string, Buffer | null>;
+  // Tracks the highest outgoing message ID the recipient has read, per chatId
+  readOutboxCache: Map<string, number>;
+  readSubscribers: Set<(chatId: string, maxId: number) => void>;
 };
 
 const liveClients = new Map<number, LiveEntry>();
@@ -374,6 +378,8 @@ export async function getLiveClient(accountId: number): Promise<LiveEntry> {
     subscribers: new Set(),
     dialogSubscribers: new Set(),
     avatarCache: new Map(),
+    readOutboxCache: new Map(),
+    readSubscribers: new Set(),
   };
   liveClients.set(accountId, entry);
 
@@ -399,6 +405,7 @@ export async function getLiveClient(accountId: number): Promise<LiveEntry> {
         html: entitiesToHtml(msg.message ?? "", msg.entities),
         date: msg.date,
         fromMe: Boolean(msg.out),
+        isRead: false, // freshly received -- recipient hasn't read it yet
         fromId: msg.fromId ? peerToChatId(msg.fromId as Api.TypePeer) : null,
         fromName,
         hasPhoto: msg.media instanceof Api.MessageMediaPhoto,
@@ -416,6 +423,21 @@ export async function getLiveClient(accountId: number): Promise<LiveEntry> {
     entry!.subscribers.forEach((sub) => sub(liveMsg));
   }, new NewMessage({}));
 
+  // Update read status when the recipient reads our outgoing messages (1-to-1 / group chats)
+  client.addEventHandler((update: Api.UpdateReadHistoryOutbox) => {
+    const chatId = peerToChatId(update.peer);
+    if (!chatId) return;
+    entry!.readOutboxCache.set(chatId, update.maxId);
+    entry!.readSubscribers.forEach((sub) => sub(chatId, update.maxId));
+  }, new Raw({ types: [Api.UpdateReadHistoryOutbox] }));
+
+  // Update read status for channel outbox reads
+  client.addEventHandler((update: Api.UpdateReadChannelOutbox) => {
+    const chatId = `c${update.channelId.toString()}`;
+    entry!.readOutboxCache.set(chatId, update.maxId);
+    entry!.readSubscribers.forEach((sub) => sub(chatId, update.maxId));
+  }, new Raw({ types: [Api.UpdateReadChannelOutbox] }));
+
   return entry;
 }
 
@@ -432,6 +454,8 @@ export async function loadDialogs(
     const entity = d.entity as Api.User | Api.Chat | Api.Channel;
     const chatId = entityToChatId(entity);
     entry.entityCache.set(chatId, entity);
+    const roMaxId = (d.dialog as any).readOutboxMaxId as number | undefined;
+    if (roMaxId) entry.readOutboxCache.set(chatId, roMaxId);
 
     const type: TgDialogItem["type"] =
       entity instanceof Api.User
@@ -540,12 +564,14 @@ export async function getMessages(
     const replyToId =
       rt?.className === "MessageReplyHeader" ? (rt.replyToMsgId ?? null) : null;
     const replyInfo = replyToId ? replyMap.get(replyToId) : undefined;
+    const readMaxId = entry.readOutboxCache.get(chatId) ?? 0;
     return {
       id: msg.id,
       text: msg.message ?? "",
       html: entitiesToHtml(msg.message ?? "", (msg as Api.Message).entities),
       date: msg.date,
       fromMe: Boolean(msg.out),
+      isRead: Boolean(msg.out) && msg.id <= readMaxId,
       fromId: msg.fromId ? peerToChatId(msg.fromId as Api.TypePeer) : null,
       fromName,
       hasPhoto: msg.media instanceof Api.MessageMediaPhoto,
@@ -588,12 +614,14 @@ export async function getPinnedMessage(
   if (!msgs.length || !msgs[0]) return null;
 
   const msg = msgs[0] as Api.Message;
+  const readMaxId = entry.readOutboxCache.get(chatId) ?? 0;
   return {
     id: msg.id,
     text: msg.message ?? "",
     html: entitiesToHtml(msg.message ?? "", (msg as Api.Message).entities),
     date: msg.date,
     fromMe: Boolean(msg.out),
+    isRead: Boolean(msg.out) && msg.id <= readMaxId,
     fromId: msg.fromId ? peerToChatId(msg.fromId as Api.TypePeer) : null,
     fromName: null,
     hasPhoto: msg.media instanceof Api.MessageMediaPhoto,
@@ -1089,6 +1117,7 @@ export async function getThreadMessages(
   );
 
   const msgs = ((result as any).messages ?? []) as Api.Message[];
+  const readMaxId = entry.readOutboxCache.get(chatId) ?? 0;
   return msgs.map((msg) => {
     let fromName: string | null = null;
     if (msg.fromId) {
@@ -1102,6 +1131,7 @@ export async function getThreadMessages(
       html: entitiesToHtml(msg.message ?? "", msg.entities),
       date: msg.date,
       fromMe: Boolean(msg.out),
+      isRead: Boolean(msg.out) && msg.id <= readMaxId,
       fromId: msg.fromId ? peerToChatId(msg.fromId as Api.TypePeer) : null,
       fromName,
       hasPhoto: msg.media instanceof Api.MessageMediaPhoto,
@@ -1418,6 +1448,20 @@ export async function joinInvite(
     entry.entityCache.set(chatId, chat as Api.Chat);
   }
   return { chatId, name, type, username, unreadCount: 0, lastMessage: null };
+}
+
+export function getReadOutboxMaxId(accountId: number, chatId: string): number {
+  return liveClients.get(accountId)?.readOutboxCache.get(chatId) ?? 0;
+}
+
+export function subscribeToReadOutbox(
+  accountId: number,
+  handler: (chatId: string, maxId: number) => void,
+): () => void {
+  const entry = liveClients.get(accountId);
+  if (!entry) return () => {};
+  entry.readSubscribers.add(handler);
+  return () => entry.readSubscribers.delete(handler);
 }
 
 export function subscribeToMessages(

@@ -451,7 +451,7 @@
                         }}</span>
                         <i
                           v-if="msg.fromMe"
-                          class="fa-solid fa-check tgc-msg-tick"
+                          :class="['fa-solid', msg.isRead ? 'fa-check-double' : 'fa-check', 'tgc-msg-tick']"
                         ></i>
                       </div>
                       <!-- Inline keyboard buttons -->
@@ -2938,6 +2938,8 @@ function startLiveSocket() {
       else if (data.type === "dialogs" && Array.isArray(data.dialogs)) {
         const updated = data.dialogs as TgDialog[];
         dialogs.value = updated;
+      } else if (data.type === "readOutbox") {
+        onReadOutbox(data.chatId as string, data.maxId as number);
       }
     } catch {
       /* ignore parse errors */
@@ -3005,6 +3007,16 @@ function onIncomingMessage(chatId: string, msg: TgMessage) {
     markChatRead(chatId);
     // If a bot sent this message it may keep editing it -- start the watcher
     if (!msg.fromMe) scheduleBotMsgWatch();
+  }
+}
+
+// Mark outgoing messages as read when the backend reports the recipient read them
+function onReadOutbox(chatId: string, maxId: number) {
+  if (chatId !== activeChatId.value) return;
+  for (const msg of messages.value) {
+    if (msg.fromMe && !msg.isRead && msg.id <= maxId) {
+      msg.isRead = true;
+    }
   }
 }
 

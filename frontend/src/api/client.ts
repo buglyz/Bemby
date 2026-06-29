@@ -652,6 +652,7 @@ export type TgMessage = {
   html: string | null;
   date: number;
   fromMe: boolean;
+  isRead: boolean;
   fromId: string | null;
   fromName: string | null;
   hasPhoto: boolean;

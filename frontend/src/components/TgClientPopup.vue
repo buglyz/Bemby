@@ -158,6 +158,7 @@
                     <span class="tgc-dialog-preview">{{
                       d.lastMessage?.text || ""
                     }}</span>
+                    <i v-if="d.pinned && !d.unreadCount" class="fa-solid fa-thumbtack tgc-pin-icon"></i>
                     <span v-if="d.unreadCount > 0" class="tgc-unread-badge">{{
                       d.unreadCount
                     }}</span>
@@ -404,6 +405,17 @@
                         v-if="msg.hasPhoto"
                         :src="photoUrl(msg.id)"
                         class="tgc-msg-photo"
+                        loading="lazy"
+                        @error="
+                          (e: Event) =>
+                            ((e.target as HTMLImageElement).style.display =
+                              'none')
+                        "
+                      />
+                      <img
+                        v-if="msg.hasSticker"
+                        :src="photoUrl(msg.id)"
+                        class="tgc-msg-sticker"
                         loading="lazy"
                         @error="
                           (e: Event) =>
@@ -851,11 +863,11 @@
         </button>
       </template>
       <div class="tgc-ctx-divider"></div>
-      <button class="tgc-ctx-item" @click="ctxPin(true)">
+      <button v-if="!ctxMenu?.dialog.pinned" class="tgc-ctx-item" @click="ctxPin(true)">
         <i class="fa-solid fa-thumbtack"></i> Pin
       </button>
-      <button class="tgc-ctx-item" @click="ctxPin(false)">
-        <i class="fa-regular fa-thumbtack"></i> Unpin
+      <button v-else class="tgc-ctx-item" @click="ctxPin(false)">
+        <i class="fa-solid fa-thumbtack"></i> Unpin
       </button>
       <template v-if="tgFolders.length">
         <div class="tgc-ctx-divider"></div>
@@ -1434,10 +1446,11 @@ async function ctxPin(pinned: boolean) {
   closeCtx();
   try {
     await tgClientApi.pin(selectedAccountId.value, dialog.chatId, pinned);
-    // Move the dialog to top/remove pin marker in local list
+    // Update local state and reorder
     const idx = dialogs.value.findIndex((d) => d.chatId === dialog.chatId);
     if (idx !== -1) {
       const [d] = dialogs.value.splice(idx, 1);
+      d.pinned = pinned;
       if (pinned) dialogs.value.unshift(d);
       else dialogs.value.push(d);
     }
@@ -1572,6 +1585,8 @@ async function openProfile() {
         phone: null,
         bio: null,
         memberCount: null,
+        firstName: null,
+        lastName: null,
       };
     }
   } finally {
@@ -2351,6 +2366,7 @@ async function sendThreadMessage() {
       fromName: null,
       hasPhoto: false,
       hasDocument: false,
+      hasSticker: false,
       buttons: null,
       reactions: null,
       replyToId: threadRootMsg.value.id,
@@ -2969,6 +2985,7 @@ async function sendMessage() {
       fromName: null,
       hasPhoto: false,
       hasDocument: false,
+      hasSticker: false,
       buttons: null,
       reactions: null,
       replyToId: replyMsg?.id ?? null,
@@ -3821,6 +3838,14 @@ async function saveContactEdit() {
   max-width: 260px;
   max-height: 300px;
   border-radius: 8px;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.tgc-msg-sticker {
+  width: 120px;
+  height: 120px;
+  object-fit: contain;
   display: block;
   margin-bottom: 4px;
 }
@@ -4947,6 +4972,13 @@ async function saveContactEdit() {
   height: 1px;
   background: #e8e9ed;
   margin: 4px 0;
+}
+
+.tgc-pin-icon {
+  font-size: 10px;
+  color: #aaa;
+  flex-shrink: 0;
+  transform: rotate(45deg);
 }
 
 .tgc-ctx-chevron {

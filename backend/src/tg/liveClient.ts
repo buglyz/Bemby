@@ -35,6 +35,7 @@ export type TgMsgPayload = {
   fromName: string | null;
   hasPhoto: boolean;
   hasDocument: boolean;
+  hasSticker: boolean;
   buttons: TgButton[][] | null;
   reactions: TgReaction[] | null;
   replyToId: number | null;
@@ -52,6 +53,7 @@ export type TgDialogItem = {
   lastMessage: { text: string; date: number; fromMe: boolean } | null;
   left?: boolean; // true when the current user is not a member (search/resolve results)
   muted?: boolean;
+  pinned?: boolean;
 };
 
 export type TgContactItem = {
@@ -249,6 +251,13 @@ function extractReactions(msg: Api.Message): TgReaction[] | null {
   return out.length ? out : null;
 }
 
+function isStickerDoc(media: Api.TypeMessageMedia | null | undefined): boolean {
+  if (!(media instanceof Api.MessageMediaDocument)) return false;
+  const doc = (media as Api.MessageMediaDocument).document;
+  if (!(doc instanceof Api.Document)) return false;
+  return doc.attributes.some((a) => a instanceof Api.DocumentAttributeSticker);
+}
+
 function resolveProxy(proxyId: string | null) {
   if (!proxyId) return undefined;
   try {
@@ -410,7 +419,8 @@ export async function getLiveClient(accountId: number): Promise<LiveEntry> {
         fromId: msg.fromId ? peerToChatId(msg.fromId as Api.TypePeer) : null,
         fromName,
         hasPhoto: msg.media instanceof Api.MessageMediaPhoto,
-        hasDocument: msg.media instanceof Api.MessageMediaDocument,
+        hasDocument: msg.media instanceof Api.MessageMediaDocument && !isStickerDoc(msg.media),
+        hasSticker: isStickerDoc(msg.media),
         buttons: extractButtons(msg),
         reactions: extractReactions(msg),
         replyToId: (msg.replyTo as any)?.replyToMsgId ?? null,
@@ -472,6 +482,7 @@ export async function loadDialogs(
     const lastMsg = d.message as Api.Message | undefined;
     const muteUntil = (d.dialog as any).notifySettings?.muteUntil ?? 0;
     const muted = muteUntil > 0 && muteUntil > Math.floor(Date.now() / 1000);
+    const pinned = Boolean((d.dialog as any).pinned);
     result.push({
       chatId,
       name: d.name ?? entityName(entity),
@@ -486,6 +497,7 @@ export async function loadDialogs(
           }
         : null,
       muted,
+      pinned,
     });
   }
 
@@ -579,7 +591,8 @@ export async function getMessages(
       fromId: msg.fromId ? peerToChatId(msg.fromId as Api.TypePeer) : null,
       fromName,
       hasPhoto: msg.media instanceof Api.MessageMediaPhoto,
-      hasDocument: msg.media instanceof Api.MessageMediaDocument,
+      hasDocument: msg.media instanceof Api.MessageMediaDocument && !isStickerDoc(msg.media),
+      hasSticker: isStickerDoc(msg.media),
       buttons: extractButtons(msg as Api.Message),
       reactions: extractReactions(msg as Api.Message),
       replyToId,
@@ -629,7 +642,8 @@ export async function getPinnedMessage(
     fromId: msg.fromId ? peerToChatId(msg.fromId as Api.TypePeer) : null,
     fromName: null,
     hasPhoto: msg.media instanceof Api.MessageMediaPhoto,
-    hasDocument: msg.media instanceof Api.MessageMediaDocument,
+    hasDocument: msg.media instanceof Api.MessageMediaDocument && !isStickerDoc(msg.media),
+    hasSticker: isStickerDoc(msg.media),
     buttons: extractButtons(msg),
     reactions: null,
     replyToId: null,
@@ -797,7 +811,7 @@ export async function fetchPhoto(
   entry: LiveEntry,
   chatId: string,
   msgId: number,
-): Promise<Buffer | null> {
+): Promise<{ buf: Buffer; mimeType: string } | null> {
   await ensureEntityCached(entry, chatId);
   const entity = entry.entityCache.get(chatId);
   if (!entity) return null;
@@ -805,11 +819,19 @@ export async function fetchPhoto(
   const [msg] = await entry.client.getMessages(entity, { ids: [msgId] });
   if (!msg?.media) return null;
 
+  let mimeType = "image/jpeg";
+  if (msg.media instanceof Api.MessageMediaDocument) {
+    const doc = (msg.media as Api.MessageMediaDocument).document;
+    if (doc instanceof Api.Document && doc.mimeType) mimeType = doc.mimeType;
+  }
+
   const data = await entry.client.downloadMedia(msg, {});
   if (!data) return null;
-  if (Buffer.isBuffer(data)) return data;
-  if (typeof data === "string") return Buffer.from(data, "binary");
-  return Buffer.from(data as Uint8Array);
+  let buf: Buffer;
+  if (Buffer.isBuffer(data)) buf = data;
+  else if (typeof data === "string") buf = Buffer.from(data, "binary");
+  else buf = Buffer.from(data as Uint8Array);
+  return { buf, mimeType };
 }
 
 export async function fetchAvatar(
@@ -1225,7 +1247,8 @@ export async function getThreadMessages(
       fromId: msg.fromId ? peerToChatId(msg.fromId as Api.TypePeer) : null,
       fromName,
       hasPhoto: msg.media instanceof Api.MessageMediaPhoto,
-      hasDocument: msg.media instanceof Api.MessageMediaDocument,
+      hasDocument: msg.media instanceof Api.MessageMediaDocument && !isStickerDoc(msg.media),
+      hasSticker: isStickerDoc(msg.media),
       buttons: extractButtons(msg),
       reactions: extractReactions(msg),
       replyToId: null,

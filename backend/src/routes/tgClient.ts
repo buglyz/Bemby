@@ -322,6 +322,7 @@ router.post("/:accountId/messages/:chatId", async (req, res) => {
         fromName: null,
         hasPhoto: false,
         hasDocument: false,
+        hasSticker: false,
         buttons: null,
         reactions: null,
         replyToId: replyToMsgId ? Number(replyToMsgId) : null,
@@ -563,14 +564,14 @@ router.get("/:accountId/messages/:chatId/:msgId/photo", async (req, res) => {
   const msgId = Number(req.params.msgId);
   try {
     const entry = await getLiveClient(accountId);
-    const buf = await fetchPhoto(entry, chatId, msgId);
-    if (!buf) {
+    const result = await fetchPhoto(entry, chatId, msgId);
+    if (!result) {
       res.status(404).json({ error: "Photo not found" });
       return;
     }
-    res.set("Content-Type", "image/jpeg");
+    res.set("Content-Type", result.mimeType);
     res.set("Cache-Control", "private, max-age=3600");
-    res.send(buf);
+    res.send(result.buf);
   } catch (err: any) {
     tgError(err, accountId, res);
   }

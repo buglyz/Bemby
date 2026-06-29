@@ -623,6 +623,7 @@ export type TgDialog = {
   lastMessage: { text: string; date: number; fromMe: boolean } | null;
   left?: boolean; // not a member; join required to send messages
   muted?: boolean;
+  pinned?: boolean;
 };
 
 export type TgButton = {
@@ -658,6 +659,7 @@ export type TgMessage = {
   fromName: string | null;
   hasPhoto: boolean;
   hasDocument: boolean;
+  hasSticker: boolean;
   buttons: TgButton[][] | null;
   reactions: TgReaction[] | null;
   replyToId: number | null;

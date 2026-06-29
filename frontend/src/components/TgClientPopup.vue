@@ -2553,6 +2553,7 @@ async function openChat(dialog: TgDialog, addToHistory = false) {
   stopMembershipPoll();
   stopBotMsgWatch();
   pinnedMsg.value = null;
+  webViewPanel.value = null;
   await fetchMessages();
   markChatRead(dlg.chatId);
   if (dlg.type === "bot") loadBotCommands(dlg.chatId);

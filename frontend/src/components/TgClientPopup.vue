@@ -239,6 +239,13 @@
                 <i class="fa-solid fa-arrows-rotate"></i>
               </button>
               <button
+                class="tgc-icon-btn"
+                @click="openGoUrlDialog"
+                title="Open URL"
+              >
+                <i class="fa-solid fa-globe"></i>
+              </button>
+              <button
                 class="tgc-icon-btn tgc-chat-close-btn"
                 @click="closeChat"
                 title="Close chat"
@@ -962,6 +969,39 @@
       </template>
     </div>
   </div>
+  <!-- Go to URL dialog -->
+  <div
+    v-if="showGoUrlDialog"
+    class="tgc-invite-overlay"
+    @click.self="showGoUrlDialog = false"
+  >
+    <div class="tgc-invite-card tgc-gourl-card">
+      <div class="tgc-invite-icon">
+        <i class="fa-solid fa-globe"></i>
+      </div>
+      <div class="tgc-invite-title">Open URL</div>
+      <div class="tgc-gourl-hint">Paste a Telegram link or any URL</div>
+      <input
+        ref="goUrlInputEl"
+        v-model="goUrlInput"
+        class="tgc-gourl-input"
+        type="url"
+        placeholder="https://t.me/..."
+        @keydown.enter="submitGoUrl"
+        @keydown.esc="showGoUrlDialog = false"
+      />
+      <div class="tgc-invite-actions">
+        <button class="tgc-invite-cancel" @click="showGoUrlDialog = false">Cancel</button>
+        <button
+          class="tgc-invite-join"
+          :disabled="!goUrlInput.trim()"
+          @click="submitGoUrl"
+        >
+          Go
+        </button>
+      </div>
+    </div>
+  </div>
   <!-- end tgc-backdrop -->
 </template>
 
@@ -1105,6 +1145,11 @@ const selectedCmdIdx = ref(-1);
 const invitePreview = ref<TgInvitePreview | null>(null);
 const checkingInvite = ref(false);
 const joiningInvite = ref(false);
+
+// Go-to-URL dialog
+const showGoUrlDialog = ref(false);
+const goUrlInput = ref("");
+const goUrlInputEl = ref<HTMLInputElement | null>(null);
 
 // Chat navigation history -- used so "back" returns to the previous chat
 // when the user was navigated here from within another chat (e.g. via invite link or URL button)
@@ -1658,6 +1703,53 @@ async function handleTgUrl(url: string) {
     return;
   }
   window.open(url, "_blank", "noopener");
+}
+
+function openGoUrlDialog() {
+  goUrlInput.value = "";
+  showGoUrlDialog.value = true;
+  nextTick(() => goUrlInputEl.value?.focus());
+}
+
+async function submitGoUrl() {
+  let url = goUrlInput.value.trim();
+  if (!url) return;
+  if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+  showGoUrlDialog.value = false;
+  goUrlInput.value = "";
+
+  if (!selectedAccountId.value) {
+    window.open(url, "_blank", "noopener");
+    return;
+  }
+
+  // Invite links, username links, bot /start links → navigate in messenger chat
+  const isTgChatLink =
+    /https?:\/\/t(?:elegram)?\.me\/(\+|joinchat\/)/i.test(url) ||
+    (/https?:\/\/t(?:elegram)?\.me\/[A-Za-z]\w+([?&]start=)/i.test(url) &&
+      !isMiniAppUrl(url)) ||
+    (/https?:\/\/t(?:elegram)?\.me\/[A-Za-z]\w+(?:\/\d+)?(?:[?#].*)?$/i.test(url) &&
+      !isMiniAppUrl(url));
+  if (isTgChatLink) {
+    await handleTgUrl(url);
+    return;
+  }
+
+  // Mini app URLs → resolve authenticated URL then open in messenger webview
+  if (isMiniAppUrl(url)) {
+    let webAppUrl = url;
+    try {
+      const res = await tgClientApi.webviewResolve(selectedAccountId.value, url);
+      webAppUrl = res.webAppUrl;
+    } catch {}
+    webViewPanel.value = { url: webAppUrl, title: "Mini App" };
+    return;
+  }
+
+  // Arbitrary URL → open in messenger webview directly
+  let title = url;
+  try { title = new URL(url).hostname; } catch {}
+  webViewPanel.value = { url, title };
 }
 
 async function confirmJoinInvite() {
@@ -4938,7 +5030,7 @@ async function addContactSubmit() {
 .tgc-invite-overlay {
   position: fixed;
   inset: 0;
-  z-index: 1000;
+  z-index: 3000;
   background: rgba(0, 0, 0, 0.55);
   display: flex;
   align-items: center;
@@ -5027,5 +5119,31 @@ async function addContactSubmit() {
 .tgc-invite-join:disabled {
   opacity: 0.65;
   cursor: not-allowed;
+}
+
+.tgc-gourl-card {
+  text-align: left;
+}
+
+.tgc-gourl-hint {
+  font-size: 13px;
+  color: #666;
+  margin-bottom: 12px;
+}
+
+.tgc-gourl-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 12px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 14px;
+  margin-bottom: 16px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.tgc-gourl-input:focus {
+  border-color: #4361ee;
 }
 </style>

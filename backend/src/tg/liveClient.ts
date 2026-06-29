@@ -1186,7 +1186,9 @@ export async function resolvePeer(
 
 export type JoinResult = { joined: true } | { requestSent: true };
 
-// Opens a bot chat and sends the startParam via messages.StartBot (mirrors clicking a t.me/bot?start=PARAM link).
+// Opens a bot chat and sends the startParam, mirroring a t.me/bot?start=PARAM deep link.
+// Tries messages.StartBot first (correct for first-time activation); falls back to sending
+// /start PARAM as a plain message when the bot is already active.
 export async function startBot(
   entry: LiveEntry,
   username: string,
@@ -1200,14 +1202,22 @@ export async function startBot(
   const chatId = `u${entity.id}`;
   entry.entityCache.set(chatId, entity);
 
-  await entry.client.invoke(
-    new Api.messages.StartBot({
-      bot: entity as any,
-      peer: entity as any,
-      randomId: BigInt(Date.now() % 1_000_000_000) as any,
-      startParam,
-    }),
-  );
+  try {
+    await entry.client.invoke(
+      new Api.messages.StartBot({
+        bot: entity as any,
+        peer: entity as any,
+        randomId: BigInt(Date.now() % 1_000_000_000) as any,
+        startParam,
+      }),
+    );
+  } catch {
+    // Bot already started -- send the command as a regular message instead
+    await entry.client.sendMessage(entity, {
+      message: `/start ${startParam}`,
+      parseMode: false,
+    });
+  }
 
   const name = [entity.firstName, entity.lastName].filter(Boolean).join(" ") || username;
   return {

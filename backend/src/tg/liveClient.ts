@@ -619,7 +619,7 @@ export async function sendMessage(
 
   const result = await entry.client.sendMessage(entity, {
     message: text,
-    parseMode: undefined,
+    parseMode: false, // disable markdown so characters like __ are sent verbatim
     ...(replyToMsgId ? { replyTo: replyToMsgId } : {}),
   });
   return { id: result.id, date: result.date };

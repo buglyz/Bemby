@@ -571,6 +571,8 @@
                   placeholder="Write a message..."
                   rows="1"
                   @keydown="onComposeKey"
+                  @compositionstart="composing = true"
+                  @compositionend="composing = false"
                   @input="autoResize"
                   ref="inputEl"
                 ></textarea>
@@ -737,7 +739,9 @@
                 class="tgc-input"
                 placeholder="Write a comment..."
                 rows="1"
-                @keydown.enter.exact.prevent="sendThreadMessage"
+                @keydown.enter.exact="(e) => { if (!composing) { e.preventDefault(); sendThreadMessage(); } }"
+                @compositionstart="composing = true"
+                @compositionend="composing = false"
               ></textarea>
               <button
                 class="tgc-send-btn"
@@ -1120,6 +1124,7 @@ const addContactOk = ref(false);
 
 const messagesEl = ref<HTMLElement | null>(null);
 const inputEl = ref<HTMLTextAreaElement | null>(null);
+const composing = ref(false);
 const showMobileChat = ref(false);
 const showProfile = ref(false);
 const webViewPanel = ref<{ url: string; title: string } | null>(null);
@@ -2820,7 +2825,7 @@ function onComposeKey(e: KeyboardEvent) {
     }
   }
 
-  if (e.key === "Enter" && !e.shiftKey) {
+  if (e.key === "Enter" && !e.shiftKey && !composing.value) {
     e.preventDefault();
     sendMessage();
   }

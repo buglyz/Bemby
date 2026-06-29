@@ -659,9 +659,11 @@
                   <i class="fa-solid fa-circle-info tgc-profile-row-icon"></i>
                   <div class="tgc-profile-row-body">
                     <div class="tgc-profile-row-label">Bio</div>
-                    <div class="tgc-profile-row-value tgc-bio-text">
-                      {{ profileDetails.bio }}
-                    </div>
+                    <div
+                      class="tgc-profile-row-value tgc-bio-text"
+                      v-html="linkifyBio(profileDetails.bio!)"
+                      @click.capture="onMsgLinkClick"
+                    ></div>
                   </div>
                 </div>
 
@@ -1513,6 +1515,21 @@ function escMsgText(s: string): string {
     .replace(/\n/g, "<br>");
 }
 
+function linkifyBio(text: string): string {
+  const escaped = text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\n/g, "<br>");
+  return escaped.replace(
+    /(https?:\/\/[^\s<]+)|@([A-Za-z0-9_]{3,})/g,
+    (_, url, mention) =>
+      url
+        ? `<a href="${url}" class="tgc-bio-link">${url}</a>`
+        : `<a href="https://t.me/${mention}" class="tgc-bio-link">@${mention}</a>`,
+  );
+}
+
 function onMsgLinkClick(e: MouseEvent) {
   const a = (e.target as HTMLElement).closest("a");
   if (!a) return;
@@ -2098,13 +2115,8 @@ function openCommandMenu() {
 }
 
 function selectCommand(cmd: TgBotCommand) {
-  inputText.value = `/${cmd.command} `;
-  autoResize();
-  nextTick(() => {
-    inputEl.value?.focus();
-    const el = inputEl.value;
-    if (el) el.setSelectionRange(el.value.length, el.value.length);
-  });
+  inputText.value = `/${cmd.command}`;
+  sendMessage();
 }
 
 function showToast(msg: string, ms = 3000) {
@@ -4651,10 +4663,18 @@ async function addContactSubmit() {
 }
 
 .tgc-bio-text {
-  white-space: pre-wrap;
   font-size: 13px;
   color: #444;
   line-height: 1.5;
+}
+
+.tgc-bio-link {
+  color: #2481cc;
+  text-decoration: none;
+  cursor: pointer;
+  &:hover {
+    text-decoration: underline;
+  }
 }
 
 .tgc-copy-icon {

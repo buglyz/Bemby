@@ -219,6 +219,22 @@
                 : `Exporting all ${accounts.length} account(s)`
           }}
         </p>
+        <div class="form-group" style="margin-top: 12px">
+          <label class="form-label">{{ t("accounts.exportSecretLabel") }}</label>
+          <div class="input-with-toggle">
+            <input
+              v-model="exportSecret"
+              :type="showExportSecret ? 'text' : 'password'"
+              class="form-input"
+              :placeholder="t('accounts.exportSecretPlaceholder')"
+              autocomplete="new-password"
+            />
+            <button type="button" class="toggle-secret-btn" @click="showExportSecret = !showExportSecret">
+              <i :class="showExportSecret ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye'"></i>
+            </button>
+          </div>
+          <p style="font-size: 11px; color: #888; margin: 4px 0 0">{{ t("accounts.exportSecretHint") }}</p>
+        </div>
         <div class="modal-footer">
           <button class="btn btn-ghost" @click="showExportWarn = false">
             <i class="fa-solid fa-xmark"></i> {{ t("common.cancel") }}
@@ -244,6 +260,21 @@
             class="form-input"
             @change="onImportFile"
           />
+        </div>
+        <div v-if="importFileEncrypted" class="form-group">
+          <label class="form-label">{{ t("accounts.importSecretLabel") }}</label>
+          <div class="input-with-toggle">
+            <input
+              v-model="importSecret"
+              :type="showImportSecret ? 'text' : 'password'"
+              class="form-input"
+              :placeholder="t('accounts.importSecretPlaceholder')"
+              autocomplete="current-password"
+            />
+            <button type="button" class="toggle-secret-btn" @click="showImportSecret = !showImportSecret">
+              <i :class="showImportSecret ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye'"></i>
+            </button>
+          </div>
         </div>
         <div v-if="importError" class="error-msg">{{ importError }}</div>
         <div v-if="importResult" class="success-msg">{{ importResult }}</div>
@@ -605,7 +636,6 @@ import {
   type TgAppClient,
   type TgAccountStatus,
   type TgSpamStatus,
-  type AccountExportItem,
 } from "../api/client";
 import { t, locale } from "../i18n";
 
@@ -779,15 +809,27 @@ function toggleSelect(id: number) {
 
 // ── Export state ──────────────────────────────────────────────────────────────
 const showExportWarn = ref(false);
+const exportSecret = ref("");
+const showExportSecret = ref(false);
 
 function openExportWarn() {
+  exportSecret.value = "";
+  showExportSecret.value = false;
   showExportWarn.value = true;
 }
 
 async function confirmExport() {
+  const secret = exportSecret.value.trim() || undefined;
+  if (!secret) {
+    const msg =
+      locale.value === "zh"
+        ? "未设置加密密钥，任何持有此文件的人均可读取凭据。确定不加密导出吗？"
+        : "No encryption secret set — anyone with this file can read your credentials. Export without encryption?";
+    if (!confirm(msg)) return;
+  }
   showExportWarn.value = false;
   const ids = selectedIds.value.size > 0 ? [...selectedIds.value] : undefined;
-  const payload = await accountsApi.export(ids);
+  const payload = await accountsApi.export(ids, secret);
   const blob = new Blob([JSON.stringify(payload, null, 2)], {
     type: "application/json",
   });
@@ -802,14 +844,20 @@ async function confirmExport() {
 // ── Import state ──────────────────────────────────────────────────────────────
 const showImport = ref(false);
 const importFileEl = ref<HTMLInputElement | null>(null);
-const importParsed = ref<AccountExportItem[] | null>(null);
-const importReady = computed(() => importParsed.value !== null);
+const importRawData = ref<unknown>(null);
+const importFileEncrypted = ref(false);
+const importSecret = ref("");
+const showImportSecret = ref(false);
+const importReady = computed(() => importRawData.value !== null);
 const importBusy = ref(false);
 const importError = ref("");
 const importResult = ref("");
 
 function openImport() {
-  importParsed.value = null;
+  importRawData.value = null;
+  importFileEncrypted.value = false;
+  importSecret.value = "";
+  showImportSecret.value = false;
   importError.value = "";
   importResult.value = "";
   importBusy.value = false;
@@ -819,17 +867,18 @@ function openImport() {
 function onImportFile(e: Event) {
   importError.value = "";
   importResult.value = "";
-  importParsed.value = null;
+  importRawData.value = null;
+  importFileEncrypted.value = false;
+  importSecret.value = "";
   const file = (e.target as HTMLInputElement).files?.[0];
   if (!file) return;
   const reader = new FileReader();
   reader.onload = () => {
     try {
       const raw = JSON.parse(reader.result as string);
-      // Accept both a full export payload and a bare array
-      const items: unknown = Array.isArray(raw) ? raw : raw?.accounts;
-      if (!Array.isArray(items)) throw new Error("No accounts array found");
-      importParsed.value = items as AccountExportItem[];
+      importFileEncrypted.value = raw?.encrypted === true;
+      // Also accept bare arrays for backwards compat
+      importRawData.value = Array.isArray(raw) ? { accounts: raw } : raw;
     } catch {
       importError.value = t("accounts.importFailed") + ": invalid JSON format";
     }
@@ -838,24 +887,30 @@ function onImportFile(e: Event) {
 }
 
 async function doImport() {
-  if (!importParsed.value) return;
+  if (!importRawData.value) return;
   importBusy.value = true;
   importError.value = "";
   importResult.value = "";
   try {
-    const { imported, skipped } = await accountsApi.import(importParsed.value);
+    const secret = importSecret.value.trim() || undefined;
+    const { imported, skipped } = await accountsApi.import(importRawData.value, secret);
     importResult.value =
       locale.value === "zh"
         ? `导入完成：${imported} 个成功，${skipped} 个跳过（手机号已存在）`
         : `Done: ${imported} imported, ${skipped} skipped (phone already exists)`;
-    importParsed.value = null;
+    importRawData.value = null;
     if (importFileEl.value) importFileEl.value.value = "";
     await load();
   } catch (err: any) {
-    importError.value =
-      t("accounts.importFailed") +
-      ": " +
-      (err.response?.data?.error ?? err.message);
+    const code = err.response?.data?.code;
+    if (code === "WRONG_SECRET") {
+      importError.value = t("accounts.wrongSecret");
+    } else {
+      importError.value =
+        t("accounts.importFailed") +
+        ": " +
+        (err.response?.data?.error ?? err.message);
+    }
   } finally {
     importBusy.value = false;
   }
@@ -1197,6 +1252,32 @@ tr:hover .tg-name-refresh {
   font-size: 13px;
   color: #92400e;
   line-height: 1.5;
+}
+
+.input-with-toggle {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.input-with-toggle .form-input {
+  padding-right: 38px;
+  flex: 1;
+}
+
+.toggle-secret-btn {
+  position: absolute;
+  right: 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #888;
+  padding: 4px;
+  line-height: 1;
+}
+
+.toggle-secret-btn:hover {
+  color: #444;
 }
 
 .row-disabled td {

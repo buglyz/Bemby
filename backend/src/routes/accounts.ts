@@ -1,4 +1,5 @@
 import { Router } from "express";
+import crypto from "crypto";
 import { db } from "../db/database";
 import {
   requestCode,
@@ -12,6 +13,41 @@ import type { AuthStatus, TgAppClient } from "../types";
 import type { TgDeviceParams } from "../auth/tgAuth";
 import { parseTgProxy } from "../jobs/runner";
 import { isAuthError, markSessionExpired } from "../tg/liveClient";
+
+type EncryptedEnvelope = {
+  encrypted: true;
+  version: '1';
+  salt: string;
+  iv: string;
+  tag: string;
+  data: string;
+};
+
+function encryptPayload(plaintext: string, secret: string): EncryptedEnvelope {
+  const salt = crypto.randomBytes(16);
+  const key = crypto.scryptSync(secret, salt, 32);
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
+  return {
+    encrypted: true,
+    version: '1',
+    salt: salt.toString('hex'),
+    iv: iv.toString('hex'),
+    tag: cipher.getAuthTag().toString('hex'),
+    data: encrypted.toString('base64'),
+  };
+}
+
+function decryptPayload(envelope: EncryptedEnvelope, secret: string): string {
+  const salt = Buffer.from(envelope.salt, 'hex');
+  const key = crypto.scryptSync(secret, salt, 32);
+  const iv = Buffer.from(envelope.iv, 'hex');
+  const tag = Buffer.from(envelope.tag, 'hex');
+  const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+  decipher.setAuthTag(tag);
+  return decipher.update(Buffer.from(envelope.data, 'base64')) + decipher.final('utf8');
+}
 
 // Reasons set by checkAccountStatus for frozen/revoked sessions that need re-auth
 const REAUTH_REASONS = new Set([
@@ -201,7 +237,7 @@ type AccountImportItem = {
 
 // POST /export -- export selected (or all) accounts with sensitive fields
 router.post("/export", (req, res) => {
-  const { ids } = req.body as { ids?: number[] };
+  const { ids, secret } = req.body as { ids?: number[]; secret?: string };
   let rows: AccountRow[];
   if (Array.isArray(ids) && ids.length) {
     const placeholders = ids.map(() => "?").join(",");
@@ -215,7 +251,7 @@ router.post("/export", (req, res) => {
       .prepare("SELECT * FROM tg_accounts ORDER BY id")
       .all() as AccountRow[];
   }
-  res.json({
+  const payload = {
     version: "1",
     exportedAt: new Date().toISOString(),
     accounts: rows.map((a) => ({
@@ -229,12 +265,36 @@ router.post("/export", (req, res) => {
       appClientId: a.app_client_id ?? null,
       disabled: Boolean(a.disabled),
     })),
-  });
+  };
+  if (secret) {
+    res.json(encryptPayload(JSON.stringify(payload), secret));
+  } else {
+    res.json(payload);
+  }
 });
 
 // POST /import -- import accounts; skips existing by phone number
 router.post("/import", (req, res) => {
-  const { accounts: items } = req.body as { accounts?: AccountImportItem[] };
+  let { data, secret } = req.body as {
+    data: { version?: string; accounts?: AccountImportItem[] } | EncryptedEnvelope;
+    secret?: string;
+  };
+
+  if (data && (data as EncryptedEnvelope).encrypted === true) {
+    if (!secret) {
+      res.status(400).json({ error: 'This backup is encrypted. Please provide the secret to decrypt it.' });
+      return;
+    }
+    try {
+      data = JSON.parse(decryptPayload(data as EncryptedEnvelope, secret));
+    } catch {
+      res.status(400).json({ error: 'Incorrect secret or corrupted backup file', code: 'WRONG_SECRET' });
+      return;
+    }
+  }
+
+  const payload = data as { version?: string; accounts?: AccountImportItem[] };
+  const items = payload?.accounts;
   if (!Array.isArray(items)) {
     res.status(400).json({ error: "accounts array required" });
     return;

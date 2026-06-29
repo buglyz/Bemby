@@ -341,14 +341,15 @@ export const accountsApi = {
     api
       .post<{ tgDisplayName: string | null; tgUsername: string | null }>(`/accounts/${id}/refresh-tg-meta`)
       .then((r) => r.data),
-  export: (ids?: number[]) =>
+  export: (ids?: number[], secret?: string) =>
     api
-      .post<AccountExportPayload>("/accounts/export", { ids: ids ?? [] })
+      .post<AccountExportPayload>("/accounts/export", { ids: ids ?? [], secret: secret || undefined })
       .then((r) => r.data),
-  import: (accounts: AccountExportItem[]) =>
+  import: (data: unknown, secret?: string) =>
     api
       .post<{ imported: number; skipped: number }>("/accounts/import", {
-        accounts,
+        data,
+        secret: secret || undefined,
       })
       .then((r) => r.data),
   checkSpam: (id: number) =>

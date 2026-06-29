@@ -51,6 +51,7 @@ export type TgDialogItem = {
   unreadCount: number;
   lastMessage: { text: string; date: number; fromMe: boolean } | null;
   left?: boolean; // true when the current user is not a member (search/resolve results)
+  muted?: boolean;
 };
 
 export type TgContactItem = {
@@ -469,6 +470,8 @@ export async function loadDialogs(
           : "group";
 
     const lastMsg = d.message as Api.Message | undefined;
+    const muteUntil = (d.dialog as any).notifySettings?.muteUntil ?? 0;
+    const muted = muteUntil > 0 && muteUntil > Math.floor(Date.now() / 1000);
     result.push({
       chatId,
       name: d.name ?? entityName(entity),
@@ -482,6 +485,7 @@ export async function loadDialogs(
             fromMe: Boolean(lastMsg.out),
           }
         : null,
+      muted,
     });
   }
 

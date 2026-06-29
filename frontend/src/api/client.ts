@@ -622,6 +622,7 @@ export type TgDialog = {
   unreadCount: number;
   lastMessage: { text: string; date: number; fromMe: boolean } | null;
   left?: boolean; // not a member; join required to send messages
+  muted?: boolean;
 };
 
 export type TgButton = {

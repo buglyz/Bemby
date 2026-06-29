@@ -834,18 +834,22 @@
       class="tgc-ctx-menu"
       :style="{ left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' }"
     >
-      <button class="tgc-ctx-item" @click="ctxMute(0)">
-        <i class="fa-solid fa-bell"></i> Unmute
-      </button>
-      <button class="tgc-ctx-item" @click="ctxMute(8 * 3600)">
-        <i class="fa-solid fa-bell-slash"></i> Mute 8 hours
-      </button>
-      <button class="tgc-ctx-item" @click="ctxMute(7 * 24 * 3600)">
-        <i class="fa-solid fa-bell-slash"></i> Mute 1 week
-      </button>
-      <button class="tgc-ctx-item" @click="ctxMute(365 * 24 * 3600)">
-        <i class="fa-solid fa-bell-slash"></i> Mute forever
-      </button>
+      <template v-if="ctxMenu?.dialog.muted">
+        <button class="tgc-ctx-item" @click="ctxMute(0)">
+          <i class="fa-solid fa-bell"></i> Unmute
+        </button>
+      </template>
+      <template v-else>
+        <button class="tgc-ctx-item" @click="ctxMute(8 * 3600)">
+          <i class="fa-solid fa-bell-slash"></i> Mute 8 hours
+        </button>
+        <button class="tgc-ctx-item" @click="ctxMute(7 * 24 * 3600)">
+          <i class="fa-solid fa-bell-slash"></i> Mute 1 week
+        </button>
+        <button class="tgc-ctx-item" @click="ctxMute(365 * 24 * 3600)">
+          <i class="fa-solid fa-bell-slash"></i> Mute forever
+        </button>
+      </template>
       <div class="tgc-ctx-divider"></div>
       <button class="tgc-ctx-item" @click="ctxPin(true)">
         <i class="fa-solid fa-thumbtack"></i> Pin
@@ -1411,6 +1415,9 @@ async function ctxMute(secs: number) {
   closeCtx();
   try {
     await tgClientApi.mute(selectedAccountId.value, dialog.chatId, secs);
+    // Update local state so the menu reflects the new mute state immediately
+    const local = dialogs.value.find((d) => d.chatId === dialog.chatId);
+    if (local) local.muted = secs > 0;
     copyToast.value = secs === 0 ? "Unmuted" : "Muted";
     if (copyToastTimer) clearTimeout(copyToastTimer);
     copyToastTimer = setTimeout(() => {

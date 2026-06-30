@@ -243,7 +243,7 @@
                 class="tgc-icon-btn"
                 :class="{ 'tgc-icon-btn--active': openMiniAppInApp }"
                 @click="openMiniAppInApp = !openMiniAppInApp"
-                :title="openMiniAppInApp ? 'Mini apps open inside Bemby (click to toggle off)' : 'Mini apps open in browser (click to open inside Bemby)'"
+                :title="openMiniAppInApp ? t('tgc.miniAppInApp') : t('tgc.miniAppInBrowser')"
               >
                 <i class="fa-solid fa-puzzle-piece"></i>
               </button>
@@ -1123,6 +1123,7 @@ import {
   type TgInvitePreview,
 } from "../api/client";
 import { avatarCache, avatarQueue, avatarQueued, avatarFetching, avatarConcurrencyState, persistAvatarCache } from "../composables/avatarCache";
+import { t } from "../i18n";
 
 const { inline = false } = defineProps<{ inline?: boolean }>();
 const emit = defineEmits<{ close: [] }>();
@@ -1223,7 +1224,7 @@ const composing = ref(false);
 const showMobileChat = ref(false);
 const showProfile = ref(false);
 const webViewPanel = ref<{ url: string; title: string } | null>(null);
-const openMiniAppInApp = ref(false);
+const openMiniAppInApp = ref(true);
 const profileDetails = ref<TgProfile | null>(null);
 const profileLoading = ref(false);
 const copyToast = ref("");

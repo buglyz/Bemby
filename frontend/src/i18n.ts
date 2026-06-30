@@ -531,6 +531,10 @@ const zh = {
       wrongSecret: "密钥错误或文件损坏",
     },
   },
+  tgc: {
+    miniAppInApp: "Mini App 在 Bemby 内打开（点击切换关闭）",
+    miniAppInBrowser: "Mini App 在浏览器打开（点击切换为在 Bemby 内打开）",
+  },
 };
 
 const en: typeof zh = {
@@ -1075,6 +1079,10 @@ const en: typeof zh = {
       importSecretPlaceholder: "Enter the secret used when exporting",
       wrongSecret: "Incorrect secret or corrupted file",
     },
+  },
+  tgc: {
+    miniAppInApp: "Mini apps open inside Bemby (click to toggle off)",
+    miniAppInBrowser: "Mini apps open in browser (click to open inside Bemby)",
   },
 };
 

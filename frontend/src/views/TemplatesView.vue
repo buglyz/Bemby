@@ -60,7 +60,6 @@
               <td @click.stop>
                 <div class="actions hide-mobile">
                   <button
-                    v-if="(tpl.linkedJobCount ?? 0) > 0"
                     class="btn btn-sm btn-ghost btn-icon"
                     :title="t('templates.createJobsBtn')"
                     @click="openCreateJobs(tpl)"

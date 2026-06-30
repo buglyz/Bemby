@@ -33,6 +33,7 @@ const zh = {
     blankForDefault: "留空使用系统默认",
     leaveBlankKeep: "留空保持不变",
     saveFailed: "保存失败",
+    triggerFailed: "触发失败",
     download: "下载",
     all: "全部",
     default: "默认",
@@ -142,6 +143,10 @@ const zh = {
     importFileLabel: "选择从 Bemby 导出的 JSON 文件",
     importDoing: "导入中...",
     importFailed: "导入失败",
+    forceReauthLabel: "强制重新认证（推荐）",
+    forceReauthHint: "导入后清除会话令牌，账户需重新认证",
+    forceReauthRisk:
+      "警告：关闭此选项将导入现有会话令牌。若同一会话令牌在多处同时使用，Telegram 将撤销该会话，导致账户掉线。",
     tabBasic: "基本信息",
     tabAdvanced: "高级",
     twoFaSection: "两步验证（2FA）密码",
@@ -536,6 +541,10 @@ const zh = {
       importSecretLabel: "解密密钥",
       importSecretPlaceholder: "输入导出时使用的密钥",
       wrongSecret: "密钥错误或文件损坏",
+      forceReauthLabel: "强制重新认证（推荐）",
+      forceReauthHint: "导入后清除会话令牌，账户需重新认证",
+      forceReauthRisk:
+        "警告：关闭此选项将导入现有会话令牌。若同一会话令牌在多处同时使用，Telegram 将撤销该会话，导致账户掉线。",
     },
   },
   tgc: {
@@ -575,6 +584,7 @@ const en: typeof zh = {
     blankForDefault: "— blank uses system default",
     leaveBlankKeep: "— leave blank to keep current",
     saveFailed: "Save failed",
+    triggerFailed: "Trigger failed",
     download: "Download",
     all: "All",
     default: "Default",
@@ -684,6 +694,10 @@ const en: typeof zh = {
     importFileLabel: "Select a JSON file exported from Bemby",
     importDoing: "Importing...",
     importFailed: "Import failed",
+    forceReauthLabel: "Force reauthenticate (recommended)",
+    forceReauthHint: "Clears session tokens on import; accounts must reauthenticate",
+    forceReauthRisk:
+      "Warning: disabling this will import existing session tokens. If the same session key is used in two places simultaneously, Telegram will revoke it and the account will be signed out.",
     tabBasic: "Basic",
     tabAdvanced: "Advanced",
     twoFaSection: "2FA Password",
@@ -1092,6 +1106,10 @@ const en: typeof zh = {
       importSecretLabel: "Decryption secret",
       importSecretPlaceholder: "Enter the secret used when exporting",
       wrongSecret: "Incorrect secret or corrupted file",
+      forceReauthLabel: "Force reauthenticate (recommended)",
+      forceReauthHint: "Clears session tokens on import; accounts must reauthenticate",
+      forceReauthRisk:
+        "Warning: disabling this will import existing session tokens. If the same session key is used in two places simultaneously, Telegram will revoke it and the account will be signed out.",
     },
   },
   tgc: {

@@ -747,6 +747,19 @@
           </div>
 
           <div class="form-group">
+            <label class="form-check">
+              <input type="checkbox" v-model="importForceReauth" />
+              <span>{{ t("settings.importExport.forceReauthLabel") }}</span>
+            </label>
+            <p style="font-size: 12px; color: #888; margin: 4px 0 0 24px">
+              {{ t("settings.importExport.forceReauthHint") }}
+            </p>
+            <div v-if="!importForceReauth" class="supplier-no-key-warning" style="margin-top: 8px">
+              {{ t("settings.importExport.forceReauthRisk") }}
+            </div>
+          </div>
+
+          <div class="form-group">
             <label class="form-label">{{
               t("settings.importExport.importMode")
             }}</label>
@@ -1674,6 +1687,7 @@ async function saveNotify() {
 const fileInput = ref<HTMLInputElement | null>(null);
 const importFile = ref<File | null>(null);
 const importMode = ref<"merge" | "replace">("merge");
+const importForceReauth = ref(true);
 const importing = ref(false);
 const importMsg = ref("");
 const importError = ref("");
@@ -1747,7 +1761,7 @@ async function doImport() {
       return;
     }
     const secret = importSecret.value.trim() || undefined;
-    const result = await dataApi.import(parsed, importMode.value, secret);
+    const result = await dataApi.import(parsed, importMode.value, secret, importForceReauth.value);
     importMsg.value = t("settings.importExport.importSuccess")
       .replace("{a}", String(result.accountsImported))
       .replace("{t}", String(result.templatesImported))

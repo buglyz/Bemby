@@ -362,11 +362,12 @@ export const accountsApi = {
     api
       .post<AccountExportPayload>("/accounts/export", { ids: ids ?? [], secret: secret || undefined })
       .then((r) => r.data),
-  import: (data: unknown, secret?: string) =>
+  import: (data: unknown, secret?: string, forceReauth = true) =>
     api
       .post<{ imported: number; skipped: number }>("/accounts/import", {
         data,
         secret: secret || undefined,
+        forceReauth,
       })
       .then((r) => r.data),
   updateTwoFa: (
@@ -641,9 +642,10 @@ export const dataApi = {
     data: ExportPayload | EncryptedEnvelope,
     mode: "merge" | "replace",
     secret?: string,
+    forceReauth = true,
   ) =>
     api
-      .post<ImportResult>("/data/import", { data, mode, secret })
+      .post<ImportResult>("/data/import", { data, mode, secret, forceReauth })
       .then((r) => r.data),
 };
 

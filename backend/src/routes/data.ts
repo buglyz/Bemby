@@ -231,7 +231,7 @@ router.get('/export', (req, res) => {
 });
 
 router.post('/import', (req, res) => {
-  let { data, mode, secret } = req.body as { data: ExportPayload | EncryptedEnvelope; mode: 'merge' | 'replace'; secret?: string };
+  let { data, mode, secret, forceReauth = true } = req.body as { data: ExportPayload | EncryptedEnvelope; mode: 'merge' | 'replace'; secret?: string; forceReauth?: boolean };
 
   if (data && (data as EncryptedEnvelope).encrypted === true) {
     if (!secret) {
@@ -288,7 +288,12 @@ router.post('/import', (req, res) => {
       const result = db.prepare(
         `INSERT INTO tg_accounts (name, phone_number, api_id, api_hash, session_string, auth_status, proxy_id)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      ).run(a.name, a.phoneNumber, a.apiId, a.apiHash, a.sessionString ?? null, a.authStatus ?? 'unauthenticated', a.proxyId ?? null);
+      ).run(
+        a.name, a.phoneNumber, a.apiId, a.apiHash,
+        forceReauth ? null : (a.sessionString ?? null),
+        forceReauth ? 'unauthenticated' : (a.authStatus ?? 'unauthenticated'),
+        a.proxyId ?? null,
+      );
 
       accountIndexToId.set(i, result.lastInsertRowid as number);
       results.accountsImported++;

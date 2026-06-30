@@ -627,6 +627,8 @@
         </button>
       </div>
     </div>
+    <!-- Bulk run error toast -->
+    <div v-if="bulkRunToast" class="job-toast">{{ bulkRunToast }}</div>
   </div>
 </template>
 
@@ -1356,6 +1358,15 @@ function waitForJobCompletion(id: number, logId: number): Promise<void> {
   });
 }
 
+const bulkRunToast = ref('');
+let bulkRunToastTimer: ReturnType<typeof setTimeout> | null = null;
+
+function showBulkRunToast(msg: string) {
+  if (bulkRunToastTimer) clearTimeout(bulkRunToastTimer);
+  bulkRunToast.value = msg;
+  bulkRunToastTimer = setTimeout(() => { bulkRunToast.value = ''; }, 3000);
+}
+
 async function bulkRunJobsSequential() {
   const ids = [...selectedJobIds.value];
   showBulkRunModal.value = false;
@@ -1369,7 +1380,8 @@ async function bulkRunJobsSequential() {
       const { logId } = await jobsApi.run(id);
       await waitForJobCompletion(id, logId);
     } catch (err: any) {
-      alert(err.response?.data?.error ?? 'Trigger failed');
+      // Non-blocking toast so the queue always continues to the next job
+      showBulkRunToast(err.response?.data?.error ?? t('common.triggerFailed'));
       stopRunning(id);
     }
     // Wait delay seconds before triggering the next job
@@ -1574,5 +1586,26 @@ tbody tr:nth-child(even):not(.row-selected) td {
   font-size: 13px;
   color: #666;
   white-space: nowrap;
+}
+
+.job-toast {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(26, 26, 46, 0.88);
+  color: #fff;
+  font-size: 13px;
+  padding: 8px 20px;
+  border-radius: 20px;
+  pointer-events: none;
+  z-index: 9999;
+  white-space: nowrap;
+  animation: job-fade-in 0.15s ease;
+}
+
+@keyframes job-fade-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(6px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 </style>

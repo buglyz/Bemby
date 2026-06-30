@@ -279,9 +279,10 @@ router.post("/export", (req, res) => {
 
 // POST /import -- import accounts; skips existing by phone number
 router.post("/import", (req, res) => {
-  let { data, secret } = req.body as {
+  let { data, secret, forceReauth = true } = req.body as {
     data: { version?: string; accounts?: AccountImportItem[] } | EncryptedEnvelope;
     secret?: string;
+    forceReauth?: boolean;
   };
 
   if (data && (data as EncryptedEnvelope).encrypted === true) {
@@ -324,8 +325,8 @@ router.post("/import", (req, res) => {
       a.phoneNumber,
       Number(a.apiId),
       a.apiHash,
-      a.sessionString ?? null,
-      a.authStatus ?? "unauthenticated",
+      forceReauth ? null : (a.sessionString ?? null),
+      forceReauth ? "unauthenticated" : (a.authStatus ?? "unauthenticated"),
       a.proxyId ?? null,
       a.appClientId ?? null,
       a.disabled ? 1 : 0,

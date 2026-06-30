@@ -276,6 +276,16 @@
             </button>
           </div>
         </div>
+        <div class="form-group" style="margin-top: 12px">
+          <label class="form-check">
+            <input type="checkbox" v-model="importForceReauth" />
+            <span>{{ t("accounts.forceReauthLabel") }}</span>
+          </label>
+          <div class="form-hint">{{ t("accounts.forceReauthHint") }}</div>
+          <div v-if="!importForceReauth" class="warn-box" style="margin-top: 8px">
+            {{ t("accounts.forceReauthRisk") }}
+          </div>
+        </div>
         <div v-if="importError" class="error-msg">{{ importError }}</div>
         <div v-if="importResult" class="success-msg">{{ importResult }}</div>
         <div class="modal-footer">
@@ -932,6 +942,7 @@ const importRawData = ref<unknown>(null);
 const importFileEncrypted = ref(false);
 const importSecret = ref("");
 const showImportSecret = ref(false);
+const importForceReauth = ref(true);
 const importReady = computed(() => importRawData.value !== null);
 const importBusy = ref(false);
 const importError = ref("");
@@ -942,6 +953,7 @@ function openImport() {
   importFileEncrypted.value = false;
   importSecret.value = "";
   showImportSecret.value = false;
+  importForceReauth.value = true;
   importError.value = "";
   importResult.value = "";
   importBusy.value = false;
@@ -977,7 +989,7 @@ async function doImport() {
   importResult.value = "";
   try {
     const secret = importSecret.value.trim() || undefined;
-    const { imported, skipped } = await accountsApi.import(importRawData.value, secret);
+    const { imported, skipped } = await accountsApi.import(importRawData.value, secret, importForceReauth.value);
     importResult.value =
       locale.value === "zh"
         ? `导入完成：${imported} 个成功，${skipped} 个跳过（手机号已存在）`

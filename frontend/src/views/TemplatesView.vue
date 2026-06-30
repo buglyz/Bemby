@@ -8,6 +8,10 @@
             <i :class="sharedMulti ? 'fa-solid fa-check' : 'fa-solid fa-share-nodes'"></i>
             {{ t('templates.shareSelectedBtn').replace('{n}', String(selectedIds.length)) }}
           </button>
+          <button class="btn btn-secondary" @click="bulkMuteBotForever">
+            <i :class="mutingBotDone ? 'fa-solid fa-check' : 'fa-solid fa-bell-slash'"></i>
+            {{ t('templates.bulkMuteBotForever') }}
+          </button>
           <button class="btn btn-secondary" @click="bulkEnableTpls"><i class="fa-solid fa-circle-check"></i> {{ t('templates.bulkEnable').replace('{n}', String(selectedIds.length)) }}</button>
           <button class="btn btn-secondary" @click="confirmBulkDisableTpls = true"><i class="fa-solid fa-ban"></i> {{ t('templates.bulkDisable').replace('{n}', String(selectedIds.length)) }}</button>
           <button class="btn btn-danger" @click="confirmBulkDeleteTpls = true"><i class="fa-solid fa-trash"></i> {{ t('templates.bulkDelete').replace('{n}', String(selectedIds.length)) }}</button>
@@ -593,7 +597,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue';
-import { templatesApi, settingsApi, type JobTemplate, type Settings, type UAPreset, type Proxy, type EmbywatchConfig, type CustomConfig, type CustomAction, type AvailableAccount } from '../api/client';
+import { templatesApi, settingsApi, accountsApi, tgClientApi, type JobTemplate, type Settings, type UAPreset, type Proxy, type EmbywatchConfig, type CustomConfig, type CustomAction, type AvailableAccount } from '../api/client';
 import { t } from '../i18n';
 import { usePersistedRef } from '../composables/usePersistedRef';
 
@@ -1199,6 +1203,29 @@ async function executeBulkDeleteTpls() {
   await loadTemplates();
   confirmBulkDeleteTpls.value = false;
   selectedIds.value = [];
+}
+
+const mutingBotDone = ref(false);
+
+async function bulkMuteBotForever() {
+  const botUsernames = [...new Set(
+    templates.value
+      .filter(t => selectedIds.value.includes(t.id) && t.botUsername)
+      .map(t => t.botUsername)
+  )];
+  if (!botUsernames.length) return;
+
+  const accounts = await accountsApi.list();
+  const MUTE_FOREVER = 365 * 24 * 3600;
+
+  await Promise.allSettled(
+    accounts.flatMap(acc =>
+      botUsernames.map(bot => tgClientApi.mute(acc.id, bot, MUTE_FOREVER))
+    )
+  );
+
+  mutingBotDone.value = true;
+  setTimeout(() => { mutingBotDone.value = false; }, 1500);
 }
 
 const SHARE_KEYS: (keyof JobTemplate)[] = ['name', 'jobType', 'botUsername', 'timezone', 'replyTimeoutMs', 'retryMax', 'config', 'startCommand', 'checkinButton'];

@@ -41,6 +41,7 @@
       <!-- Bulk action bar -->
       <div v-if="selectedJobIds.length" class="bulk-bar">
         <span class="bulk-count">{{ t('jobs.selectedCount').replace('{n}', String(selectedJobIds.length)) }}</span>
+        <button class="btn btn-sm btn-success" @click="showBulkRunModal = true"><i class="fa-solid fa-play"></i> {{ t('jobs.bulkRun').replace('{n}', String(selectedJobIds.length)) }}</button>
         <button class="btn btn-sm btn-secondary" @click="bulkEnableJobs"><i class="fa-solid fa-circle-check"></i> {{ t('jobs.bulkEnable').replace('{n}', String(selectedJobIds.length)) }}</button>
         <button class="btn btn-sm btn-secondary" @click="confirmBulkDisableJobs = true"><i class="fa-solid fa-ban"></i> {{ t('jobs.bulkDisable').replace('{n}', String(selectedJobIds.length)) }}</button>
         <button class="btn btn-sm btn-danger" @click="confirmBulkDeleteJobs = true"><i class="fa-solid fa-trash"></i> {{ t('jobs.bulkDelete').replace('{n}', String(selectedJobIds.length)) }}</button>
@@ -555,6 +556,23 @@
       </div>
     </div>
 
+    <!-- Bulk run modal -->
+    <div v-if="showBulkRunModal" class="modal-backdrop">
+      <div class="modal" style="width:380px">
+        <h3 class="modal-title">{{ t('jobs.bulkRunTitle') }}</h3>
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label">{{ t('jobs.bulkRunDelayLabel') }}</label>
+            <input v-model.number="bulkRunDelay" type="number" min="0" class="form-input" style="width:120px" @keyup.enter="bulkRunJobsSequential" />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-ghost" @click="showBulkRunModal = false"><i class="fa-solid fa-xmark"></i> {{ t('common.cancel') }}</button>
+          <button class="btn btn-success" @click="bulkRunJobsSequential"><i class="fa-solid fa-play"></i> {{ t('jobs.bulkRunStart') }}</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Bulk disable confirmation -->
     <div v-if="confirmBulkDisableJobs" class="modal-backdrop">
       <div class="modal" style="width:380px">
@@ -672,6 +690,8 @@ const selectedJobIds = ref<number[]>([]);
 const allJobsSelected = computed(() => sortedJobs.value.length > 0 && sortedJobs.value.every(j => selectedJobIds.value.includes(j.id)));
 const confirmBulkDisableJobs = ref(false);
 const confirmBulkDeleteJobs = ref(false);
+const showBulkRunModal = ref(false);
+const bulkRunDelay = ref(70);
 
 function setSort(key: string) {
   if (sortKey.value === key) {
@@ -1314,6 +1334,49 @@ function schedulePoll(jobId: number, logId: number) {
     }
   }, 3000);
   pollTimers.set(jobId, timer);
+}
+
+function waitForJobCompletion(id: number, logId: number): Promise<void> {
+  return new Promise((resolve) => {
+    const check = async () => {
+      try {
+        const log = await logsApi.getOne(logId);
+        if (log.status === 'running') {
+          setTimeout(check, 3000);
+        } else {
+          stopRunning(id);
+          resolve();
+        }
+      } catch {
+        stopRunning(id);
+        resolve();
+      }
+    };
+    setTimeout(check, 3000);
+  });
+}
+
+async function bulkRunJobsSequential() {
+  const ids = [...selectedJobIds.value];
+  showBulkRunModal.value = false;
+  selectedJobIds.value = [];
+
+  for (let i = 0; i < ids.length; i++) {
+    const id = ids[i];
+    running.value.add(id);
+    running.value = new Set(running.value);
+    try {
+      const { logId } = await jobsApi.run(id);
+      await waitForJobCompletion(id, logId);
+    } catch (err: any) {
+      alert(err.response?.data?.error ?? 'Trigger failed');
+      stopRunning(id);
+    }
+    // Wait delay seconds before triggering the next job
+    if (i < ids.length - 1) {
+      await new Promise(resolve => setTimeout(resolve, bulkRunDelay.value * 1000));
+    }
+  }
 }
 
 async function runNow(id: number) {

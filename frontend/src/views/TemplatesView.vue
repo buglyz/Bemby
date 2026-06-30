@@ -8,7 +8,7 @@
             <i :class="sharedMulti ? 'fa-solid fa-check' : 'fa-solid fa-share-nodes'"></i>
             {{ t('templates.shareSelectedBtn').replace('{n}', String(selectedIds.length)) }}
           </button>
-          <button class="btn btn-secondary" @click="bulkMuteBotForever"><i class="fa-solid fa-bell-slash"></i> {{ t('templates.bulkMuteBotForever') }}</button>
+          <button class="btn btn-secondary" :disabled="isMutingBot" @click="bulkMuteBotForever"><i class="fa-solid fa-bell-slash"></i> {{ t('templates.bulkMuteBotForever') }}</button>
           <button class="btn btn-secondary" @click="bulkEnableTpls"><i class="fa-solid fa-circle-check"></i> {{ t('templates.bulkEnable').replace('{n}', String(selectedIds.length)) }}</button>
           <button class="btn btn-secondary" @click="confirmBulkDisableTpls = true"><i class="fa-solid fa-ban"></i> {{ t('templates.bulkDisable').replace('{n}', String(selectedIds.length)) }}</button>
           <button class="btn btn-danger" @click="confirmBulkDeleteTpls = true"><i class="fa-solid fa-trash"></i> {{ t('templates.bulkDelete').replace('{n}', String(selectedIds.length)) }}</button>
@@ -1205,9 +1205,15 @@ async function executeBulkDeleteTpls() {
 }
 
 const muteToast = ref('');
+const isMutingBot = ref(false);
 let muteToastTimer: ReturnType<typeof setTimeout> | null = null;
 
+// ~15 calls/min -- safe for Telegram's account.UpdateNotifySettings
+const MUTE_RATE_MS = 4000;
+
 async function bulkMuteBotForever() {
+  if (isMutingBot.value) return;
+
   const botUsernames = [...new Set(
     templates.value
       .filter(t => selectedIds.value.includes(t.id) && t.botUsername)
@@ -1215,16 +1221,27 @@ async function bulkMuteBotForever() {
   )];
   if (!botUsernames.length) return;
 
-  const accounts = await accountsApi.list();
+  const accounts = (await accountsApi.list()).filter(a => !a.disabled);
   const MUTE_FOREVER = 365 * 24 * 3600;
+  const pairs = accounts.flatMap(acc => botUsernames.map(bot => ({ acc, bot })));
 
-  await Promise.allSettled(
-    accounts.flatMap(acc =>
-      botUsernames.map(bot => tgClientApi.mute(acc.id, bot, MUTE_FOREVER))
-    )
-  );
-
+  isMutingBot.value = true;
   if (muteToastTimer) clearTimeout(muteToastTimer);
+
+  for (let i = 0; i < pairs.length; i++) {
+    const { acc, bot } = pairs[i];
+    muteToast.value = t('templates.bulkMutingProgress')
+      .replace('{done}', String(i + 1))
+      .replace('{total}', String(pairs.length));
+    try {
+      await tgClientApi.mute(acc.id, bot, MUTE_FOREVER);
+    } catch { /* continue on individual failure */ }
+    if (i < pairs.length - 1) {
+      await new Promise(resolve => setTimeout(resolve, MUTE_RATE_MS));
+    }
+  }
+
+  isMutingBot.value = false;
   muteToast.value = t('templates.bulkMuteBotForeverDone');
   muteToastTimer = setTimeout(() => { muteToast.value = ''; }, 3000);
 }

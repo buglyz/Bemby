@@ -313,6 +313,7 @@ const zh = {
     bulkDisable: "禁用 ({n})",
     bulkDelete: "删除 ({n})",
     bulkMuteBotForever: "永久屏蔽机器人",
+    bulkMuteBotForeverDone: "已为所有账户永久屏蔽机器人通知",
     confirmBulkDisable: "确定禁用所选的 {n} 个模板？",
     confirmBulkDelete:
       "确定删除所选的 {n} 个模板？关联任务将被解绑，但不会被删除。",
@@ -860,6 +861,7 @@ const en: typeof zh = {
     bulkDisable: "Disable ({n})",
     bulkDelete: "Delete ({n})",
     bulkMuteBotForever: "Mute Bot Forever",
+    bulkMuteBotForeverDone: "Bot muted forever for all accounts",
     confirmBulkDisable: "Disable {n} selected templates?",
     confirmBulkDelete:
       "Delete {n} selected templates? Linked jobs will be unlinked but not deleted.",

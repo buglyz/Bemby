@@ -8,10 +8,7 @@
             <i :class="sharedMulti ? 'fa-solid fa-check' : 'fa-solid fa-share-nodes'"></i>
             {{ t('templates.shareSelectedBtn').replace('{n}', String(selectedIds.length)) }}
           </button>
-          <button class="btn btn-secondary" @click="bulkMuteBotForever">
-            <i :class="mutingBotDone ? 'fa-solid fa-check' : 'fa-solid fa-bell-slash'"></i>
-            {{ t('templates.bulkMuteBotForever') }}
-          </button>
+          <button class="btn btn-secondary" @click="bulkMuteBotForever"><i class="fa-solid fa-bell-slash"></i> {{ t('templates.bulkMuteBotForever') }}</button>
           <button class="btn btn-secondary" @click="bulkEnableTpls"><i class="fa-solid fa-circle-check"></i> {{ t('templates.bulkEnable').replace('{n}', String(selectedIds.length)) }}</button>
           <button class="btn btn-secondary" @click="confirmBulkDisableTpls = true"><i class="fa-solid fa-ban"></i> {{ t('templates.bulkDisable').replace('{n}', String(selectedIds.length)) }}</button>
           <button class="btn btn-danger" @click="confirmBulkDeleteTpls = true"><i class="fa-solid fa-trash"></i> {{ t('templates.bulkDelete').replace('{n}', String(selectedIds.length)) }}</button>
@@ -592,6 +589,8 @@
         </button>
       </div>
     </div>
+    <!-- Mute toast -->
+    <div v-if="muteToast" class="tpl-toast">{{ muteToast }}</div>
   </div>
 </template>
 
@@ -1205,7 +1204,8 @@ async function executeBulkDeleteTpls() {
   selectedIds.value = [];
 }
 
-const mutingBotDone = ref(false);
+const muteToast = ref('');
+let muteToastTimer: ReturnType<typeof setTimeout> | null = null;
 
 async function bulkMuteBotForever() {
   const botUsernames = [...new Set(
@@ -1224,8 +1224,9 @@ async function bulkMuteBotForever() {
     )
   );
 
-  mutingBotDone.value = true;
-  setTimeout(() => { mutingBotDone.value = false; }, 1500);
+  if (muteToastTimer) clearTimeout(muteToastTimer);
+  muteToast.value = t('templates.bulkMuteBotForeverDone');
+  muteToastTimer = setTimeout(() => { muteToast.value = ''; }, 3000);
 }
 
 const SHARE_KEYS: (keyof JobTemplate)[] = ['name', 'jobType', 'botUsername', 'timezone', 'replyTimeoutMs', 'retryMax', 'config', 'startCommand', 'checkinButton'];
@@ -1459,5 +1460,26 @@ tbody tr:nth-child(even):not(.row-selected) td {
   font-weight: 500;
   font-size: 13px;
   flex: 1;
+}
+
+.tpl-toast {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(26, 26, 46, 0.88);
+  color: #fff;
+  font-size: 13px;
+  padding: 8px 20px;
+  border-radius: 20px;
+  pointer-events: none;
+  z-index: 9999;
+  white-space: nowrap;
+  animation: tpl-fade-in 0.15s ease;
+}
+
+@keyframes tpl-fade-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(6px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 </style>

@@ -33,6 +33,13 @@ const PORT = Number(process.env.PORT ?? 3000);
 const BIND_HOST = process.env.HOST ?? "0.0.0.0";
 const DISPLAY_HOST = process.env.DISPLAY_HOST ?? BIND_HOST;
 
+// TRUST_PROXY: set to the number of proxy hops in front of this app.
+// 0/false = direct internet (no proxy) -- clients cannot spoof X-Forwarded-For
+// 1       = one reverse proxy (nginx, Caddy, Railway, etc.)
+// 2+      = multiple proxies (e.g. Cloudflare + nginx)
+const trustProxy = process.env.TRUST_PROXY ?? '0';
+app.set('trust proxy', /^\d+$/.test(trustProxy) ? Number(trustProxy) : trustProxy);
+
 app.use(cors());
 app.use(express.json());
 

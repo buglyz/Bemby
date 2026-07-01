@@ -842,7 +842,7 @@
       </div>
 
       <div
-        v-if="logs.length === 50"
+        v-if="hasMore"
         style="padding: 12px 16px; text-align: center"
       >
         <button class="btn btn-ghost btn-sm" @click="loadMore">
@@ -879,6 +879,7 @@ const filterText = usePersistedRef<string>("bemby:logs:filterText", "");
 const showDevLogs = usePersistedRef<boolean>("bemby:logs:showDevLogs", false);
 const showRetired = usePersistedRef<boolean>("bemby:logs:showRetired", false);
 const offset = ref(0);
+const hasMore = ref(false);
 
 const filteredLogs = computed(() => {
   const q = filterText.value.trim().toLowerCase();
@@ -1014,12 +1015,14 @@ onMounted(async () => {
 async function load() {
   offset.value = 0;
   expandedId.value = null;
-  logs.value = await logsApi.list({
+  const page = await logsApi.list({
     jobId: filterJobId.value === "" ? undefined : Number(filterJobId.value),
     limit: 50,
     offset: 0,
     showRetired: showRetired.value,
   });
+  logs.value = page;
+  hasMore.value = page.length === 50;
 }
 
 async function loadMore() {
@@ -1031,6 +1034,7 @@ async function loadMore() {
     showRetired: showRetired.value,
   });
   logs.value.push(...more);
+  hasMore.value = more.length === 50;
 }
 
 async function toggleRetire(log: Log) {

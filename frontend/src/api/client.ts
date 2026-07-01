@@ -78,6 +78,7 @@ export type Account = {
   sortOrder: number;
   tgDisplayName: string | null;
   tgUsername: string | null;
+  notes: string | null;
 };
 
 export type AccountExportItem = {
@@ -429,6 +430,8 @@ export const accountsApi = {
       .then((r) => r.data),
   reorder: (items: Array<{ id: number; sortOrder: number }>) =>
     api.put("/accounts/reorder", { items }).then((r) => r.data),
+  bulkUpdateNotes: (ids: number[], notes: string | null) =>
+    api.put("/accounts/bulk-notes", { ids, notes }).then((r) => r.data),
   forceReauth: (id: number) =>
     api.post<Account>(`/accounts/${id}/force-reauth`).then((r) => r.data),
 };

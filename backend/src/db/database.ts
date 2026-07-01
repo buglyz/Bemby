@@ -169,6 +169,9 @@ try {
 try {
   db.exec("ALTER TABLE tg_accounts ADD COLUMN tg_username TEXT");
 } catch {}
+try {
+  db.exec("ALTER TABLE tg_accounts ADD COLUMN notes TEXT");
+} catch {}
 
 // Seed default TG app client profiles (Linux is default)
 try {

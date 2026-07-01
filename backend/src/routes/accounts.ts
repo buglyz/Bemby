@@ -97,6 +97,7 @@ type AccountRow = {
   sort_order: number;
   tg_display_name: string | null;
   tg_username: string | null;
+  notes: string | null;
 };
 
 /** Resolves effective API credentials, falling back to global defaults. Throws if neither is set. */
@@ -186,6 +187,7 @@ function toJson(row: AccountRow) {
     sortOrder: row.sort_order ?? 0,
     tgDisplayName: row.tg_display_name ?? null,
     tgUsername: row.tg_username ?? null,
+    notes: row.notes ?? null,
   };
 }
 
@@ -209,7 +211,7 @@ router.get("/", (req, res) => {
 });
 
 router.post("/", (req, res) => {
-  const { name, phoneNumber, apiId, apiHash, proxyId, appClientId } =
+  const { name, phoneNumber, apiId, apiHash, proxyId, appClientId, notes } =
     req.body as Record<string, string>;
   if (!name || !phoneNumber) {
     res.status(400).json({ error: "name and phoneNumber are required" });
@@ -229,7 +231,7 @@ router.post("/", (req, res) => {
     .get() as { m: number };
   const result = db
     .prepare(
-      "INSERT INTO tg_accounts (name, phone_number, api_id, api_hash, proxy_id, app_client_id, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO tg_accounts (name, phone_number, api_id, api_hash, proxy_id, app_client_id, sort_order, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .run(
       name,
@@ -239,6 +241,7 @@ router.post("/", (req, res) => {
       proxyId || null,
       appClientId || null,
       maxRow.m + 1,
+      notes || null,
     );
 
   const row = db
@@ -261,6 +264,22 @@ router.put("/reorder", (req, res) => {
   );
   const tx = db.transaction(() => {
     for (const { id, sortOrder } of items) update.run(sortOrder, id);
+  });
+  tx();
+  res.json({ ok: true });
+});
+
+// PUT /bulk-notes -- update notes for multiple accounts at once
+router.put("/bulk-notes", (req, res) => {
+  const { ids, notes } = req.body as { ids?: number[]; notes?: string | null };
+  if (!Array.isArray(ids) || !ids.length) {
+    res.status(400).json({ error: "ids array required" });
+    return;
+  }
+  const newNotes = notes || null;
+  const update = db.prepare("UPDATE tg_accounts SET notes = ? WHERE id = ?");
+  const tx = db.transaction(() => {
+    for (const id of ids) update.run(newNotes, id);
   });
   tx();
   res.json({ ok: true });
@@ -401,8 +420,16 @@ router.post("/import", (req, res) => {
 });
 
 router.put("/:id", (req, res) => {
-  const { name, phoneNumber, apiId, apiHash, proxyId, disabled, appClientId } =
-    req.body as Record<string, string | null | boolean>;
+  const {
+    name,
+    phoneNumber,
+    apiId,
+    apiHash,
+    proxyId,
+    disabled,
+    appClientId,
+    notes,
+  } = req.body as Record<string, string | null | boolean>;
   const existing = db
     .prepare("SELECT * FROM tg_accounts WHERE id = ?")
     .get(req.params.id) as AccountRow | undefined;
@@ -418,9 +445,10 @@ router.put("/:id", (req, res) => {
     disabled !== undefined ? (disabled ? 1 : 0) : existing.disabled;
   const newAppClientId =
     appClientId !== undefined ? appClientId || null : existing.app_client_id;
+  const newNotes = notes !== undefined ? (notes as string) || null : existing.notes;
 
   db.prepare(
-    "UPDATE tg_accounts SET name = ?, phone_number = ?, api_id = ?, api_hash = ?, proxy_id = ?, disabled = ?, app_client_id = ? WHERE id = ?",
+    "UPDATE tg_accounts SET name = ?, phone_number = ?, api_id = ?, api_hash = ?, proxy_id = ?, disabled = ?, app_client_id = ?, notes = ? WHERE id = ?",
   ).run(
     name ?? existing.name,
     phoneNumber ?? existing.phone_number,
@@ -429,6 +457,7 @@ router.put("/:id", (req, res) => {
     newProxyId,
     newDisabled,
     newAppClientId,
+    newNotes,
     req.params.id,
   );
 

@@ -606,6 +606,10 @@ tr:hover td {
 	z-index: 299;
 }
 
+.col-hidden {
+	display: none !important;
+}
+
 /* ── Responsive ──────────────────────────────────────────────────────────────── */
 
 @media (max-width: 767px) {

@@ -22,6 +22,14 @@
         <button
           v-if="selectedIds.size > 0"
           class="btn btn-secondary"
+          @click="openBulkNotes"
+        >
+          <i class="fa-solid fa-note-sticky"></i>
+          {{ t("accounts.setNotesSelected") }} ({{ selectedIds.size }})
+        </button>
+        <button
+          v-if="selectedIds.size > 0"
+          class="btn btn-secondary"
           @click="openExportWarn"
         >
           <i class="fa-solid fa-file-export"></i>
@@ -29,6 +37,17 @@
         </button>
         <button v-else class="btn btn-secondary" @click="openExportWarn">
           <i class="fa-solid fa-file-export"></i> {{ t("accounts.exportBtn") }}
+        </button>
+        <button class="btn btn-secondary" @click="showNotes = !showNotes">
+          <i
+            class="fa-solid"
+            :class="showNotes ? 'fa-eye-slash' : 'fa-eye'"
+          ></i>
+          {{
+            showNotes
+              ? t("accounts.hideNotesToggle")
+              : t("accounts.showNotesToggle")
+          }}
         </button>
         <button class="btn btn-secondary" @click="openImport">
           <i class="fa-solid fa-file-import"></i> {{ t("accounts.importBtn") }}
@@ -49,13 +68,14 @@
               <th>{{ t("accounts.colPhone") }}</th>
               <th class="col-hide-mobile">{{ t("accounts.colTgName") }}</th>
               <th>{{ t("accounts.colStatus") }}</th>
+              <th :class="notesColClass">{{ t("accounts.colNotes") }}</th>
               <th class="col-hide-mobile">{{ t("accounts.colAdded") }}</th>
               <th>{{ t("common.actions") }}</th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="!accounts.length">
-              <td colspan="7" class="empty">{{ t("accounts.noAccounts") }}</td>
+              <td :colspan="showNotes ? 8 : 7" class="empty">{{ t("accounts.noAccounts") }}</td>
             </tr>
             <tr
               v-for="(a, idx) in accounts"
@@ -160,6 +180,7 @@
                   }}
                 </span>
               </td>
+              <td :class="notesColClass" style="max-width: 200px; white-space: pre-wrap; word-break: break-word">{{ a.notes }}</td>
               <td class="col-hide-mobile">{{ fmtDate(a.createdAt) }}</td>
               <td @click.stop>
                 <!-- desktop: icon buttons -->
@@ -223,6 +244,41 @@
             </tr>
           </tbody>
         </table>
+      </div>
+    </div>
+
+    <!-- Bulk notes modal -->
+    <div v-if="showBulkNotes" class="modal-backdrop">
+      <div class="modal" style="max-width: 420px">
+        <h3 class="modal-title">
+          {{ t("accounts.bulkNotesTitle") }} ({{ selectedIds.size }})
+        </h3>
+        <div class="form-group">
+          <label class="form-label">{{ t("accounts.labelNotes") }}</label>
+          <textarea
+            v-model="bulkNotesText"
+            class="form-input"
+            rows="4"
+            :placeholder="t('accounts.notesPlaceholder')"
+            style="resize: vertical"
+          ></textarea>
+        </div>
+        <div class="modal-actions">
+          <button
+            class="btn btn-ghost"
+            :disabled="bulkNotesSaving"
+            @click="showBulkNotes = false"
+          >
+            {{ t("common.cancel") }}
+          </button>
+          <button
+            class="btn btn-primary"
+            :disabled="bulkNotesSaving"
+            @click="saveBulkNotes"
+          >
+            {{ bulkNotesSaving ? t("common.saving") : t("common.save") }}
+          </button>
+        </div>
       </div>
     </div>
 
@@ -482,6 +538,16 @@
                 {{ c.name }}
               </option>
             </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">{{ t("accounts.labelNotes") }}</label>
+            <textarea
+              v-model="form.notes"
+              class="form-input"
+              rows="3"
+              :placeholder="t('accounts.notesPlaceholder')"
+              style="resize: vertical"
+            ></textarea>
           </div>
         </div>
 
@@ -941,6 +1007,7 @@ import {
   type SessionInfo,
 } from "../api/client";
 import { t, locale } from "../i18n";
+import { usePersistedRef } from "../composables/usePersistedRef";
 
 const accounts = ref<Account[]>([]);
 
@@ -1014,6 +1081,7 @@ const form = reactive({
   apiHash: "",
   proxyId: "",
   appClientId: "",
+  notes: "",
 });
 const formError = ref("");
 const saving = ref(false);
@@ -1113,6 +1181,37 @@ const statusTarget = ref<Account | null>(null);
 const statusResult = ref<TgAccountStatus | null>(null);
 const statusError = ref("");
 const statusChecking = ref(false);
+
+// ── Notes column toggle ───────────────────────────────────────────────────────
+const showNotes = usePersistedRef<boolean>("bemby:accounts:showNotes", true);
+const notesColClass = computed(() =>
+  showNotes.value ? "col-hide-mobile" : "col-hidden",
+);
+
+// ── Bulk notes state ──────────────────────────────────────────────────────────
+const showBulkNotes = ref(false);
+const bulkNotesText = ref("");
+const bulkNotesSaving = ref(false);
+
+async function openBulkNotes() {
+  bulkNotesText.value = "";
+  showBulkNotes.value = true;
+}
+
+async function saveBulkNotes() {
+  if (!selectedIds.value.size) return;
+  bulkNotesSaving.value = true;
+  try {
+    await accountsApi.bulkUpdateNotes(
+      [...selectedIds.value],
+      bulkNotesText.value || null,
+    );
+    await load();
+    showBulkNotes.value = false;
+  } finally {
+    bulkNotesSaving.value = false;
+  }
+}
 
 // ── Selection state ───────────────────────────────────────────────────────────
 const selectedIds = ref(new Set<number>());
@@ -1336,6 +1435,7 @@ function openAdd() {
     apiHash: "",
     proxyId: "",
     appClientId: "",
+    notes: "",
   });
   formError.value = "";
   showForm.value = true;
@@ -1350,6 +1450,7 @@ function openEdit(a: Account) {
     apiHash: "",
     proxyId: a.proxyId ?? "",
     appClientId: a.appClientId ?? "",
+    notes: a.notes ?? "",
   });
   formError.value = "";
   editTab.value = "basic";
@@ -1382,6 +1483,7 @@ async function saveAccount() {
         ...(form.apiHash ? { apiHash: form.apiHash } : {}),
         proxyId: form.proxyId || null,
         appClientId: form.appClientId || null,
+        notes: form.notes || null,
       });
     } else {
       await accountsApi.create({
@@ -1391,6 +1493,7 @@ async function saveAccount() {
         apiHash: form.apiHash,
         proxyId: form.proxyId || null,
         appClientId: form.appClientId || null,
+        notes: form.notes || null,
       });
     }
     showForm.value = false;

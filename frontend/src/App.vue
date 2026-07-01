@@ -92,7 +92,8 @@
 import { computed, onUnmounted, ref, watch, type Component } from 'vue';
 import TgClientPopup from './components/TgClientPopup.vue';
 import { useRoute, useRouter } from 'vue-router';
-import { version as APP_VERSION } from '../package.json';
+import { version } from '../package.json';
+const APP_VERSION = version + (import.meta.env.DEV ? '-dev' : '');
 import { t, locale, setLocale } from './i18n';
 import { authApi, requirePasswordChangeSignal } from './api/client';
 import AccountsView from './views/AccountsView.vue';

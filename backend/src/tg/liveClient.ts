@@ -2,7 +2,7 @@ import { TelegramClient, Api, Logger } from "telegram";
 import { LogLevel } from "telegram/extensions/Logger";
 import { StringSession } from "telegram/sessions";
 import { NewMessage, Raw, type NewMessageEvent } from "telegram/events";
-import { db } from "../db/database";
+import { db, getDefaultTgApiCredentials } from "../db/database";
 import { parseTgProxy } from "../jobs/runner";
 import type { TgDeviceParams } from "../auth/tgAuth";
 
@@ -79,8 +79,8 @@ type LiveEntry = {
 const liveClients = new Map<number, LiveEntry>();
 
 type AccountRow = {
-  api_id: number;
-  api_hash: string;
+  api_id: number | null;
+  api_hash: string | null;
   session_string: string | null;
   proxy_id: string | null;
   app_client_id: string | null;
@@ -107,10 +107,15 @@ export function peerToChatId(peer: Api.TypePeer): string {
 // Reverse of peerToChatId -- used as a fallback entity lookup key
 function chatIdToPeer(chatId: string): Api.TypePeer | null {
   try {
-    if (chatId.startsWith('u')) return new Api.PeerUser({ userId: BigInt(chatId.slice(1)) as any });
-    if (chatId.startsWith('c')) return new Api.PeerChannel({ channelId: BigInt(chatId.slice(1)) as any });
-    if (chatId.startsWith('g')) return new Api.PeerChat({ chatId: BigInt(chatId.slice(1)) as any });
-  } catch { /* ignore malformed ids */ }
+    if (chatId.startsWith("u"))
+      return new Api.PeerUser({ userId: BigInt(chatId.slice(1)) as any });
+    if (chatId.startsWith("c"))
+      return new Api.PeerChannel({ channelId: BigInt(chatId.slice(1)) as any });
+    if (chatId.startsWith("g"))
+      return new Api.PeerChat({ chatId: BigInt(chatId.slice(1)) as any });
+  } catch {
+    /* ignore malformed ids */
+  }
   return null;
 }
 
@@ -223,16 +228,14 @@ function extractButtons(msg: Api.Message): TgButton[][] | null {
   if (!msg.replyMarkup) return null;
   if (msg.replyMarkup instanceof Api.ReplyInlineMarkup) {
     return msg.replyMarkup.rows.map((row) =>
-      row.buttons.map(
-        (btn: any): TgButton => ({
-          text: btn.text ?? "",
-          data: btn.data ? Buffer.from(btn.data).toString("base64") : null,
-          url: btn.url ?? null,
-          webApp:
-            btn instanceof Api.KeyboardButtonWebView ||
-            btn instanceof Api.KeyboardButtonSimpleWebView,
-        }),
-      ),
+      row.buttons.map((btn: any): TgButton => ({
+        text: btn.text ?? "",
+        data: btn.data ? Buffer.from(btn.data).toString("base64") : null,
+        url: btn.url ?? null,
+        webApp:
+          btn instanceof Api.KeyboardButtonWebView ||
+          btn instanceof Api.KeyboardButtonSimpleWebView,
+      })),
     );
   }
   return null;
@@ -352,13 +355,20 @@ export async function getLiveClient(accountId: number): Promise<LiveEntry> {
   if (!account?.session_string)
     throw new Error("Account not found or not authenticated");
 
+  const defaults =
+    !account.api_id || !account.api_hash ? getDefaultTgApiCredentials() : null;
+  const apiId = account.api_id ?? defaults?.apiId;
+  const apiHash = account.api_hash ?? defaults?.apiHash;
+  if (!apiId || !apiHash)
+    throw new Error("No API credentials available for this account");
+
   const proxy = resolveProxy(account.proxy_id);
   const deviceParams = resolveDeviceParams(account.app_client_id);
 
   const client = new TelegramClient(
     new StringSession(account.session_string),
-    account.api_id,
-    account.api_hash,
+    apiId,
+    apiHash,
     {
       connectionRetries: 5,
       baseLogger: new Logger(LogLevel.NONE),
@@ -419,7 +429,9 @@ export async function getLiveClient(accountId: number): Promise<LiveEntry> {
         fromId: msg.fromId ? peerToChatId(msg.fromId as Api.TypePeer) : null,
         fromName,
         hasPhoto: msg.media instanceof Api.MessageMediaPhoto,
-        hasDocument: msg.media instanceof Api.MessageMediaDocument && !isStickerDoc(msg.media),
+        hasDocument:
+          msg.media instanceof Api.MessageMediaDocument &&
+          !isStickerDoc(msg.media),
         hasSticker: isStickerDoc(msg.media),
         buttons: extractButtons(msg),
         reactions: extractReactions(msg),
@@ -435,19 +447,25 @@ export async function getLiveClient(accountId: number): Promise<LiveEntry> {
   }, new NewMessage({}));
 
   // Update read status when the recipient reads our outgoing messages (1-to-1 / group chats)
-  client.addEventHandler((update: Api.UpdateReadHistoryOutbox) => {
-    const chatId = peerToChatId(update.peer);
-    if (!chatId) return;
-    entry!.readOutboxCache.set(chatId, update.maxId);
-    entry!.readSubscribers.forEach((sub) => sub(chatId, update.maxId));
-  }, new Raw({ types: [Api.UpdateReadHistoryOutbox] }));
+  client.addEventHandler(
+    (update: Api.UpdateReadHistoryOutbox) => {
+      const chatId = peerToChatId(update.peer);
+      if (!chatId) return;
+      entry!.readOutboxCache.set(chatId, update.maxId);
+      entry!.readSubscribers.forEach((sub) => sub(chatId, update.maxId));
+    },
+    new Raw({ types: [Api.UpdateReadHistoryOutbox] }),
+  );
 
   // Update read status for channel outbox reads
-  client.addEventHandler((update: Api.UpdateReadChannelOutbox) => {
-    const chatId = `c${update.channelId.toString()}`;
-    entry!.readOutboxCache.set(chatId, update.maxId);
-    entry!.readSubscribers.forEach((sub) => sub(chatId, update.maxId));
-  }, new Raw({ types: [Api.UpdateReadChannelOutbox] }));
+  client.addEventHandler(
+    (update: Api.UpdateReadChannelOutbox) => {
+      const chatId = `c${update.channelId.toString()}`;
+      entry!.readOutboxCache.set(chatId, update.maxId);
+      entry!.readSubscribers.forEach((sub) => sub(chatId, update.maxId));
+    },
+    new Raw({ types: [Api.UpdateReadChannelOutbox] }),
+  );
 
   return entry;
 }
@@ -517,10 +535,13 @@ export async function ensureEntityCached(
   try {
     const peer = chatIdToPeer(chatId);
     if (peer) {
-      const entity = await entry.client.getEntity(peer) as Api.User | Api.Chat | Api.Channel;
+      const entity = (await entry.client.getEntity(peer)) as
+        Api.User | Api.Chat | Api.Channel;
       if (entity) entry.entityCache.set(chatId, entity);
     }
-  } catch { /* not resolvable -- fetchAvatar will cache null and won't retry */ }
+  } catch {
+    /* not resolvable -- fetchAvatar will cache null and won't retry */
+  }
 }
 
 export async function getMessages(
@@ -591,7 +612,9 @@ export async function getMessages(
       fromId: msg.fromId ? peerToChatId(msg.fromId as Api.TypePeer) : null,
       fromName,
       hasPhoto: msg.media instanceof Api.MessageMediaPhoto,
-      hasDocument: msg.media instanceof Api.MessageMediaDocument && !isStickerDoc(msg.media),
+      hasDocument:
+        msg.media instanceof Api.MessageMediaDocument &&
+        !isStickerDoc(msg.media),
       hasSticker: isStickerDoc(msg.media),
       buttons: extractButtons(msg as Api.Message),
       reactions: extractReactions(msg as Api.Message),
@@ -642,7 +665,8 @@ export async function getPinnedMessage(
     fromId: msg.fromId ? peerToChatId(msg.fromId as Api.TypePeer) : null,
     fromName: null,
     hasPhoto: msg.media instanceof Api.MessageMediaPhoto,
-    hasDocument: msg.media instanceof Api.MessageMediaDocument && !isStickerDoc(msg.media),
+    hasDocument:
+      msg.media instanceof Api.MessageMediaDocument && !isStickerDoc(msg.media),
     hasSticker: isStickerDoc(msg.media),
     buttons: extractButtons(msg),
     reactions: null,
@@ -1116,7 +1140,9 @@ export async function addChatToFolder(
   }
 
   const raw = await entry.client.invoke(new Api.messages.GetDialogFilters());
-  const filters: any[] = Array.isArray(raw) ? raw : ((raw as any)?.filters ?? []);
+  const filters: any[] = Array.isArray(raw)
+    ? raw
+    : ((raw as any)?.filters ?? []);
   const filter = filters.find((f: any) => f.id === folderId);
   if (!filter) throw new Error("Folder not found");
 
@@ -1168,7 +1194,9 @@ export async function clickButton(
   const entity = entry.entityCache.get(chatId);
   if (!entity) throw new Error("Chat not found");
   const dataBytes = Buffer.from(data, "base64");
-  console.log(`[button] chatId=${chatId} msgId=${msgId} data_hex=${dataBytes.toString("hex")} data_utf8=${dataBytes.toString("utf8")}`);
+  console.log(
+    `[button] chatId=${chatId} msgId=${msgId} data_hex=${dataBytes.toString("hex")} data_utf8=${dataBytes.toString("utf8")}`,
+  );
   const result = await client.invoke(
     new Api.messages.GetBotCallbackAnswer({
       peer: entity as any,
@@ -1177,7 +1205,9 @@ export async function clickButton(
       game: false,
     }),
   );
-  console.log(`[button] result alert=${result.alert} message=${JSON.stringify(result.message)} url=${result.url ?? "null"}`);
+  console.log(
+    `[button] result alert=${result.alert} message=${JSON.stringify(result.message)} url=${result.url ?? "null"}`,
+  );
   return {
     alert: result.alert ?? false,
     message: result.message ?? null,
@@ -1247,7 +1277,9 @@ export async function getThreadMessages(
       fromId: msg.fromId ? peerToChatId(msg.fromId as Api.TypePeer) : null,
       fromName,
       hasPhoto: msg.media instanceof Api.MessageMediaPhoto,
-      hasDocument: msg.media instanceof Api.MessageMediaDocument && !isStickerDoc(msg.media),
+      hasDocument:
+        msg.media instanceof Api.MessageMediaDocument &&
+        !isStickerDoc(msg.media),
       hasSticker: isStickerDoc(msg.media),
       buttons: extractButtons(msg),
       reactions: extractReactions(msg),
@@ -1362,7 +1394,8 @@ export async function startBot(
     });
   }
 
-  const name = [entity.firstName, entity.lastName].filter(Boolean).join(" ") || username;
+  const name =
+    [entity.firstName, entity.lastName].filter(Boolean).join(" ") || username;
   return {
     chatId,
     name,

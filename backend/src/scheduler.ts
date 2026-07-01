@@ -1,4 +1,4 @@
-import { db } from "./db/database";
+import { db, getDefaultTgApiCredentials } from "./db/database";
 import { runJob, type JobDetailLog } from "./jobs/runner";
 import {
   sendTgNotify,
@@ -8,7 +8,12 @@ import {
 } from "./jobs/notify";
 import type { Job, TgAccount } from "./types";
 import { DateTime } from "luxon";
-import { registerJob, unregisterJob, registerLiveDetail, clearLiveDetail } from "./jobs/cancellation";
+import {
+  registerJob,
+  unregisterJob,
+  registerLiveDetail,
+  clearLiveDetail,
+} from "./jobs/cancellation";
 import { toMinutes, pickNextRun } from "./scheduler-utils";
 
 type ScheduleEntry = {
@@ -20,7 +25,6 @@ type ScheduleEntry = {
 
 const schedule = new Map<number, ScheduleEntry>();
 
-
 function checkDailyRunEnabled(): boolean {
   const row = db
     .prepare("SELECT value FROM settings WHERE key = 'check_daily_run'")
@@ -28,20 +32,29 @@ function checkDailyRunEnabled(): boolean {
   return row?.value !== "false";
 }
 
-export function daysUntilNextRun(jobId: number, tz: string, runEveryDays: number): number {
+export function daysUntilNextRun(
+  jobId: number,
+  tz: string,
+  runEveryDays: number,
+): number {
   const row = db
     .prepare(
       "SELECT ran_at FROM job_logs WHERE job_id = ? AND status = 'success' ORDER BY ran_at DESC LIMIT 1",
     )
     .get(jobId) as { ran_at: string } | undefined;
   if (!row) return 0;
-  const lastRun = DateTime.fromISO(row.ran_at, { zone: "utc" }).setZone(tz).startOf("day");
+  const lastRun = DateTime.fromISO(row.ran_at, { zone: "utc" })
+    .setZone(tz)
+    .startOf("day");
   const today = DateTime.now().setZone(tz).startOf("day");
   const daysSince = Math.floor(today.diff(lastRun, "days").days);
   return daysSince >= runEveryDays ? 0 : runEveryDays - daysSince;
 }
 
-export function loadEligibleJobs(): Array<{ job: Job; account: TgAccount | null }> {
+export function loadEligibleJobs(): Array<{
+  job: Job;
+  account: TgAccount | null;
+}> {
   const rows = db
     .prepare(
       `
@@ -82,26 +95,37 @@ export function loadEligibleJobs(): Array<{ job: Job; account: TgAccount | null 
     } as Job,
     account:
       row.account_id != null
-        ? ({
-            id: row.account_id,
-            name: row.account_name,
-            phoneNumber: row.phone_number,
-            apiId: row.api_id,
-            apiHash: row.api_hash,
-            sessionString: row.session_string,
-            authStatus: row.auth_status,
-            proxyId: row.account_proxy_id ?? null,
-            disabled: Boolean(row.account_disabled),
-            appClientId: row.account_app_client_id ?? null,
-            createdAt: row.account_created_at,
-          } as TgAccount)
+        ? (() => {
+            const defaults =
+              !row.api_id || !row.api_hash
+                ? getDefaultTgApiCredentials()
+                : null;
+            return {
+              id: row.account_id,
+              name: row.account_name,
+              phoneNumber: row.phone_number,
+              apiId: row.api_id ?? defaults?.apiId ?? null,
+              apiHash: row.api_hash ?? defaults?.apiHash ?? null,
+              sessionString: row.session_string,
+              authStatus: row.auth_status,
+              proxyId: row.account_proxy_id ?? null,
+              disabled: Boolean(row.account_disabled),
+              appClientId: row.account_app_client_id ?? null,
+              createdAt: row.account_created_at,
+            } as TgAccount;
+          })()
         : null,
   }));
 }
 
-export async function executeJob(job: Job, account: TgAccount | null): Promise<void> {
+export async function executeJob(
+  job: Job,
+  account: TgAccount | null,
+): Promise<void> {
   // Re-fetch job settings so changes made after scheduling take effect
-  const freshJob = db.prepare("SELECT * FROM jobs WHERE id = ?").get(job.id) as any;
+  const freshJob = db
+    .prepare("SELECT * FROM jobs WHERE id = ?")
+    .get(job.id) as any;
   if (freshJob) {
     job = {
       id: freshJob.id,
@@ -185,11 +209,7 @@ export async function executeJob(job: Job, account: TgAccount | null): Promise<v
   }
 }
 
-function scheduleOne(
-  job: Job,
-  account: TgAccount | null,
-  daysAhead = 0,
-): void {
+function scheduleOne(job: Job, account: TgAccount | null, daysAhead = 0): void {
   const existing = schedule.get(job.id);
   if (existing) clearTimeout(existing.timer);
 
@@ -228,7 +248,9 @@ function refreshJobs(): void {
   for (const { job, account } of eligible) {
     const existing = schedule.get(job.id);
     if (!existing) {
-      const daysAhead = dailyCheckOn ? daysUntilNextRun(job.id, job.timezone, job.runEveryDays ?? 1) : 0;
+      const daysAhead = dailyCheckOn
+        ? daysUntilNextRun(job.id, job.timezone, job.runEveryDays ?? 1)
+        : 0;
       scheduleOne(job, account, daysAhead);
     } else {
       const scheduleChanged =
@@ -239,7 +261,9 @@ function refreshJobs(): void {
         existing.job.accountId !== job.accountId ||
         existing.job.runEveryDays !== job.runEveryDays;
       if (scheduleChanged) {
-        const daysAhead = dailyCheckOn ? daysUntilNextRun(job.id, job.timezone, job.runEveryDays ?? 1) : 0;
+        const daysAhead = dailyCheckOn
+          ? daysUntilNextRun(job.id, job.timezone, job.runEveryDays ?? 1)
+          : 0;
         scheduleOne(job, account, daysAhead);
       } else {
         // Keep the timer but update the stored snapshot so status reflects current settings

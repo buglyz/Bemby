@@ -1,6 +1,6 @@
 import { Router } from "express";
 import crypto from "crypto";
-import { db } from "../db/database";
+import { db, getDefaultTgApiCredentials } from "../db/database";
 import {
   requestCode,
   submitCode,
@@ -20,7 +20,7 @@ import { isAuthError, markSessionExpired } from "../tg/liveClient";
 
 type EncryptedEnvelope = {
   encrypted: true;
-  version: '1';
+  version: "1";
   salt: string;
   iv: string;
   tag: string;
@@ -31,26 +31,32 @@ function encryptPayload(plaintext: string, secret: string): EncryptedEnvelope {
   const salt = crypto.randomBytes(16);
   const key = crypto.scryptSync(secret, salt, 32);
   const iv = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
-  const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
+  const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
+  const encrypted = Buffer.concat([
+    cipher.update(plaintext, "utf8"),
+    cipher.final(),
+  ]);
   return {
     encrypted: true,
-    version: '1',
-    salt: salt.toString('hex'),
-    iv: iv.toString('hex'),
-    tag: cipher.getAuthTag().toString('hex'),
-    data: encrypted.toString('base64'),
+    version: "1",
+    salt: salt.toString("hex"),
+    iv: iv.toString("hex"),
+    tag: cipher.getAuthTag().toString("hex"),
+    data: encrypted.toString("base64"),
   };
 }
 
 function decryptPayload(envelope: EncryptedEnvelope, secret: string): string {
-  const salt = Buffer.from(envelope.salt, 'hex');
+  const salt = Buffer.from(envelope.salt, "hex");
   const key = crypto.scryptSync(secret, salt, 32);
-  const iv = Buffer.from(envelope.iv, 'hex');
-  const tag = Buffer.from(envelope.tag, 'hex');
-  const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+  const iv = Buffer.from(envelope.iv, "hex");
+  const tag = Buffer.from(envelope.tag, "hex");
+  const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
   decipher.setAuthTag(tag);
-  return decipher.update(Buffer.from(envelope.data, 'base64')) + decipher.final('utf8');
+  return (
+    decipher.update(Buffer.from(envelope.data, "base64")) +
+    decipher.final("utf8")
+  );
 }
 
 // Reasons set by checkAccountStatus for frozen/revoked sessions that need re-auth
@@ -75,8 +81,8 @@ type AccountRow = {
   id: number;
   name: string;
   phone_number: string;
-  api_id: number;
-  api_hash: string;
+  api_id: number | null;
+  api_hash: string | null;
   session_string: string | null;
   auth_status: AuthStatus;
   proxy_id: string | null;
@@ -87,6 +93,21 @@ type AccountRow = {
   tg_display_name: string | null;
   tg_username: string | null;
 };
+
+/** Resolves effective API credentials, falling back to global defaults. Throws if neither is set. */
+function resolveApiCredentials(account: AccountRow): {
+  apiId: number;
+  apiHash: string;
+} {
+  const apiId = account.api_id || getDefaultTgApiCredentials()?.apiId;
+  const apiHash = account.api_hash || getDefaultTgApiCredentials()?.apiHash;
+  if (!apiId || !apiHash) {
+    throw new Error(
+      "No API credentials available. Add credentials to this account or configure global defaults in Settings.",
+    );
+  }
+  return { apiId, apiHash };
+}
 
 function resolveAppClientParams(
   appClientId: string | null | undefined,
@@ -148,8 +169,10 @@ function toJson(row: AccountRow) {
     id: row.id,
     name: row.name,
     phoneNumber: row.phone_number,
-    apiId: row.api_id,
+    apiId: row.api_id ?? null,
     // apiHash intentionally omitted from responses
+    /** True when the account has no per-account credentials and relies on global defaults. */
+    usesDefaultCredentials: !row.api_id || !row.api_hash,
     authStatus: row.auth_status,
     proxyId: row.proxy_id ?? null,
     disabled: Boolean(row.disabled),
@@ -161,7 +184,12 @@ function toJson(row: AccountRow) {
   };
 }
 
-function saveTgMeta(id: number, firstName: string, lastName: string | undefined, username: string | undefined) {
+function saveTgMeta(
+  id: number,
+  firstName: string,
+  lastName: string | undefined,
+  username: string | undefined,
+) {
   const displayName = [firstName, lastName].filter(Boolean).join(" ");
   db.prepare(
     "UPDATE tg_accounts SET tg_display_name = ?, tg_username = ? WHERE id = ?",
@@ -178,10 +206,16 @@ router.get("/", (req, res) => {
 router.post("/", (req, res) => {
   const { name, phoneNumber, apiId, apiHash, proxyId, appClientId } =
     req.body as Record<string, string>;
-  if (!name || !phoneNumber || !apiId || !apiHash) {
-    res
-      .status(400)
-      .json({ error: "name, phoneNumber, apiId, apiHash are required" });
+  if (!name || !phoneNumber) {
+    res.status(400).json({ error: "name and phoneNumber are required" });
+    return;
+  }
+  // API credentials required unless global defaults are configured
+  if ((!apiId || !apiHash) && !getDefaultTgApiCredentials()) {
+    res.status(400).json({
+      error:
+        "apiId and apiHash are required (or configure global defaults in Settings)",
+    });
     return;
   }
 
@@ -195,8 +229,8 @@ router.post("/", (req, res) => {
     .run(
       name,
       phoneNumber,
-      Number(apiId),
-      apiHash,
+      apiId ? Number(apiId) : null,
+      apiHash || null,
       proxyId || null,
       appClientId || null,
       maxRow.m + 1,
@@ -279,21 +313,36 @@ router.post("/export", (req, res) => {
 
 // POST /import -- import accounts; skips existing by phone number
 router.post("/import", (req, res) => {
-  let { data, secret, forceReauth = true } = req.body as {
-    data: { version?: string; accounts?: AccountImportItem[] } | EncryptedEnvelope;
+  let {
+    data,
+    secret,
+    forceReauth = true,
+  } = req.body as {
+    data:
+      { version?: string; accounts?: AccountImportItem[] } | EncryptedEnvelope;
     secret?: string;
     forceReauth?: boolean;
   };
 
   if (data && (data as EncryptedEnvelope).encrypted === true) {
     if (!secret) {
-      res.status(400).json({ error: 'This backup is encrypted. Please provide the secret to decrypt it.' });
+      res
+        .status(400)
+        .json({
+          error:
+            "This backup is encrypted. Please provide the secret to decrypt it.",
+        });
       return;
     }
     try {
       data = JSON.parse(decryptPayload(data as EncryptedEnvelope, secret));
     } catch {
-      res.status(400).json({ error: 'Incorrect secret or corrupted backup file', code: 'WRONG_SECRET' });
+      res
+        .status(400)
+        .json({
+          error: "Incorrect secret or corrupted backup file",
+          code: "WRONG_SECRET",
+        });
       return;
     }
   }
@@ -306,8 +355,9 @@ router.post("/import", (req, res) => {
   }
   let imported = 0;
   let skipped = 0;
+  const defaults = getDefaultTgApiCredentials();
   for (const a of items) {
-    if (!a.phoneNumber || !a.apiId || !a.apiHash) {
+    if (!a.phoneNumber || ((!a.apiId || !a.apiHash) && !defaults)) {
       skipped++;
       continue;
     }
@@ -395,12 +445,13 @@ router.post("/:id/check-status", async (req, res) => {
   }
 
   try {
+    const { apiId, apiHash } = resolveApiCredentials(account);
     const proxyUrl = resolveProxyUrl(account.proxy_id);
     const proxy = parseTgProxy(proxyUrl);
     const deviceParams = resolveAppClientParams(account.app_client_id);
     const status = await checkAccountStatus(
-      account.api_id,
-      account.api_hash,
+      apiId,
+      apiHash,
       account.session_string,
       proxy,
       deviceParams,
@@ -419,26 +470,35 @@ router.post("/:id/refresh-tg-meta", async (req, res) => {
   const account = db
     .prepare("SELECT * FROM tg_accounts WHERE id = ?")
     .get(req.params.id) as AccountRow | undefined;
-  if (!account) { res.status(404).json({ error: "Not found" }); return; }
+  if (!account) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
   if (!account.session_string) {
     res.status(400).json({ error: "Account not authenticated" });
     return;
   }
   try {
+    const { apiId, apiHash } = resolveApiCredentials(account);
     const proxyUrl = resolveProxyUrl(account.proxy_id);
     const proxy = parseTgProxy(proxyUrl);
     const deviceParams = resolveAppClientParams(account.app_client_id);
     const status = await checkAccountStatus(
-      account.api_id,
-      account.api_hash,
+      apiId,
+      apiHash,
       account.session_string,
       proxy,
       deviceParams,
     );
     if (statusNeedsReauth(status)) markSessionExpired(account.id);
     saveTgMeta(account.id, status.firstName, status.lastName, status.username);
-    const displayName = [status.firstName, status.lastName].filter(Boolean).join(" ");
-    res.json({ tgDisplayName: displayName || null, tgUsername: status.username ?? null });
+    const displayName = [status.firstName, status.lastName]
+      .filter(Boolean)
+      .join(" ");
+    res.json({
+      tgDisplayName: displayName || null,
+      tgUsername: status.username ?? null,
+    });
   } catch (err: any) {
     if (isAuthError(err?.message ?? "")) markSessionExpired(account.id);
     res.status(500).json({ error: err.message });
@@ -457,12 +517,13 @@ router.post("/check-enabled-sessions", async (req, res) => {
     rows.map(async (account) => {
       if (!account.session_string) return { id: account.id, expired: true };
       try {
+        const { apiId, apiHash } = resolveApiCredentials(account);
         const proxyUrl = resolveProxyUrl(account.proxy_id);
         const proxy = parseTgProxy(proxyUrl);
         const deviceParams = resolveAppClientParams(account.app_client_id);
         const status = await checkAccountStatus(
-          account.api_id,
-          account.api_hash,
+          apiId,
+          apiHash,
           account.session_string,
           proxy,
           deviceParams,
@@ -498,19 +559,23 @@ router.post("/:id/check-spam", async (req, res) => {
   const account = db
     .prepare("SELECT * FROM tg_accounts WHERE id = ?")
     .get(req.params.id) as AccountRow | undefined;
-  if (!account) { res.status(404).json({ error: "Not found" }); return; }
+  if (!account) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
   if (!account.session_string) {
     res.status(400).json({ error: "Account not authenticated" });
     return;
   }
 
   try {
+    const { apiId, apiHash } = resolveApiCredentials(account);
     const proxyUrl = resolveProxyUrl(account.proxy_id);
     const proxy = parseTgProxy(proxyUrl);
     const deviceParams = resolveAppClientParams(account.app_client_id);
     const result = await checkSpamStatus(
-      account.api_id,
-      account.api_hash,
+      apiId,
+      apiHash,
       account.session_string,
       proxy,
       deviceParams,
@@ -527,7 +592,10 @@ router.post("/:id/update-2fa", async (req, res) => {
   const account = db
     .prepare("SELECT * FROM tg_accounts WHERE id = ?")
     .get(req.params.id) as AccountRow | undefined;
-  if (!account) { res.status(404).json({ error: "Not found" }); return; }
+  if (!account) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
   if (!account.session_string) {
     res.status(400).json({ error: "Account not authenticated" });
     return;
@@ -538,12 +606,13 @@ router.post("/:id/update-2fa", async (req, res) => {
     hint?: string;
   };
   try {
+    const { apiId, apiHash } = resolveApiCredentials(account);
     const proxyUrl = resolveProxyUrl(account.proxy_id);
     const proxy = parseTgProxy(proxyUrl);
     const deviceParams = resolveAppClientParams(account.app_client_id);
     await updateTwoFa(
-      account.api_id,
-      account.api_hash,
+      apiId,
+      apiHash,
       account.session_string,
       { currentPassword, newPassword, hint },
       proxy,
@@ -561,18 +630,22 @@ router.get("/:id/sessions", async (req, res) => {
   const account = db
     .prepare("SELECT * FROM tg_accounts WHERE id = ?")
     .get(req.params.id) as AccountRow | undefined;
-  if (!account) { res.status(404).json({ error: "Not found" }); return; }
+  if (!account) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
   if (!account.session_string) {
     res.status(400).json({ error: "Account not authenticated" });
     return;
   }
   try {
+    const { apiId, apiHash } = resolveApiCredentials(account);
     const proxyUrl = resolveProxyUrl(account.proxy_id);
     const proxy = parseTgProxy(proxyUrl);
     const deviceParams = resolveAppClientParams(account.app_client_id);
     const sessions = await getSessions(
-      account.api_id,
-      account.api_hash,
+      apiId,
+      apiHash,
       account.session_string,
       proxy,
       deviceParams,
@@ -589,20 +662,27 @@ router.post("/:id/terminate-session", async (req, res) => {
   const account = db
     .prepare("SELECT * FROM tg_accounts WHERE id = ?")
     .get(req.params.id) as AccountRow | undefined;
-  if (!account) { res.status(404).json({ error: "Not found" }); return; }
+  if (!account) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
   if (!account.session_string) {
     res.status(400).json({ error: "Account not authenticated" });
     return;
   }
   const { hash } = req.body as { hash?: string };
-  if (!hash) { res.status(400).json({ error: "hash required" }); return; }
+  if (!hash) {
+    res.status(400).json({ error: "hash required" });
+    return;
+  }
   try {
+    const { apiId, apiHash } = resolveApiCredentials(account);
     const proxyUrl = resolveProxyUrl(account.proxy_id);
     const proxy = parseTgProxy(proxyUrl);
     const deviceParams = resolveAppClientParams(account.app_client_id);
     await terminateSession(
-      account.api_id,
-      account.api_hash,
+      apiId,
+      apiHash,
       account.session_string,
       hash,
       proxy,
@@ -620,18 +700,22 @@ router.post("/:id/terminate-other-sessions", async (req, res) => {
   const account = db
     .prepare("SELECT * FROM tg_accounts WHERE id = ?")
     .get(req.params.id) as AccountRow | undefined;
-  if (!account) { res.status(404).json({ error: "Not found" }); return; }
+  if (!account) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
   if (!account.session_string) {
     res.status(400).json({ error: "Account not authenticated" });
     return;
   }
   try {
+    const { apiId, apiHash } = resolveApiCredentials(account);
     const proxyUrl = resolveProxyUrl(account.proxy_id);
     const proxy = parseTgProxy(proxyUrl);
     const deviceParams = resolveAppClientParams(account.app_client_id);
     await terminateOtherSessions(
-      account.api_id,
-      account.api_hash,
+      apiId,
+      apiHash,
       account.session_string,
       proxy,
       deviceParams,
@@ -674,13 +758,14 @@ router.post("/:id/auth/request", async (req, res) => {
   }
 
   try {
+    const { apiId, apiHash } = resolveApiCredentials(account);
     const proxyUrl = resolveProxyUrl(account.proxy_id);
     const proxy = parseTgProxy(proxyUrl);
     const deviceParams = resolveAppClientParams(account.app_client_id);
     const { isCodeViaApp } = await requestCode(
       account.id,
-      account.api_id,
-      account.api_hash,
+      apiId,
+      apiHash,
       account.phone_number,
       proxy,
       deviceParams,

@@ -1,6 +1,11 @@
-export type AuthStatus = 'unauthenticated' | 'pending_code' | 'pending_2fa' | 'authenticated' | 'session_expired';
-export type JobType = 'checkin' | 'embywatch' | 'custom';
-export type LogStatus = 'success' | 'failed' | 'running';
+export type AuthStatus =
+  | "unauthenticated"
+  | "pending_code"
+  | "pending_2fa"
+  | "authenticated"
+  | "session_expired";
+export type JobType = "checkin" | "embywatch" | "custom";
+export type LogStatus = "success" | "failed" | "running";
 
 export type TgAppClient = {
   id: string;
@@ -18,8 +23,9 @@ export type TgAccount = {
   id: number;
   name: string;
   phoneNumber: string;
-  apiId: number;
-  apiHash: string;
+  /** Null when the account relies on the global default from settings. */
+  apiId: number | null;
+  apiHash: string | null;
   sessionString: string | null;
   authStatus: AuthStatus;
   proxyId: string | null;
@@ -68,11 +74,29 @@ export type JobTemplate = {
 };
 
 export type CustomAction =
-  | { type: 'send_command'; content: string; maxRetries?: number }
-  | { type: 'wait_reply'; maxWaitMs: number; successContains?: string; failContains?: string; maxRetries?: number }
-  | { type: 'delay'; waitMs: number }
-  | { type: 'click_button'; button: string; maxRetries: number; maxWaitMs: number; successContains?: string; failContains?: string }
-  | { type: 'enter_captcha'; maxWaitMs: number; captchaLength?: number; maxRetries?: number };
+  | { type: "send_command"; content: string; maxRetries?: number }
+  | {
+      type: "wait_reply";
+      maxWaitMs: number;
+      successContains?: string;
+      failContains?: string;
+      maxRetries?: number;
+    }
+  | { type: "delay"; waitMs: number }
+  | {
+      type: "click_button";
+      button: string;
+      maxRetries: number;
+      maxWaitMs: number;
+      successContains?: string;
+      failContains?: string;
+    }
+  | {
+      type: "enter_captcha";
+      maxWaitMs: number;
+      captchaLength?: number;
+      maxRetries?: number;
+    };
 
 export type CustomConfig = {
   actions: CustomAction[];
@@ -113,7 +137,7 @@ export type CustomStepLog = {
   /** For wait_reply: number of messages received during the wait */
   msgCount?: number;
   /** For click_button: 'edit' or 'new_message' — which response path fired */
-  responseSource?: 'edit' | 'new_message';
+  responseSource?: "edit" | "new_message";
   /** For click_button: how many retries were needed (0 = first attempt succeeded) */
   retryCount?: number;
   errorName?: string;

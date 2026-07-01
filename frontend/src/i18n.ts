@@ -82,6 +82,9 @@ const zh = {
     labelApiId: "API ID",
     labelApiHash: "API Hash",
     apiHint: "从 my.telegram.org/apps 获取 API ID 和 Hash",
+    apiOptionalHint: "已在设置中配置全局凭据，此处可留空",
+    apiIdOptional: "API ID（可选）",
+    apiHashOptional: "API Hash（可选）",
     labelProxy: "代理",
     proxyNone: "不使用代理",
     labelAppClient: "TG 客户端",
@@ -471,6 +474,17 @@ const zh = {
     tgClientModeLabel: "账户默认客户端",
     tgClientModeDefault: "使用默认",
     tgClientModeRandom: "随机选择",
+    defaultTgApiSection: "默认 TG API 凭据",
+    defaultTgApiHint: "未配置独立凭据的账户将使用此处的 API ID 和 Hash。",
+    labelDefaultTgApiId: "默认 API ID",
+    labelDefaultTgApiHash: "默认 API Hash",
+    defaultTgApiHashSet: "当前已设置（已脱敏）：",
+    defaultTgApiHashPlaceholder: "输入新 Hash 以更新",
+    defaultTgApiHashNew: "32 位十六进制字符串",
+    defaultTgApiClear: "清除",
+    defaultTgApiClearing: "清除中...",
+    defaultTgApiSaved: "默认凭据已保存",
+    defaultTgApiCleared: "默认凭据已清除",
     saveBtn: "保存",
     aiSection: "AI 按钮识别",
     aiHint: "用于 {aiBtn} 功能，从内联键盘中自动识别签到按钮。",
@@ -609,7 +623,8 @@ const en: typeof zh = {
   },
   forcePwd: {
     title: "Security Alert",
-    subtitle: "Default password detected. Please set a new password before continuing.",
+    subtitle:
+      "Default password detected. Please set a new password before continuing.",
     newPassword: "New Password",
     confirmPassword: "Confirm New Password",
     submit: "Set New Password",
@@ -633,6 +648,10 @@ const en: typeof zh = {
     labelApiId: "API ID",
     labelApiHash: "API Hash",
     apiHint: "Get API ID & Hash from my.telegram.org/apps",
+    apiOptionalHint:
+      "Global credentials are set in Settings -- these fields are optional",
+    apiIdOptional: "API ID (optional)",
+    apiHashOptional: "API Hash (optional)",
     labelProxy: "Proxy",
     proxyNone: "No proxy",
     labelAppClient: "TG Client",
@@ -684,7 +703,8 @@ const en: typeof zh = {
       "This file will contain Telegram session tokens and API Hash credentials. Consider setting an encryption secret below to protect the backup.",
     exportSecretLabel: "Encryption secret (optional)",
     exportSecretPlaceholder: "Leave blank for no encryption",
-    exportSecretHint: "If set, the export file will be encrypted and the same secret will be required on import",
+    exportSecretHint:
+      "If set, the export file will be encrypted and the same secret will be required on import",
     importTitle: "Import Accounts",
     importWarnBody:
       "This file contains Telegram session tokens and API credentials. Delete it immediately after importing. If the file is encrypted, enter the secret below.",
@@ -695,7 +715,8 @@ const en: typeof zh = {
     importDoing: "Importing...",
     importFailed: "Import failed",
     forceReauthLabel: "Force reauthenticate (recommended)",
-    forceReauthHint: "Clears session tokens on import; accounts must reauthenticate",
+    forceReauthHint:
+      "Clears session tokens on import; accounts must reauthenticate",
     forceReauthRisk:
       "Warning: disabling this will import existing session tokens. If the same session key is used in two places simultaneously, Telegram will revoke it and the account will be signed out.",
     tabBasic: "Basic",
@@ -796,8 +817,10 @@ const en: typeof zh = {
     labelFailContains: "Fail contains (optional)",
     successContainsPlaceholder: "e.g. check-in successful",
     failContainsPlaceholder: "e.g. check-in failed",
-    successContainsHint: "Mark as success when response contains this text; leave blank to skip text matching",
-    failContainsHint: "Mark as failed when response contains this text; leave blank to skip text matching",
+    successContainsHint:
+      "Mark as success when response contains this text; leave blank to skip text matching",
+    failContainsHint:
+      "Mark as failed when response contains this text; leave blank to skip text matching",
     labelReplyTimeout: "Reply Timeout (ms)",
     labelWindowStart: "Window Start (HHMM)",
     labelWindowEnd: "Window End (HHMM)",
@@ -1031,6 +1054,18 @@ const en: typeof zh = {
     tgClientModeLabel: "Default client for accounts",
     tgClientModeDefault: "Use default",
     tgClientModeRandom: "Random",
+    defaultTgApiSection: "Default TG API Credentials",
+    defaultTgApiHint:
+      "Accounts without their own credentials will fall back to this API ID and Hash.",
+    labelDefaultTgApiId: "Default API ID",
+    labelDefaultTgApiHash: "Default API Hash",
+    defaultTgApiHashSet: "Currently set (masked):",
+    defaultTgApiHashPlaceholder: "Enter new hash to update",
+    defaultTgApiHashNew: "32-char hex",
+    defaultTgApiClear: "Clear",
+    defaultTgApiClearing: "Clearing...",
+    defaultTgApiSaved: "Default credentials saved",
+    defaultTgApiCleared: "Default credentials cleared",
     saveBtn: "Save",
     aiSection: "AI Button Detection",
     aiHint:
@@ -1102,12 +1137,14 @@ const en: typeof zh = {
       invalidFile: "Invalid file format",
       exportSecretLabel: "Encryption secret (optional)",
       exportSecretPlaceholder: "Leave blank for no encryption",
-      exportSecretHint: "If set, the export file will be encrypted and the same secret will be required on import",
+      exportSecretHint:
+        "If set, the export file will be encrypted and the same secret will be required on import",
       importSecretLabel: "Decryption secret",
       importSecretPlaceholder: "Enter the secret used when exporting",
       wrongSecret: "Incorrect secret or corrupted file",
       forceReauthLabel: "Force reauthenticate (recommended)",
-      forceReauthHint: "Clears session tokens on import; accounts must reauthenticate",
+      forceReauthHint:
+        "Clears session tokens on import; accounts must reauthenticate",
       forceReauthRisk:
         "Warning: disabling this will import existing session tokens. If the same session key is used in two places simultaneously, Telegram will revoke it and the account will be signed out.",
     },

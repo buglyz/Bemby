@@ -299,10 +299,7 @@ export type Log = {
   message: string | null;
   retired: boolean;
   detail?:
-    | CheckinAttemptLog[]
-    | EmbywatchLog[]
-    | { steps: CustomStepLog[] }
-    | null;
+    CheckinAttemptLog[] | EmbywatchLog[] | { steps: CustomStepLog[] } | null;
 };
 
 export type ScheduleStatus = {
@@ -350,7 +347,13 @@ export const accountsApi = {
   create: (
     data: Omit<
       Account,
-      "id" | "authStatus" | "createdAt" | "disabled" | "sortOrder" | "tgDisplayName" | "tgUsername"
+      | "id"
+      | "authStatus"
+      | "createdAt"
+      | "disabled"
+      | "sortOrder"
+      | "tgDisplayName"
+      | "tgUsername"
     > & {
       apiHash: string;
     },
@@ -379,11 +382,16 @@ export const accountsApi = {
       .then((r) => r.data),
   refreshTgMeta: (id: number) =>
     api
-      .post<{ tgDisplayName: string | null; tgUsername: string | null }>(`/accounts/${id}/refresh-tg-meta`)
+      .post<{ tgDisplayName: string | null; tgUsername: string | null }>(
+        `/accounts/${id}/refresh-tg-meta`,
+      )
       .then((r) => r.data),
   export: (ids?: number[], secret?: string) =>
     api
-      .post<AccountExportPayload>("/accounts/export", { ids: ids ?? [], secret: secret || undefined })
+      .post<AccountExportPayload>("/accounts/export", {
+        ids: ids ?? [],
+        secret: secret || undefined,
+      })
       .then((r) => r.data),
   import: (data: unknown, secret?: string, forceReauth = true) =>
     api
@@ -494,9 +502,9 @@ export const logsApi = {
     showRetired?: boolean;
   }) =>
     api
-      .get<
-        Log[]
-      >("/logs", { params: { ...params, showRetired: params?.showRetired ? "1" : "0" } })
+      .get<Log[]>("/logs", {
+        params: { ...params, showRetired: params?.showRetired ? "1" : "0" },
+      })
       .then((r) => r.data),
   getOne: (id: number) => api.get<Log>(`/logs/${id}`).then((r) => r.data),
   cancel: (id: number) =>
@@ -533,6 +541,9 @@ export type Settings = {
   proxies: string;
   tg_app_clients: string;
   tg_client_mode: string; // 'default' | 'random'
+  default_tg_api_id?: string;
+  /** Masked value returned by the server (e.g. abcd****efgh). Never the raw hash. */
+  default_tg_api_hash?: string;
 };
 
 export const settingsApi = {
@@ -784,9 +795,10 @@ export const tgClientApi = {
     signal?: AbortSignal,
   ) =>
     api
-      .get<
-        TgMessage[]
-      >(`/tg-client/${accountId}/messages/${encodeURIComponent(chatId)}`, { params, signal })
+      .get<TgMessage[]>(
+        `/tg-client/${accountId}/messages/${encodeURIComponent(chatId)}`,
+        { params, signal },
+      )
       .then((r) => r.data),
 
   send: (
@@ -864,9 +876,9 @@ export const tgClientApi = {
 
   avatarsBatch: (accountId: number, chatIds: string[]) =>
     api
-      .get<
-        Record<string, string>
-      >(`/tg-client/${accountId}/avatars?ids=${chatIds.map(encodeURIComponent).join(",")}`)
+      .get<Record<string, string>>(
+        `/tg-client/${accountId}/avatars?ids=${chatIds.map(encodeURIComponent).join(",")}`,
+      )
       .then((r) => r.data),
 
   profile: (accountId: number, chatId: string) =>
@@ -913,7 +925,9 @@ export const tgClientApi = {
 
   clearCache: (accountId: number, chatId: string) =>
     api
-      .delete(`/tg-client/${accountId}/messages/${encodeURIComponent(chatId)}/cache`)
+      .delete(
+        `/tg-client/${accountId}/messages/${encodeURIComponent(chatId)}/cache`,
+      )
       .then((r) => r.data),
 
   sendReaction: (
@@ -933,9 +947,9 @@ export const tgClientApi = {
 
   botCommands: (accountId: number, chatId: string) =>
     api
-      .get<
-        TgBotCommand[]
-      >(`/tg-client/${accountId}/bot-commands/${encodeURIComponent(chatId)}`)
+      .get<TgBotCommand[]>(
+        `/tg-client/${accountId}/bot-commands/${encodeURIComponent(chatId)}`,
+      )
       .then((r) => r.data),
 
   threadMessages: (
@@ -945,9 +959,10 @@ export const tgClientApi = {
     params?: { limit?: number; offsetId?: number },
   ) =>
     api
-      .get<
-        TgMessage[]
-      >(`/tg-client/${accountId}/messages/${encodeURIComponent(chatId)}/${msgId}/thread`, { params })
+      .get<TgMessage[]>(
+        `/tg-client/${accountId}/messages/${encodeURIComponent(chatId)}/${msgId}/thread`,
+        { params },
+      )
       .then((r) => r.data),
 
   markRead: (accountId: number, chatId: string, maxId: number) =>
@@ -997,14 +1012,19 @@ export const tgClientApi = {
 
   pinnedMessage: (accountId: number, chatId: string) =>
     api
-      .get<TgMessage | null>(`/tg-client/${accountId}/chats/${encodeURIComponent(chatId)}/pinned`)
+      .get<TgMessage | null>(
+        `/tg-client/${accountId}/chats/${encodeURIComponent(chatId)}/pinned`,
+      )
       .then((r) => r.data),
 
   startBot: (accountId: number, username: string, startParam: string) =>
     api
-      .post<TgDialog>(`/tg-client/${accountId}/start-bot/${encodeURIComponent(username)}`, {
-        startParam,
-      })
+      .post<TgDialog>(
+        `/tg-client/${accountId}/start-bot/${encodeURIComponent(username)}`,
+        {
+          startParam,
+        },
+      )
       .then((r) => r.data),
 
   webviewResolve: (accountId: number, url: string, botChatId?: string | null) =>

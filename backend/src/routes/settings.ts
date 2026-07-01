@@ -22,13 +22,27 @@ export const ALLOWED_KEYS = [
   "proxies",
   "tg_app_clients",
   "tg_client_mode",
+  "default_tg_api_id",
+  "default_tg_api_hash",
 ];
+
+/** Returns first 4 chars + **** + last 4 chars, or **** for short values. */
+function maskApiHash(hash: string): string {
+  if (!hash) return "";
+  if (hash.length <= 8) return "****";
+  return `${hash.slice(0, 4)}****${hash.slice(-4)}`;
+}
 
 router.get("/", (_req, res) => {
   const rows = db
     .prepare("SELECT key, value FROM settings")
     .all() as SettingRow[];
-  res.json(Object.fromEntries(rows.map((r) => [r.key, r.value])));
+  const result = Object.fromEntries(rows.map((r) => [r.key, r.value]));
+  // Never expose the raw hash to the client
+  if (result.default_tg_api_hash) {
+    result.default_tg_api_hash = maskApiHash(result.default_tg_api_hash);
+  }
+  res.json(result);
 });
 
 router.put("/", (req, res) => {
@@ -39,7 +53,14 @@ router.put("/", (req, res) => {
 
   db.transaction(() => {
     for (const key of ALLOWED_KEYS) {
-      if (key in updates) stmt.run(key, String(updates[key]));
+      if (!(key in updates)) continue;
+      // Skip if the client sent back the masked hash unchanged
+      if (
+        key === "default_tg_api_hash" &&
+        String(updates[key]).includes("****")
+      )
+        continue;
+      stmt.run(key, String(updates[key]));
     }
   })();
 
@@ -49,7 +70,11 @@ router.put("/", (req, res) => {
   const rows = db
     .prepare("SELECT key, value FROM settings")
     .all() as SettingRow[];
-  res.json(Object.fromEntries(rows.map((r) => [r.key, r.value])));
+  const result = Object.fromEntries(rows.map((r) => [r.key, r.value]));
+  if (result.default_tg_api_hash) {
+    result.default_tg_api_hash = maskApiHash(result.default_tg_api_hash);
+  }
+  res.json(result);
 });
 
 // Test TCP reachability through a SOCKS proxy (target: 1.1.1.1:80)

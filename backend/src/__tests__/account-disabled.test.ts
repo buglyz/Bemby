@@ -3,27 +3,32 @@
 //   2. Scheduler filter — loadEligibleJobs excludes jobs whose account is disabled,
 //      keeps jobs with enabled accounts, and keeps no-account (embywatch) jobs.
 
-import Database from 'better-sqlite3';
+import Database from "better-sqlite3";
 
 let testDb!: InstanceType<typeof Database>;
 
-vi.mock('../db/database', () => ({ get db() { return testDb; } }));
-vi.mock('../jobs/runner',       () => ({ runJob: vi.fn() }));
-vi.mock('../jobs/notify',       () => ({
-  sendTgNotify:       vi.fn(),
+vi.mock("../db/database", () => ({
+  get db() {
+    return testDb;
+  },
+  getDefaultTgApiCredentials: () => null,
+}));
+vi.mock("../jobs/runner", () => ({ runJob: vi.fn() }));
+vi.mock("../jobs/notify", () => ({
+  sendTgNotify: vi.fn(),
   buildFailureMessage: vi.fn(),
   buildSuccessMessage: vi.fn(),
-  getNotifyConfig:     vi.fn().mockReturnValue({ events: [], username: null }),
+  getNotifyConfig: vi.fn().mockReturnValue({ events: [], username: null }),
 }));
-vi.mock('../jobs/cancellation', () => ({
-  registerJob:     vi.fn().mockReturnValue(new AbortController().signal),
-  unregisterJob:   vi.fn(),
+vi.mock("../jobs/cancellation", () => ({
+  registerJob: vi.fn().mockReturnValue(new AbortController().signal),
+  unregisterJob: vi.fn(),
   registerLiveDetail: vi.fn(),
-  clearLiveDetail:    vi.fn(),
+  clearLiveDetail: vi.fn(),
 }));
 
-import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
-import { loadEligibleJobs } from '../scheduler';
+import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
+import { loadEligibleJobs } from "../scheduler";
 
 // ---------------------------------------------------------------------------
 // Schema — mirrors the real DB, includes the disabled column
@@ -68,34 +73,56 @@ const SCHEMA = `
 // DB helpers
 // ---------------------------------------------------------------------------
 
-function insertAccount(fields: Partial<{
-  name: string; authStatus: string; sessionString: string | null; disabled: number;
-}> = {}) {
-  const { lastInsertRowid } = testDb.prepare(`
+function insertAccount(
+  fields: Partial<{
+    name: string;
+    authStatus: string;
+    sessionString: string | null;
+    disabled: number;
+  }> = {},
+) {
+  const { lastInsertRowid } = testDb
+    .prepare(
+      `
     INSERT INTO tg_accounts (name, auth_status, session_string, disabled)
     VALUES (?, ?, ?, ?)
-  `).run(
-    fields.name ?? 'Acct',
-    fields.authStatus  ?? 'authenticated',
-    fields.sessionString !== undefined ? fields.sessionString : 'sess',
-    fields.disabled ?? 0,
-  );
-  return testDb.prepare('SELECT * FROM tg_accounts WHERE id = ?').get(lastInsertRowid) as any;
+  `,
+    )
+    .run(
+      fields.name ?? "Acct",
+      fields.authStatus ?? "authenticated",
+      fields.sessionString !== undefined ? fields.sessionString : "sess",
+      fields.disabled ?? 0,
+    );
+  return testDb
+    .prepare("SELECT * FROM tg_accounts WHERE id = ?")
+    .get(lastInsertRowid) as any;
 }
 
-function insertJob(fields: Partial<{
-  name: string; accountId: number | null; jobType: string; enabled: number;
-}> = {}) {
-  const { lastInsertRowid } = testDb.prepare(`
+function insertJob(
+  fields: Partial<{
+    name: string;
+    accountId: number | null;
+    jobType: string;
+    enabled: number;
+  }> = {},
+) {
+  const { lastInsertRowid } = testDb
+    .prepare(
+      `
     INSERT INTO jobs (name, account_id, job_type, enabled)
     VALUES (?, ?, ?, ?)
-  `).run(
-    fields.name ?? 'Job',
-    fields.accountId !== undefined ? fields.accountId : null,
-    fields.jobType ?? 'checkin',
-    fields.enabled ?? 1,
-  );
-  return testDb.prepare('SELECT * FROM jobs WHERE id = ?').get(lastInsertRowid) as any;
+  `,
+    )
+    .run(
+      fields.name ?? "Job",
+      fields.accountId !== undefined ? fields.accountId : null,
+      fields.jobType ?? "checkin",
+      fields.enabled ?? 1,
+    );
+  return testDb
+    .prepare("SELECT * FROM jobs WHERE id = ?")
+    .get(lastInsertRowid) as any;
 }
 
 // ---------------------------------------------------------------------------
@@ -103,40 +130,52 @@ function insertJob(fields: Partial<{
 // ---------------------------------------------------------------------------
 
 beforeAll(() => {
-  testDb = new Database(':memory:');
-  testDb.pragma('foreign_keys = ON');
+  testDb = new Database(":memory:");
+  testDb.pragma("foreign_keys = ON");
   testDb.exec(SCHEMA);
 });
 
 beforeEach(() => {
   vi.clearAllMocks();
-  testDb.exec('DELETE FROM jobs; DELETE FROM tg_accounts;');
+  testDb.exec("DELETE FROM jobs; DELETE FROM tg_accounts;");
 });
 
 // ---------------------------------------------------------------------------
 // DB column behaviour
 // ---------------------------------------------------------------------------
 
-describe('tg_accounts.disabled column', () => {
-  it('defaults to 0 for a newly inserted account', () => {
-    const { lastInsertRowid } = testDb.prepare(
-      "INSERT INTO tg_accounts (name, phone_number, api_id, api_hash) VALUES ('A', '+1', 1, 'h')"
-    ).run();
-    const row = testDb.prepare('SELECT disabled FROM tg_accounts WHERE id = ?').get(lastInsertRowid) as any;
+describe("tg_accounts.disabled column", () => {
+  it("defaults to 0 for a newly inserted account", () => {
+    const { lastInsertRowid } = testDb
+      .prepare(
+        "INSERT INTO tg_accounts (name, phone_number, api_id, api_hash) VALUES ('A', '+1', 1, 'h')",
+      )
+      .run();
+    const row = testDb
+      .prepare("SELECT disabled FROM tg_accounts WHERE id = ?")
+      .get(lastInsertRowid) as any;
     expect(row.disabled).toBe(0);
   });
 
-  it('persists disabled = 1 after an UPDATE', () => {
+  it("persists disabled = 1 after an UPDATE", () => {
     const a = insertAccount({ disabled: 0 });
-    testDb.prepare('UPDATE tg_accounts SET disabled = 1 WHERE id = ?').run(a.id);
-    const row = testDb.prepare('SELECT disabled FROM tg_accounts WHERE id = ?').get(a.id) as any;
+    testDb
+      .prepare("UPDATE tg_accounts SET disabled = 1 WHERE id = ?")
+      .run(a.id);
+    const row = testDb
+      .prepare("SELECT disabled FROM tg_accounts WHERE id = ?")
+      .get(a.id) as any;
     expect(row.disabled).toBe(1);
   });
 
-  it('can be toggled back to 0', () => {
+  it("can be toggled back to 0", () => {
     const a = insertAccount({ disabled: 1 });
-    testDb.prepare('UPDATE tg_accounts SET disabled = 0 WHERE id = ?').run(a.id);
-    const row = testDb.prepare('SELECT disabled FROM tg_accounts WHERE id = ?').get(a.id) as any;
+    testDb
+      .prepare("UPDATE tg_accounts SET disabled = 0 WHERE id = ?")
+      .run(a.id);
+    const row = testDb
+      .prepare("SELECT disabled FROM tg_accounts WHERE id = ?")
+      .get(a.id) as any;
     expect(row.disabled).toBe(0);
   });
 });
@@ -145,104 +184,114 @@ describe('tg_accounts.disabled column', () => {
 // Scheduler filter — loadEligibleJobs
 // ---------------------------------------------------------------------------
 
-describe('loadEligibleJobs — disabled account filter', () => {
-  it('excludes a checkin job whose account is disabled', () => {
+describe("loadEligibleJobs — disabled account filter", () => {
+  it("excludes a checkin job whose account is disabled", () => {
     const disabledAcct = insertAccount({ disabled: 1 });
-    const job = insertJob({ accountId: disabledAcct.id, jobType: 'checkin' });
+    const job = insertJob({ accountId: disabledAcct.id, jobType: "checkin" });
 
     const eligible = loadEligibleJobs();
 
-    expect(eligible.map(e => e.job.id)).not.toContain(job.id);
+    expect(eligible.map((e) => e.job.id)).not.toContain(job.id);
   });
 
-  it('includes a checkin job whose account is enabled', () => {
+  it("includes a checkin job whose account is enabled", () => {
     const enabledAcct = insertAccount({ disabled: 0 });
-    const job = insertJob({ accountId: enabledAcct.id, jobType: 'checkin' });
+    const job = insertJob({ accountId: enabledAcct.id, jobType: "checkin" });
 
     const eligible = loadEligibleJobs();
 
-    expect(eligible.map(e => e.job.id)).toContain(job.id);
+    expect(eligible.map((e) => e.job.id)).toContain(job.id);
   });
 
-  it('includes an embywatch job with no account regardless of other disabled accounts', () => {
+  it("includes an embywatch job with no account regardless of other disabled accounts", () => {
     // Insert an unrelated disabled account to make sure the filter is precise
     insertAccount({ disabled: 1 });
-    const job = insertJob({ accountId: null, jobType: 'embywatch' });
+    const job = insertJob({ accountId: null, jobType: "embywatch" });
 
     const eligible = loadEligibleJobs();
 
-    expect(eligible.map(e => e.job.id)).toContain(job.id);
+    expect(eligible.map((e) => e.job.id)).toContain(job.id);
   });
 
-  it('excludes a custom job whose account is disabled', () => {
+  it("excludes a custom job whose account is disabled", () => {
     const disabledAcct = insertAccount({ disabled: 1 });
-    const job = insertJob({ accountId: disabledAcct.id, jobType: 'custom' });
+    const job = insertJob({ accountId: disabledAcct.id, jobType: "custom" });
 
     const eligible = loadEligibleJobs();
 
-    expect(eligible.map(e => e.job.id)).not.toContain(job.id);
+    expect(eligible.map((e) => e.job.id)).not.toContain(job.id);
   });
 
-  it('keeps enabled-account jobs while filtering disabled-account jobs in the same query', () => {
-    const enabled  = insertAccount({ name: 'Enabled',  disabled: 0 });
-    const disabled = insertAccount({ name: 'Disabled', disabled: 1 });
-    const goodJob  = insertJob({ accountId: enabled.id,  jobType: 'checkin' });
-    const badJob   = insertJob({ accountId: disabled.id, jobType: 'checkin' });
+  it("keeps enabled-account jobs while filtering disabled-account jobs in the same query", () => {
+    const enabled = insertAccount({ name: "Enabled", disabled: 0 });
+    const disabled = insertAccount({ name: "Disabled", disabled: 1 });
+    const goodJob = insertJob({ accountId: enabled.id, jobType: "checkin" });
+    const badJob = insertJob({ accountId: disabled.id, jobType: "checkin" });
 
     const eligible = loadEligibleJobs();
-    const ids = eligible.map(e => e.job.id);
+    const ids = eligible.map((e) => e.job.id);
 
     expect(ids).toContain(goodJob.id);
     expect(ids).not.toContain(badJob.id);
   });
 
-  it('excludes a job that is explicitly disabled (enabled = 0)', () => {
+  it("excludes a job that is explicitly disabled (enabled = 0)", () => {
     const acct = insertAccount({ disabled: 0 });
-    const job  = insertJob({ accountId: acct.id, jobType: 'checkin', enabled: 0 });
+    const job = insertJob({
+      accountId: acct.id,
+      jobType: "checkin",
+      enabled: 0,
+    });
 
     const eligible = loadEligibleJobs();
 
-    expect(eligible.map(e => e.job.id)).not.toContain(job.id);
+    expect(eligible.map((e) => e.job.id)).not.toContain(job.id);
   });
 
-  it('excludes a checkin job whose account has no session string', () => {
-    const unauthAcct = insertAccount({ authStatus: 'unauthenticated', sessionString: null, disabled: 0 });
-    const job = insertJob({ accountId: unauthAcct.id, jobType: 'checkin' });
+  it("excludes a checkin job whose account has no session string", () => {
+    const unauthAcct = insertAccount({
+      authStatus: "unauthenticated",
+      sessionString: null,
+      disabled: 0,
+    });
+    const job = insertJob({ accountId: unauthAcct.id, jobType: "checkin" });
 
     const eligible = loadEligibleJobs();
 
-    expect(eligible.map(e => e.job.id)).not.toContain(job.id);
+    expect(eligible.map((e) => e.job.id)).not.toContain(job.id);
   });
 
-  it('returns account with disabled=false on the account object for eligible jobs', () => {
+  it("returns account with disabled=false on the account object for eligible jobs", () => {
     const acct = insertAccount({ disabled: 0 });
-    insertJob({ accountId: acct.id, jobType: 'checkin' });
+    insertJob({ accountId: acct.id, jobType: "checkin" });
 
     const eligible = loadEligibleJobs();
-    const entry = eligible.find(e => e.account?.id === acct.id);
+    const entry = eligible.find((e) => e.account?.id === acct.id);
 
     expect(entry).toBeDefined();
     expect(entry!.account!.disabled).toBe(false);
   });
 
-  it('returns account with the correct appClientId when one is set', () => {
+  it("returns account with the correct appClientId when one is set", () => {
     const acct = insertAccount({ disabled: 0 });
-    testDb.prepare('UPDATE tg_accounts SET app_client_id = ? WHERE id = ?').run('preset-ios', acct.id);
-    insertJob({ accountId: acct.id, jobType: 'checkin' });
+    testDb
+      .prepare("UPDATE tg_accounts SET app_client_id = ? WHERE id = ?")
+      .run("preset-ios", acct.id);
+    insertJob({ accountId: acct.id, jobType: "checkin" });
 
     const eligible = loadEligibleJobs();
-    const entry = eligible.find(e => e.account?.id === acct.id);
+    const entry = eligible.find((e) => e.account?.id === acct.id);
 
     expect(entry).toBeDefined();
-    expect(entry!.account!.appClientId).toBe('preset-ios');
+    expect(entry!.account!.appClientId).toBe("preset-ios");
   });
 
-  it('returns account with appClientId null when no client is assigned', () => {
+  it("returns account with appClientId null when no client is assigned", () => {
     const acct = insertAccount({ disabled: 0 }); // no app_client_id set
-    insertJob({ accountId: acct.id, jobType: 'checkin' });
+    insertJob({ accountId: acct.id, jobType: "checkin" });
 
     const eligible = loadEligibleJobs();
-    const entry = eligible.find(e => e.account?.id === acct.id);
+    const entry = eligible.find((e) => e.account?.id === acct.id);
 
     expect(entry!.account!.appClientId).toBeNull();
   });

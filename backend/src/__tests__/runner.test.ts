@@ -126,8 +126,10 @@ describe("runJob — checkin", () => {
     );
     const logs: JobDetailLog[] = [];
     const promise = runJob(makeJob("checkin", 3), makeAccount(), logs);
+    // Attach rejection handler before timers fire to avoid unhandled rejection warnings
+    const assertion = expect(promise).rejects.toThrow();
     await vi.runAllTimersAsync();
-    await expect(promise).rejects.toThrow();
+    await assertion;
     expect(logs).toHaveLength(3);
     expect(vi.mocked(runCheckin)).toHaveBeenCalledTimes(3);
   });
@@ -137,8 +139,10 @@ describe("runJob — checkin", () => {
     const err = new MockCheckinError("permanent", { ...stubCheckinLog });
     vi.mocked(runCheckin).mockRejectedValue(err);
     const promise = runJob(makeJob("checkin", 2), makeAccount(), []);
+    // Attach rejection handler before timers fire to avoid unhandled rejection warnings
+    const assertion = expect(promise).rejects.toBe(err);
     await vi.runAllTimersAsync();
-    await expect(promise).rejects.toBe(err);
+    await assertion;
   });
 
   it("throws immediately when no account is linked", async () => {

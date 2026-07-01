@@ -154,10 +154,14 @@ try {
   db.exec("UPDATE tg_accounts SET sort_order = id WHERE sort_order = 0");
 } catch {}
 try {
-  db.exec("ALTER TABLE jobs ADD COLUMN run_every_days INTEGER NOT NULL DEFAULT 1");
+  db.exec(
+    "ALTER TABLE jobs ADD COLUMN run_every_days INTEGER NOT NULL DEFAULT 1",
+  );
 } catch {}
 try {
-  db.exec("ALTER TABLE job_templates ADD COLUMN run_every_days INTEGER NOT NULL DEFAULT 1");
+  db.exec(
+    "ALTER TABLE job_templates ADD COLUMN run_every_days INTEGER NOT NULL DEFAULT 1",
+  );
 } catch {}
 try {
   db.exec("ALTER TABLE tg_accounts ADD COLUMN tg_display_name TEXT");
@@ -273,8 +277,7 @@ try {
     const getSetting = (key: string) =>
       (
         db.prepare("SELECT value FROM settings WHERE key = ?").get(key) as
-          | { value: string }
-          | undefined
+          { value: string } | undefined
       )?.value ?? "";
     const apiKey = getSetting("ai_api_key");
     const baseUrl = getSetting("ai_base_url") || "https://openrouter.ai/api/v1";
@@ -359,3 +362,64 @@ try {
     )
   `);
 } catch {}
+
+// Make api_id and api_hash nullable so accounts can fall back to global defaults
+try {
+  const cols = db.prepare("PRAGMA table_info(tg_accounts)").all() as Array<{
+    name: string;
+    notnull: number;
+  }>;
+  if (cols.find((c) => c.name === "api_id")?.notnull === 1) {
+    db.exec(`
+      CREATE TABLE tg_accounts_v2 (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        name            TEXT    NOT NULL,
+        phone_number    TEXT    NOT NULL,
+        api_id          INTEGER,
+        api_hash        TEXT,
+        session_string  TEXT,
+        auth_status     TEXT    NOT NULL DEFAULT 'unauthenticated',
+        created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+        proxy_id        TEXT,
+        disabled        INTEGER NOT NULL DEFAULT 0,
+        app_client_id   TEXT,
+        sort_order      INTEGER NOT NULL DEFAULT 0,
+        tg_display_name TEXT,
+        tg_username     TEXT
+      );
+      INSERT INTO tg_accounts_v2 SELECT
+        id, name, phone_number,
+        NULLIF(api_id, 0), NULLIF(api_hash, ''),
+        session_string, auth_status, created_at,
+        proxy_id, disabled, app_client_id, sort_order,
+        tg_display_name, tg_username
+      FROM tg_accounts;
+      DROP TABLE tg_accounts;
+      ALTER TABLE tg_accounts_v2 RENAME TO tg_accounts;
+    `);
+    console.log("[db] Migrated tg_accounts api_id/api_hash to nullable");
+  }
+} catch (e) {
+  console.error("[db] tg_accounts nullable migration failed:", e);
+}
+
+/** Returns the global fallback TG API credentials, or null if not configured. */
+export function getDefaultTgApiCredentials(): {
+  apiId: number;
+  apiHash: string;
+} | null {
+  try {
+    const idRow = db
+      .prepare("SELECT value FROM settings WHERE key = ?")
+      .get("default_tg_api_id") as { value: string } | undefined;
+    const hashRow = db
+      .prepare("SELECT value FROM settings WHERE key = ?")
+      .get("default_tg_api_hash") as { value: string } | undefined;
+    const apiId = Number(idRow?.value);
+    const apiHash = hashRow?.value ?? "";
+    if (!apiId || !apiHash) return null;
+    return { apiId, apiHash };
+  } catch {
+    return null;
+  }
+}

@@ -667,6 +667,89 @@
         </div>
       </div>
 
+      <!-- Default TG API Credentials -->
+      <div class="card s-col-6">
+        <div class="card-body">
+          <div class="card-section-title">
+            {{ t("settings.defaultTgApiSection") }}
+          </div>
+          <p style="font-size: 12px; color: #888; margin: 0 0 14px">
+            {{ t("settings.defaultTgApiHint") }}
+          </p>
+
+          <div v-if="defaultTgApiMsg" class="success-msg">
+            {{ defaultTgApiMsg }}
+          </div>
+          <div v-if="defaultTgApiError" class="error-msg">
+            {{ defaultTgApiError }}
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">{{
+                t("settings.labelDefaultTgApiId")
+              }}</label>
+              <input
+                v-model.number="defaultTgApiId"
+                class="form-input"
+                type="number"
+                min="1"
+                placeholder="e.g. 1234567"
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label">{{
+                t("settings.labelDefaultTgApiHash")
+              }}</label>
+              <input
+                v-model.trim="defaultTgApiHashInput"
+                class="form-input"
+                :placeholder="
+                  defaultTgApiHashMasked
+                    ? t('settings.defaultTgApiHashPlaceholder')
+                    : t('settings.defaultTgApiHashNew')
+                "
+                style="font-family: monospace"
+              />
+              <p
+                v-if="defaultTgApiHashMasked"
+                style="font-size: 11px; color: #888; margin: 4px 0 0"
+              >
+                {{ t("settings.defaultTgApiHashSet") }}
+                <code style="font-size: 11px">{{
+                  defaultTgApiHashMasked
+                }}</code>
+              </p>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 8px; flex-wrap: wrap">
+            <button
+              class="btn btn-primary"
+              :disabled="defaultTgApiSaving"
+              @click="saveDefaultTgApi"
+            >
+              <i class="fa-solid fa-floppy-disk"></i>
+              {{
+                defaultTgApiSaving ? t("common.saving") : t("settings.saveBtn")
+              }}
+            </button>
+            <button
+              v-if="defaultTgApiId || defaultTgApiHashMasked"
+              class="btn btn-ghost"
+              :disabled="defaultTgApiClearing"
+              @click="clearDefaultTgApi"
+            >
+              {{
+                defaultTgApiClearing
+                  ? t("settings.defaultTgApiClearing")
+                  : t("settings.defaultTgApiClear")
+              }}
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- Import / Export -->
       <div class="card s-col-6">
         <div class="card-body">
@@ -689,7 +772,9 @@
                 v-model="exportSecret"
                 :type="showExportSecret ? 'text' : 'password'"
                 class="form-input"
-                :placeholder="t('settings.importExport.exportSecretPlaceholder')"
+                :placeholder="
+                  t('settings.importExport.exportSecretPlaceholder')
+                "
                 autocomplete="new-password"
               />
               <button
@@ -697,7 +782,13 @@
                 class="toggle-secret-btn"
                 @click="showExportSecret = !showExportSecret"
               >
-                <i :class="showExportSecret ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye'"></i>
+                <i
+                  :class="
+                    showExportSecret
+                      ? 'fa-solid fa-eye-slash'
+                      : 'fa-solid fa-eye'
+                  "
+                ></i>
               </button>
             </div>
             <p style="font-size: 11px; color: #888; margin: 4px 0 8px">
@@ -733,7 +824,9 @@
                 v-model="importSecret"
                 :type="showImportSecret ? 'text' : 'password'"
                 class="form-input"
-                :placeholder="t('settings.importExport.importSecretPlaceholder')"
+                :placeholder="
+                  t('settings.importExport.importSecretPlaceholder')
+                "
                 autocomplete="current-password"
               />
               <button
@@ -741,7 +834,13 @@
                 class="toggle-secret-btn"
                 @click="showImportSecret = !showImportSecret"
               >
-                <i :class="showImportSecret ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye'"></i>
+                <i
+                  :class="
+                    showImportSecret
+                      ? 'fa-solid fa-eye-slash'
+                      : 'fa-solid fa-eye'
+                  "
+                ></i>
               </button>
             </div>
           </div>
@@ -754,7 +853,11 @@
             <p style="font-size: 12px; color: #888; margin: 4px 0 0 24px">
               {{ t("settings.importExport.forceReauthHint") }}
             </p>
-            <div v-if="!importForceReauth" class="supplier-no-key-warning" style="margin-top: 8px">
+            <div
+              v-if="!importForceReauth"
+              class="supplier-no-key-warning"
+              style="margin-top: 8px"
+            >
               {{ t("settings.importExport.forceReauthRisk") }}
             </div>
           </div>
@@ -1358,6 +1461,61 @@ async function saveAppClients() {
   }
 }
 
+// ── Default TG API Credentials ─────────────────────────────────────────────────
+
+const defaultTgApiId = ref<number | "">(0);
+const defaultTgApiHashInput = ref("");
+const defaultTgApiHashMasked = ref("");
+const defaultTgApiSaving = ref(false);
+const defaultTgApiClearing = ref(false);
+const defaultTgApiMsg = ref("");
+const defaultTgApiError = ref("");
+
+async function saveDefaultTgApi() {
+  defaultTgApiMsg.value = "";
+  defaultTgApiError.value = "";
+  defaultTgApiSaving.value = true;
+  try {
+    const payload: Record<string, string> = {
+      default_tg_api_id: String(defaultTgApiId.value || ""),
+    };
+    // Only include hash if user typed a new one
+    if (defaultTgApiHashInput.value) {
+      payload.default_tg_api_hash = defaultTgApiHashInput.value;
+    }
+    const updated = await settingsApi.update(payload);
+    defaultTgApiHashMasked.value = updated.default_tg_api_hash ?? "";
+    defaultTgApiHashInput.value = "";
+    defaultTgApiMsg.value = t("settings.defaultTgApiSaved");
+  } catch (err: any) {
+    defaultTgApiError.value =
+      err.response?.data?.error ?? t("settings.saveFailed");
+  } finally {
+    defaultTgApiSaving.value = false;
+  }
+}
+
+async function clearDefaultTgApi() {
+  defaultTgApiMsg.value = "";
+  defaultTgApiError.value = "";
+  defaultTgApiClearing.value = true;
+  try {
+    await settingsApi.update({
+      default_tg_api_id: "",
+      default_tg_api_hash: "",
+    });
+    defaultTgApiId.value = 0;
+    defaultTgApiHashInput.value = "";
+    defaultTgApiHashMasked.value = "";
+    defaultTgApiMsg.value = t("settings.defaultTgApiCleared");
+  } catch (err: any) {
+    defaultTgApiError.value =
+      err.response?.data?.error ?? t("settings.saveFailed");
+  } finally {
+    defaultTgApiClearing.value = false;
+  }
+}
+
 const notifyEventOptions = computed(() => [
   { value: "failed", label: t("settings.notifyEventFailed") },
   { value: "success", label: t("settings.notifyEventSuccess") },
@@ -1397,6 +1555,8 @@ onMounted(async () => {
       appClients.value = [];
     }
     tgClientMode.value = s.tg_client_mode === "random" ? "random" : "default";
+    defaultTgApiId.value = Number(s.default_tg_api_id) || 0;
+    defaultTgApiHashMasked.value = s.default_tg_api_hash ?? "";
     form.default_play_duration = Number(s.default_play_duration ?? 300);
     form.default_device_name = s.default_device_name ?? "Mac";
     form.ai_model = s.ai_model ?? "";
@@ -1761,7 +1921,12 @@ async function doImport() {
       return;
     }
     const secret = importSecret.value.trim() || undefined;
-    const result = await dataApi.import(parsed, importMode.value, secret, importForceReauth.value);
+    const result = await dataApi.import(
+      parsed,
+      importMode.value,
+      secret,
+      importForceReauth.value,
+    );
     importMsg.value = t("settings.importExport.importSuccess")
       .replace("{a}", String(result.accountsImported))
       .replace("{t}", String(result.templatesImported))
@@ -1778,7 +1943,8 @@ async function doImport() {
     importError.value =
       code === "WRONG_SECRET"
         ? t("settings.importExport.wrongSecret")
-        : (err.response?.data?.error ?? t("settings.importExport.importFailed"));
+        : (err.response?.data?.error ??
+          t("settings.importExport.importFailed"));
   } finally {
     importing.value = false;
   }

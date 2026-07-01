@@ -3,7 +3,11 @@
     <div class="page-header">
       <h2 class="page-title">{{ t("accounts.title") }}</h2>
       <div class="page-header-actions">
-        <button v-if="accounts.length" class="btn btn-secondary" @click="toggleSelectAll">
+        <button
+          v-if="accounts.length"
+          class="btn btn-secondary"
+          @click="toggleSelectAll"
+        >
           {{ allSelected ? t("common.deselectAll") : t("common.selectAll") }}
         </button>
         <button
@@ -61,7 +65,7 @@
                 dragOverIdx === idx ? 'drag-over' : '',
                 selectedIds.has(a.id) ? 'row-selected' : '',
               ]"
-              style="cursor:pointer"
+              style="cursor: pointer"
               draggable="true"
               @click="toggleSelect(a.id)"
               @dragstart="onDragStart(idx, $event)"
@@ -111,7 +115,9 @@
                   </span>
                   <template v-else-if="a.tgDisplayName">
                     <span class="tg-name-text">{{ a.tgDisplayName }}</span>
-                    <span v-if="a.tgUsername" class="tg-name-username">@{{ a.tgUsername }}</span>
+                    <span v-if="a.tgUsername" class="tg-name-username"
+                      >@{{ a.tgUsername }}</span
+                    >
                   </template>
                   <button
                     v-if="a.authStatus === 'authenticated'"
@@ -133,7 +139,11 @@
                   class="badge badge-grey"
                   style="margin-left: 6px"
                 >
-                  <i class="fa-solid fa-spinner fa-spin" style="margin-right: 3px"></i>{{ t("accounts.spamChecking") }}
+                  <i
+                    class="fa-solid fa-spinner fa-spin"
+                    style="margin-right: 3px"
+                  ></i
+                  >{{ t("accounts.spamChecking") }}
                 </span>
                 <span
                   v-else-if="spamStatuses.get(a.id)"
@@ -141,7 +151,13 @@
                   :title="spamStatuses.get(a.id)!.rawMessage"
                   style="margin-left: 6px; cursor: help"
                 >
-                  <i class="fa-solid fa-shield-halved" style="margin-right: 3px"></i>{{ t(`accounts.spam.${spamStatuses.get(a.id)!.spamStatus}`) }}
+                  <i
+                    class="fa-solid fa-shield-halved"
+                    style="margin-right: 3px"
+                  ></i
+                  >{{
+                    t(`accounts.spam.${spamStatuses.get(a.id)!.spamStatus}`)
+                  }}
                 </span>
               </td>
               <td class="col-hide-mobile">{{ fmtDate(a.createdAt) }}</td>
@@ -166,10 +182,20 @@
                   </button>
                   <button
                     class="btn btn-sm btn-ghost btn-icon"
-                    :title="a.disabled ? t('accounts.enableAccount') : t('accounts.disableAccount')"
+                    :title="
+                      a.disabled
+                        ? t('accounts.enableAccount')
+                        : t('accounts.disableAccount')
+                    "
                     @click="toggleDisabled(a)"
                   >
-                    <i :class="a.disabled ? 'fa-solid fa-circle-play' : 'fa-solid fa-ban'"></i>
+                    <i
+                      :class="
+                        a.disabled
+                          ? 'fa-solid fa-circle-play'
+                          : 'fa-solid fa-ban'
+                      "
+                    ></i>
                   </button>
                   <button
                     class="btn btn-sm btn-ghost btn-icon"
@@ -187,7 +213,10 @@
                   </button>
                 </div>
                 <!-- mobile: ... opens action sheet -->
-                <button class="btn btn-sm btn-ghost btn-icon show-mobile" @click="actionMenuAccount = a">
+                <button
+                  class="btn btn-sm btn-ghost btn-icon show-mobile"
+                  @click="actionMenuAccount = a"
+                >
                   <i class="fa-solid fa-ellipsis-vertical"></i>
                 </button>
               </td>
@@ -220,7 +249,9 @@
           }}
         </p>
         <div class="form-group" style="margin-top: 12px">
-          <label class="form-label">{{ t("accounts.exportSecretLabel") }}</label>
+          <label class="form-label">{{
+            t("accounts.exportSecretLabel")
+          }}</label>
           <div class="input-with-toggle">
             <input
               v-model="exportSecret"
@@ -229,11 +260,21 @@
               :placeholder="t('accounts.exportSecretPlaceholder')"
               autocomplete="new-password"
             />
-            <button type="button" class="toggle-secret-btn" @click="showExportSecret = !showExportSecret">
-              <i :class="showExportSecret ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye'"></i>
+            <button
+              type="button"
+              class="toggle-secret-btn"
+              @click="showExportSecret = !showExportSecret"
+            >
+              <i
+                :class="
+                  showExportSecret ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye'
+                "
+              ></i>
             </button>
           </div>
-          <p style="font-size: 11px; color: #888; margin: 4px 0 0">{{ t("accounts.exportSecretHint") }}</p>
+          <p style="font-size: 11px; color: #888; margin: 4px 0 0">
+            {{ t("accounts.exportSecretHint") }}
+          </p>
         </div>
         <div class="modal-footer">
           <button class="btn btn-ghost" @click="showExportWarn = false">
@@ -262,7 +303,9 @@
           />
         </div>
         <div v-if="importFileEncrypted" class="form-group">
-          <label class="form-label">{{ t("accounts.importSecretLabel") }}</label>
+          <label class="form-label">{{
+            t("accounts.importSecretLabel")
+          }}</label>
           <div class="input-with-toggle">
             <input
               v-model="importSecret"
@@ -271,8 +314,16 @@
               :placeholder="t('accounts.importSecretPlaceholder')"
               autocomplete="current-password"
             />
-            <button type="button" class="toggle-secret-btn" @click="showImportSecret = !showImportSecret">
-              <i :class="showImportSecret ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye'"></i>
+            <button
+              type="button"
+              class="toggle-secret-btn"
+              @click="showImportSecret = !showImportSecret"
+            >
+              <i
+                :class="
+                  showImportSecret ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye'
+                "
+              ></i>
             </button>
           </div>
         </div>
@@ -282,7 +333,11 @@
             <span>{{ t("accounts.forceReauthLabel") }}</span>
           </label>
           <div class="form-hint">{{ t("accounts.forceReauthHint") }}</div>
-          <div v-if="!importForceReauth" class="warn-box" style="margin-top: 8px">
+          <div
+            v-if="!importForceReauth"
+            class="warn-box"
+            style="margin-top: 8px"
+          >
             {{ t("accounts.forceReauthRisk") }}
           </div>
         </div>
@@ -314,11 +369,20 @@
         </h3>
 
         <!-- Tabs: only shown when editing an authenticated account -->
-        <div v-if="editTarget?.authStatus === 'authenticated'" class="edit-tabs">
-          <button :class="['edit-tab', editTab === 'basic' ? 'active' : '']" @click="editTab = 'basic'">
+        <div
+          v-if="editTarget?.authStatus === 'authenticated'"
+          class="edit-tabs"
+        >
+          <button
+            :class="['edit-tab', editTab === 'basic' ? 'active' : '']"
+            @click="editTab = 'basic'"
+          >
             {{ t("accounts.tabBasic") }}
           </button>
-          <button :class="['edit-tab', editTab === 'advanced' ? 'active' : '']" @click="editTab = 'advanced'">
+          <button
+            :class="['edit-tab', editTab === 'advanced' ? 'active' : '']"
+            @click="editTab = 'advanced'"
+          >
             {{ t("accounts.tabAdvanced") }}
           </button>
         </div>
@@ -328,34 +392,80 @@
           <div v-if="formError" class="error-msg">{{ formError }}</div>
           <div class="form-group">
             <label class="form-label">{{ t("accounts.labelName") }}</label>
-            <input v-model.trim="form.name" class="form-input" placeholder="e.g. My Account" />
+            <input
+              v-model.trim="form.name"
+              class="form-input"
+              placeholder="e.g. My Account"
+            />
           </div>
           <div class="form-group">
             <label class="form-label">{{ t("accounts.labelPhone") }}</label>
-            <input v-model.trim="form.phoneNumber" class="form-input" placeholder="+61412345678" />
+            <input
+              v-model.trim="form.phoneNumber"
+              class="form-input"
+              placeholder="+61412345678"
+            />
           </div>
           <div class="form-group" style="max-width: 140px">
-            <label class="form-label">{{ t("accounts.labelApiId") }}</label>
+            <label class="form-label">
+              {{
+                hasGlobalTgCreds
+                  ? t("accounts.apiIdOptional")
+                  : t("accounts.labelApiId")
+              }}
+            </label>
             <input v-model.trim="form.apiId" class="form-input" type="number" />
           </div>
           <div class="form-group">
-            <label class="form-label">{{ t("accounts.labelApiHash") }}</label>
+            <label class="form-label">
+              {{
+                hasGlobalTgCreds
+                  ? t("accounts.apiHashOptional")
+                  : t("accounts.labelApiHash")
+              }}
+            </label>
             <input
               v-model.trim="form.apiHash"
               class="form-input"
-              placeholder="32-char hex"
+              :placeholder="
+                hasGlobalTgCreds ? t('accounts.apiHashOptional') : '32-char hex'
+              "
               style="font-family: monospace"
             />
           </div>
-          <p style="font-size: 12px; color: #888; margin-top: -8px; margin-bottom: 14px">
+          <p
+            v-if="hasGlobalTgCreds"
+            style="
+              font-size: 12px;
+              color: #2ec4b6;
+              margin-top: -8px;
+              margin-bottom: 14px;
+            "
+          >
+            <i class="fa-solid fa-circle-info" style="margin-right: 4px"></i
+            >{{ t("accounts.apiOptionalHint") }}
+          </p>
+          <p
+            v-else
+            style="
+              font-size: 12px;
+              color: #888;
+              margin-top: -8px;
+              margin-bottom: 14px;
+            "
+          >
             {{ t("accounts.apiHint") }}
-            <a href="https://my.telegram.org/apps" target="_blank">my.telegram.org/apps</a>
+            <a href="https://my.telegram.org/apps" target="_blank"
+              >my.telegram.org/apps</a
+            >
           </p>
           <div v-if="proxiesList.length" class="form-group">
             <label class="form-label">{{ t("accounts.labelProxy") }}</label>
             <select v-model="form.proxyId" class="form-select">
               <option value="">{{ t("accounts.proxyNone") }}</option>
-              <option v-for="p in proxiesList" :key="p.id" :value="p.id">{{ p.name }}</option>
+              <option v-for="p in proxiesList" :key="p.id" :value="p.id">
+                {{ p.name }}
+              </option>
             </select>
           </div>
           <div class="form-group">
@@ -368,27 +478,57 @@
                     : `${t("accounts.appClientDefault")}${defaultClientName ? ` (${defaultClientName})` : ""}`
                 }}
               </option>
-              <option v-for="c in appClientsList" :key="c.id" :value="c.id">{{ c.name }}</option>
+              <option v-for="c in appClientsList" :key="c.id" :value="c.id">
+                {{ c.name }}
+              </option>
             </select>
           </div>
         </div>
 
         <!-- Advanced tab (authenticated accounts only) -->
-        <div v-if="editTarget?.authStatus === 'authenticated'" v-show="editTab === 'advanced'">
-          <div class="form-section-label" style="margin-bottom: 12px">{{ t("accounts.twoFaSection") }}</div>
-          <div class="form-group">
-            <label class="form-label">{{ t("accounts.twoFaCurrentPassword") }}</label>
-            <p class="form-hint">{{ t("accounts.twoFaCurrentPasswordHint") }}</p>
-            <input v-model="twoFaCurrentPwd" type="password" class="form-input" autocomplete="current-password" />
+        <div
+          v-if="editTarget?.authStatus === 'authenticated'"
+          v-show="editTab === 'advanced'"
+        >
+          <div class="form-section-label" style="margin-bottom: 12px">
+            {{ t("accounts.twoFaSection") }}
           </div>
           <div class="form-group">
-            <label class="form-label">{{ t("accounts.twoFaNewPassword") }}</label>
+            <label class="form-label">{{
+              t("accounts.twoFaCurrentPassword")
+            }}</label>
+            <p class="form-hint">
+              {{ t("accounts.twoFaCurrentPasswordHint") }}
+            </p>
+            <input
+              v-model="twoFaCurrentPwd"
+              type="password"
+              class="form-input"
+              autocomplete="current-password"
+            />
+          </div>
+          <div class="form-group">
+            <label class="form-label">{{
+              t("accounts.twoFaNewPassword")
+            }}</label>
             <p class="form-hint">{{ t("accounts.twoFaNewPasswordHint") }}</p>
-            <input v-model="twoFaNewPwd" type="password" class="form-input" autocomplete="new-password" />
+            <input
+              v-model="twoFaNewPwd"
+              type="password"
+              class="form-input"
+              autocomplete="new-password"
+            />
           </div>
           <div v-if="twoFaNewPwd" class="form-group">
-            <label class="form-label">{{ t("accounts.twoFaNewPasswordConfirm") }}</label>
-            <input v-model="twoFaNewPwdConfirm" type="password" class="form-input" autocomplete="new-password" />
+            <label class="form-label">{{
+              t("accounts.twoFaNewPasswordConfirm")
+            }}</label>
+            <input
+              v-model="twoFaNewPwdConfirm"
+              type="password"
+              class="form-input"
+              autocomplete="new-password"
+            />
           </div>
           <div class="form-group">
             <label class="form-label">{{ t("accounts.twoFaHint") }}</label>
@@ -396,7 +536,11 @@
           </div>
           <div v-if="twoFaError" class="error-msg">{{ twoFaError }}</div>
           <div v-if="twoFaMsg" class="success-msg">{{ twoFaMsg }}</div>
-          <button class="btn btn-secondary btn-inline" :disabled="twoFaBusy" @click="doUpdateTwoFa">
+          <button
+            class="btn btn-secondary btn-inline"
+            :disabled="twoFaBusy"
+            @click="doUpdateTwoFa"
+          >
             <i class="fa-solid fa-lock"></i>
             {{ twoFaBusy ? t("common.saving") : t("accounts.twoFaUpdate") }}
           </button>
@@ -404,29 +548,58 @@
           <hr class="section-divider" />
 
           <div class="sessions-header">
-            <div class="form-section-label">{{ t("accounts.sessionsSection") }}</div>
-            <button class="btn btn-xs btn-ghost" :disabled="sessionsLoading" @click="loadSessions">
-              <i class="fa-solid fa-arrows-rotate" :class="sessionsLoading ? 'fa-spin' : ''"></i>
+            <div class="form-section-label">
+              {{ t("accounts.sessionsSection") }}
+            </div>
+            <button
+              class="btn btn-xs btn-ghost"
+              :disabled="sessionsLoading"
+              @click="loadSessions"
+            >
+              <i
+                class="fa-solid fa-arrows-rotate"
+                :class="sessionsLoading ? 'fa-spin' : ''"
+              ></i>
               {{ t("accounts.sessionsRefresh") }}
             </button>
           </div>
 
-          <div v-if="sessionsLoading && !sessions.length" class="sessions-empty">
-            <i class="fa-solid fa-spinner fa-spin"></i> {{ t("accounts.sessionsLoading") }}
+          <div
+            v-if="sessionsLoading && !sessions.length"
+            class="sessions-empty"
+          >
+            <i class="fa-solid fa-spinner fa-spin"></i>
+            {{ t("accounts.sessionsLoading") }}
           </div>
           <div v-if="sessionsError" class="error-msg">{{ sessionsError }}</div>
-          <div v-if="terminateError" class="error-msg">{{ terminateError }}</div>
+          <div v-if="terminateError" class="error-msg">
+            {{ terminateError }}
+          </div>
           <div v-if="terminateMsg" class="success-msg">{{ terminateMsg }}</div>
 
           <div class="sessions-list">
-            <div v-for="s in sessions" :key="s.hash" :class="['session-item', s.current ? 'session-current' : '']">
+            <div
+              v-for="s in sessions"
+              :key="s.hash"
+              :class="['session-item', s.current ? 'session-current' : '']"
+            >
               <div class="session-info">
                 <div class="session-device">
                   {{ s.deviceModel }}
-                  <span v-if="s.current" class="badge badge-green" style="font-size: 10px; margin-left: 6px">{{ t("accounts.sessionsCurrent") }}</span>
+                  <span
+                    v-if="s.current"
+                    class="badge badge-green"
+                    style="font-size: 10px; margin-left: 6px"
+                    >{{ t("accounts.sessionsCurrent") }}</span
+                  >
                 </div>
-                <div class="session-meta">{{ s.appName }} · {{ s.ip }} · {{ s.country }}</div>
-                <div class="session-meta">{{ t("accounts.sessionsLastActive") }}: {{ fmtSessionDate(s.dateActive) }}</div>
+                <div class="session-meta">
+                  {{ s.appName }} · {{ s.ip }} · {{ s.country }}
+                </div>
+                <div class="session-meta">
+                  {{ t("accounts.sessionsLastActive") }}:
+                  {{ fmtSessionDate(s.dateActive) }}
+                </div>
               </div>
               <button
                 v-if="!s.current"
@@ -434,15 +607,27 @@
                 :disabled="terminatingHash === s.hash"
                 @click="doTerminateSession(s.hash)"
               >
-                {{ terminatingHash === s.hash ? t("accounts.sessionTerminating") : t("accounts.sessionTerminate") }}
+                {{
+                  terminatingHash === s.hash
+                    ? t("accounts.sessionTerminating")
+                    : t("accounts.sessionTerminate")
+                }}
               </button>
             </div>
           </div>
 
           <div v-if="sessions.length > 1" style="margin-top: 10px">
-            <button class="btn btn-ghost btn-inline" :disabled="terminateBusy" @click="doTerminateAllSessions">
+            <button
+              class="btn btn-ghost btn-inline"
+              :disabled="terminateBusy"
+              @click="doTerminateAllSessions"
+            >
               <i class="fa-solid fa-right-from-bracket"></i>
-              {{ terminateBusy ? t("common.saving") : t("accounts.terminateSessions") }}
+              {{
+                terminateBusy
+                  ? t("common.saving")
+                  : t("accounts.terminateSessions")
+              }}
             </button>
           </div>
         </div>
@@ -460,9 +645,15 @@
               style="margin-right: auto"
             >
               <i class="fa-solid fa-rotate-right"></i>
-              {{ forceReauthBusy ? t("common.saving") : t("accounts.forceReauth") }}
+              {{
+                forceReauthBusy ? t("common.saving") : t("accounts.forceReauth")
+              }}
             </button>
-            <button class="btn btn-primary" :disabled="saving" @click="saveAccount">
+            <button
+              class="btn btn-primary"
+              :disabled="saving"
+              @click="saveAccount"
+            >
               <i class="fa-solid fa-floppy-disk"></i>
               {{ saving ? t("common.saving") : t("common.save") }}
             </button>
@@ -647,52 +838,89 @@
     </div>
 
     <!-- Mobile action sheet -->
-    <div v-if="actionMenuAccount" class="action-sheet-backdrop" @click="actionMenuAccount = null">
+    <div
+      v-if="actionMenuAccount"
+      class="action-sheet-backdrop"
+      @click="actionMenuAccount = null"
+    >
       <div class="action-sheet" @click.stop>
         <div class="action-sheet-header">{{ actionMenuAccount.name }}</div>
         <button
           v-if="actionMenuAccount.authStatus !== 'authenticated'"
           class="action-sheet-btn"
-          @click="openAuth(actionMenuAccount); actionMenuAccount = null"
+          @click="
+            openAuth(actionMenuAccount);
+            actionMenuAccount = null;
+          "
         >
           <i class="fa-solid fa-key"></i> {{ t("accounts.authenticate") }}
         </button>
         <button
           v-if="actionMenuAccount.authStatus === 'authenticated'"
           class="action-sheet-btn"
-          @click="openCheckStatus(actionMenuAccount); actionMenuAccount = null"
+          @click="
+            openCheckStatus(actionMenuAccount);
+            actionMenuAccount = null;
+          "
         >
-          <i class="fa-solid fa-circle-info"></i> {{ t("accounts.checkStatus") }}
+          <i class="fa-solid fa-circle-info"></i>
+          {{ t("accounts.checkStatus") }}
         </button>
         <button
           v-if="actionMenuAccount.authStatus === 'authenticated'"
           class="action-sheet-btn"
           :disabled="metaLoading.has(actionMenuAccount.id)"
-          @click="fetchMeta(actionMenuAccount.id); actionMenuAccount = null"
+          @click="
+            fetchMeta(actionMenuAccount.id);
+            actionMenuAccount = null;
+          "
         >
-          <i class="fa-solid fa-arrows-rotate"></i> {{ t("accounts.colTgName") }}
+          <i class="fa-solid fa-arrows-rotate"></i>
+          {{ t("accounts.colTgName") }}
         </button>
         <button
           class="action-sheet-btn"
-          @click="toggleDisabled(actionMenuAccount); actionMenuAccount = null"
+          @click="
+            toggleDisabled(actionMenuAccount);
+            actionMenuAccount = null;
+          "
         >
-          <i :class="actionMenuAccount.disabled ? 'fa-solid fa-circle-play' : 'fa-solid fa-ban'"></i>
-          {{ actionMenuAccount.disabled ? t("accounts.enableAccount") : t("accounts.disableAccount") }}
+          <i
+            :class="
+              actionMenuAccount.disabled
+                ? 'fa-solid fa-circle-play'
+                : 'fa-solid fa-ban'
+            "
+          ></i>
+          {{
+            actionMenuAccount.disabled
+              ? t("accounts.enableAccount")
+              : t("accounts.disableAccount")
+          }}
         </button>
         <button
           class="action-sheet-btn"
-          @click="openEdit(actionMenuAccount); actionMenuAccount = null"
+          @click="
+            openEdit(actionMenuAccount);
+            actionMenuAccount = null;
+          "
         >
           <i class="fa-solid fa-pen"></i> {{ t("common.edit") }}
         </button>
         <button
           class="action-sheet-btn danger"
-          @click="remove(actionMenuAccount.id); actionMenuAccount = null"
+          @click="
+            remove(actionMenuAccount.id);
+            actionMenuAccount = null;
+          "
         >
           <i class="fa-solid fa-trash"></i> {{ t("common.delete") }}
         </button>
         <div class="action-sheet-divider"></div>
-        <button class="action-sheet-btn action-sheet-cancel" @click="actionMenuAccount = null">
+        <button
+          class="action-sheet-btn action-sheet-cancel"
+          @click="actionMenuAccount = null"
+        >
           {{ t("common.cancel") }}
         </button>
       </div>
@@ -740,7 +968,15 @@ const settings = ref<{
   proxies?: string;
   tg_app_clients?: string;
   tg_client_mode?: string;
+  default_tg_api_id?: string;
+  default_tg_api_hash?: string;
 } | null>(null);
+
+const hasGlobalTgCreds = computed(
+  () =>
+    !!Number(settings.value?.default_tg_api_id) &&
+    !!settings.value?.default_tg_api_hash,
+);
 
 const proxiesList = computed<Proxy[]>(() => {
   try {
@@ -812,8 +1048,10 @@ async function fetchMeta(accountId: number) {
     if (idx !== -1) {
       accounts.value[idx] = { ...accounts.value[idx], ...meta };
     }
-  } catch {}
-  finally { metaLoading.delete(accountId); }
+  } catch {
+  } finally {
+    metaLoading.delete(accountId);
+  }
 }
 
 // ── Mobile action sheet ───────────────────────────────────────────────────────
@@ -855,7 +1093,10 @@ const spamBulkRunning = ref(false);
 async function checkSpamBulk() {
   if (spamBulkRunning.value) return;
   const targets = accounts.value.filter(
-    (a) => selectedIds.value.has(a.id) && a.authStatus === "authenticated" && !a.disabled,
+    (a) =>
+      selectedIds.value.has(a.id) &&
+      a.authStatus === "authenticated" &&
+      !a.disabled,
   );
   if (!targets.length) return;
   spamBulkRunning.value = true;
@@ -989,7 +1230,11 @@ async function doImport() {
   importResult.value = "";
   try {
     const secret = importSecret.value.trim() || undefined;
-    const { imported, skipped } = await accountsApi.import(importRawData.value, secret, importForceReauth.value);
+    const { imported, skipped } = await accountsApi.import(
+      importRawData.value,
+      secret,
+      importForceReauth.value,
+    );
     importResult.value =
       locale.value === "zh"
         ? `导入完成：${imported} 个成功，${skipped} 个跳过（手机号已存在）`
@@ -1025,7 +1270,11 @@ const resendBusy = ref(false);
 
 // Load sessions when Advanced tab is first opened
 watch(editTab, (tab) => {
-  if (tab === "advanced" && editTarget.value?.authStatus === "authenticated" && sessions.value.length === 0) {
+  if (
+    tab === "advanced" &&
+    editTarget.value?.authStatus === "authenticated" &&
+    sessions.value.length === 0
+  ) {
     loadSessions();
   }
 });
@@ -1170,7 +1419,9 @@ async function doUpdateTwoFa() {
       hint: twoFaHint.value || undefined,
     });
     const removed = !twoFaNewPwd.value;
-    twoFaMsg.value = removed ? t("accounts.twoFaRemoved") : t("accounts.twoFaUpdated");
+    twoFaMsg.value = removed
+      ? t("accounts.twoFaRemoved")
+      : t("accounts.twoFaUpdated");
     twoFaCurrentPwd.value = "";
     twoFaNewPwd.value = "";
     twoFaNewPwdConfirm.value = "";
@@ -1432,7 +1683,9 @@ tr:hover .tg-name-refresh {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .page-header-actions {
@@ -1476,7 +1729,9 @@ tr:hover .tg-name-refresh {
   border-bottom: 2px solid transparent;
   margin-bottom: -2px;
   cursor: pointer;
-  transition: color 0.15s, border-color 0.15s;
+  transition:
+    color 0.15s,
+    border-color 0.15s;
 }
 
 .edit-tab:hover {

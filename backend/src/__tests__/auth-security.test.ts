@@ -15,6 +15,7 @@ vi.mock('../scheduler', () => ({ refreshScheduler: vi.fn() }));
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import jwt from 'jsonwebtoken';
+import type { SignOptions } from 'jsonwebtoken';
 import type { Request, Response, NextFunction } from 'express';
 import { requireAuth } from '../middleware/auth';
 import { ALLOWED_KEYS } from '../routes/settings';
@@ -41,7 +42,7 @@ function mockRes(): Response & { _status?: number; _body?: unknown } {
 }
 
 // Issue a signed JWT with the test secret
-function makeToken(payload: Record<string, unknown>, expiresIn: string | number = '1h'): string {
+function makeToken(payload: Record<string, unknown>, expiresIn: SignOptions['expiresIn'] = '1h'): string {
   return jwt.sign(payload, TEST_SECRET, { expiresIn });
 }
 
@@ -274,7 +275,7 @@ describe('login -- password hashing and requirePasswordChange', () => {
   });
 
   it('requirePasswordChange flag is absent when a non-default password is used', () => {
-    const password = 'myCustomSecurePassword';
+    const password: string = 'myCustomSecurePassword';
     const requirePasswordChange = password === 'changeme';
     expect(requirePasswordChange).toBe(false);
     const token = makeToken({ sub: 'admin' });

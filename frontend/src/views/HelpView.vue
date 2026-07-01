@@ -103,6 +103,24 @@
                     在编辑面板中点击"强制重新认证"，可清除现有会话并重置为未认证状态。
                   </td>
                 </tr>
+                <tr>
+                  <td>2FA 密码</td>
+                  <td>
+                    在账户编辑面板的<strong>高级</strong>选项卡中设置、修改或移除 Telegram 两步验证密码。
+                  </td>
+                </tr>
+                <tr>
+                  <td>会话管理</td>
+                  <td>
+                    在<strong>高级</strong>选项卡中查看所有活跃登录设备（含应用名称、IP、国家、最后活跃时间），可单独终止某个会话或一键终止所有其他设备。
+                  </td>
+                </tr>
+                <tr>
+                  <td>加密导出 / 导入</td>
+                  <td>
+                    导出账户备份时可设置密码加密；导入时自动识别加密状态并提示输入密码。勾选<strong>强制重新认证</strong>（推荐）可在导入时清除会话令牌，避免 Telegram 因令牌共用而撤销会话。
+                  </td>
+                </tr>
               </tbody>
             </table>
             <div class="help-badges-row">
@@ -164,6 +182,32 @@
                     The Force Re-auth button in the edit panel clears the
                     existing session and resets the account to unauthenticated
                     without deleting it.
+                  </td>
+                </tr>
+                <tr>
+                  <td>2FA password</td>
+                  <td>
+                    Set, change, or remove the two-factor authentication
+                    password on any Telegram account from the
+                    <strong>Advanced</strong> tab in the account edit panel.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Session management</td>
+                  <td>
+                    The <strong>Advanced</strong> tab lists all active login
+                    sessions (app, IP, country, last-active time). Terminate
+                    individual sessions or all other sessions at once.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Encrypted export / import</td>
+                  <td>
+                    Account exports can be password-protected; imports
+                    auto-detect encryption and prompt for the key. Enable
+                    <strong>Force re-auth</strong> (recommended) to clear
+                    session tokens on import and prevent Telegram from revoking
+                    a shared token.
                   </td>
                 </tr>
               </tbody>
@@ -270,6 +314,59 @@
               打开聊天窗口或收到新消息时，自动调用 Telegram API
               将消息标记为已读，并立即清除对话列表中的未读角标。
             </p>
+
+            <div
+              class="card-section-title"
+              style="margin-top: 16px; font-size: 11px"
+            >
+              静音 / 取消静音
+            </div>
+            <p class="help-para">
+              右键任意对话可选择静音 8 小时、1 周、永久静音或取消静音。
+              已静音的对话在列表中显示静音徽标。
+            </p>
+
+            <div
+              class="card-section-title"
+              style="margin-top: 16px; font-size: 11px"
+            >
+              加入文件夹
+            </div>
+            <p class="help-para">
+              右键对话可选择"加入文件夹"，将其添加至任意 Telegram 文件夹。
+            </p>
+
+            <div
+              class="card-section-title"
+              style="margin-top: 16px; font-size: 11px"
+            >
+              编辑联系人
+            </div>
+            <p class="help-para">
+              在个人资料面板中点击铅笔图标，可直接修改联系人的名和姓。
+            </p>
+
+            <div
+              class="card-section-title"
+              style="margin-top: 16px; font-size: 11px"
+            >
+              小程序显示模式
+            </div>
+            <p class="help-para">
+              工具栏中的拼图图标可切换 Telegram 小程序的打开方式：
+              高亮时在应用内嵌入式面板打开，否则在浏览器中打开。
+            </p>
+
+            <div
+              class="card-section-title"
+              style="margin-top: 16px; font-size: 11px"
+            >
+              打开网址
+            </div>
+            <p class="help-para">
+              工具栏中的地球图标可打开"输入网址"对话框，支持粘贴任意 URL 或 t.me 链接，
+              直接在消息客户端或浏览器中打开，无需离开应用。
+            </p>
           </template>
           <template v-else>
             <div class="card-section-title">Messenger</div>
@@ -354,6 +451,63 @@
               Opening a chat or receiving a new message automatically calls the
               Telegram API to mark messages as read and clears the unread badge
               on the dialog immediately.
+            </p>
+
+            <div
+              class="card-section-title"
+              style="margin-top: 16px; font-size: 11px"
+            >
+              Mute / unmute
+            </div>
+            <p class="help-para">
+              Right-click any dialog to mute it for 8 hours, 1 week, forever,
+              or to unmute it. Muted dialogs show a mute badge in the list.
+            </p>
+
+            <div
+              class="card-section-title"
+              style="margin-top: 16px; font-size: 11px"
+            >
+              Add to folder
+            </div>
+            <p class="help-para">
+              Right-click a dialog and choose "Add to folder" to add it to any
+              of your Telegram folders.
+            </p>
+
+            <div
+              class="card-section-title"
+              style="margin-top: 16px; font-size: 11px"
+            >
+              Edit contact
+            </div>
+            <p class="help-para">
+              Click the pencil icon in the profile panel to edit a contact's
+              first and last name directly.
+            </p>
+
+            <div
+              class="card-section-title"
+              style="margin-top: 16px; font-size: 11px"
+            >
+              Mini app display mode
+            </div>
+            <p class="help-para">
+              The puzzle-piece button in the toolbar toggles how Telegram mini
+              apps open: when highlighted, they open in an embedded in-app
+              panel; otherwise they open in the browser.
+            </p>
+
+            <div
+              class="card-section-title"
+              style="margin-top: 16px; font-size: 11px"
+            >
+              Open URL
+            </div>
+            <p class="help-para">
+              The globe button in the toolbar opens a dialog where you can paste
+              any URL or t.me link and open it in the messenger or browser
+              without leaving the app.
             </p>
           </template>
         </div>
@@ -616,6 +770,17 @@
             <p class="help-para">
               点击任意列标题可对任务列表按该列排序，再次点击切换升序/降序。点击行本身可高亮选中该行。
               筛选条件与排序方式在刷新后自动恢复。
+            </p>
+
+            <div
+              class="card-section-title"
+              style="margin-top: 16px; font-size: 11px"
+            >
+              批量运行
+            </div>
+            <p class="help-para">
+              勾选多个任务后，批量操作栏出现<strong>运行 (N)</strong> 按钮。
+              点击后可设置任务间延迟时间（默认 70 秒），确认后任务按顺序依次执行。
             </p>
 
             <div
@@ -929,6 +1094,19 @@
               class="card-section-title"
               style="margin-top: 16px; font-size: 11px"
             >
+              Bulk Run
+            </div>
+            <p class="help-para">
+              Tick checkboxes on multiple job rows and click
+              <strong>Run (N)</strong> in the bulk action bar. Set a delay
+              between jobs (default 70 s) and confirm -- jobs run sequentially,
+              each waiting for the previous one to finish before starting.
+            </p>
+
+            <div
+              class="card-section-title"
+              style="margin-top: 16px; font-size: 11px"
+            >
               Mobile Action Menu
             </div>
             <p class="help-para">
@@ -948,6 +1126,16 @@
             <div class="card-section-title">模板</div>
             <p class="help-para">
               模板存储可复用的任务配置。将任务关联至模板后，模板的变更会自动同步至所有关联任务。
+            </p>
+            <div
+              class="card-section-title"
+              style="margin-top: 16px; font-size: 11px"
+            >
+              批量永久静音机器人
+            </div>
+            <p class="help-para">
+              勾选多个模板行，点击<strong>永久静音机器人</strong>按钮，将为所有关联 Telegram 账户一次性静音对应机器人的通知。
+              操作内置速率限制保护，每次账户调用间隔 4 秒。
             </p>
             <div
               class="card-section-title"
@@ -989,6 +1177,18 @@
               Templates store reusable job configurations. Jobs linked to a
               template inherit its settings; changes to the template propagate
               to all linked jobs automatically.
+            </p>
+            <div
+              class="card-section-title"
+              style="margin-top: 16px; font-size: 11px"
+            >
+              Bulk mute bot forever
+            </div>
+            <p class="help-para">
+              Tick checkboxes on multiple template rows and click
+              <strong>Mute Bot Forever</strong> to mute the associated bot
+              across every linked Telegram account in one action. Built-in
+              4-second rate-limit protection prevents flooding the Telegram API.
             </p>
             <div
               class="card-section-title"
@@ -1111,11 +1311,18 @@
                     实例，无需重新认证。
                   </td>
                 </tr>
+                <tr>
+                  <td>默认 TG API 凭据</td>
+                  <td>
+                    统一配置全局 API ID 和 Hash；无独立凭据的账号自动使用全局默认值。Hash 在界面中始终脱敏显示。
+                  </td>
+                </tr>
               </tbody>
             </table>
             <p class="help-para" style="margin-top: 14px">
               <strong>管理员凭据</strong> --
               随时更改管理员用户名或密码，确认更改时需输入当前密码。
+              使用默认密码（<code>changeme</code>）登录时，系统将强制要求更改密码后方可继续访问。
             </p>
           </template>
           <template v-else>
@@ -1213,12 +1420,22 @@
                     re-authenticating.
                   </td>
                 </tr>
+                <tr>
+                  <td>Default TG API Credentials</td>
+                  <td>
+                    Set a global API ID and Hash; accounts without their own
+                    credentials fall back to these defaults. The Hash is always
+                    masked in the UI.
+                  </td>
+                </tr>
               </tbody>
             </table>
             <p class="help-para" style="margin-top: 14px">
               <strong>Admin Credentials</strong> -- change the admin username or
               password at any time. Current password is always required to
-              confirm the change.
+              confirm the change. If the default password (<code>changeme</code>)
+              is still in use, the app forces a password change on next login
+              before any other page is accessible.
             </p>
           </template>
         </div>
@@ -1232,6 +1449,7 @@
             <p class="help-para">
               每次任务执行均记录时间戳、状态和消息。
               使用顶部的任务下拉筛选器按任务缩小范围，或在文本搜索框中输入关键词，对任务名称、账号名称或消息内容进行模糊筛选。
+              日志列表每次加载最多显示 50 条记录（最新在前），点击底部的<strong>加载更多</strong>按钮可继续加载更早的记录。
             </p>
             <div class="help-badges-row">
               <span class="badge badge-green">成功</span>
@@ -1330,7 +1548,8 @@
               Every job execution is recorded with a timestamp, status, and
               message. Use the job dropdown to filter by a specific job, or type
               in the search box to fuzzy-match across job name, account name,
-              and message.
+              and message. The list loads the 50 most recent records; click
+              <strong>Load More</strong> at the bottom to fetch older entries.
             </p>
             <div class="help-badges-row">
               <span class="badge badge-green">Success</span>

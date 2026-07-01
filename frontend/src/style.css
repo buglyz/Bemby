@@ -412,9 +412,10 @@ tr:hover td {
 
 /* Prevent iOS Safari from auto-zooming on focus (triggers when font-size < 16px) */
 @media (hover: none) and (pointer: coarse) {
-	.form-input,
-	.form-select {
-		font-size: 16px;
+	input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]),
+	textarea,
+	select {
+		font-size: 16px !important;
 	}
 }
 

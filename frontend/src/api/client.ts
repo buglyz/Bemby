@@ -1,6 +1,23 @@
 import axios from "axios";
+import { ref } from "vue";
 
 export const api = axios.create({ baseURL: "/api" });
+
+function readRequirePwdChangeClaim(): boolean {
+  const token = localStorage.getItem("token");
+  if (!token) return false;
+  try {
+    const b64 = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    const payload = JSON.parse(atob(b64));
+    return payload.requirePasswordChange === true;
+  } catch {
+    return false;
+  }
+}
+
+// Reactive signal -- true when the active JWT has requirePasswordChange set.
+// Shared between LoginView (sets it on login) and App.vue (watches it to show the modal).
+export const requirePasswordChangeSignal = ref(readRequirePwdChangeClaim());
 
 // Attach stored token to every request
 api.interceptors.request.use((config) => {
@@ -9,13 +26,19 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Redirect to login on 401
+// Redirect to login on 401; surface force-password-change on 403
 api.interceptors.response.use(
   (r) => r,
   (err) => {
     if (err.response?.status === 401) {
       localStorage.removeItem("token");
       window.location.href = "/login";
+    }
+    if (
+      err.response?.status === 403 &&
+      err.response?.data?.requirePasswordChange
+    ) {
+      requirePasswordChangeSignal.value = true;
     }
     return Promise.reject(err);
   },

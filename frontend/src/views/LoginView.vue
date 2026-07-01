@@ -44,7 +44,7 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { authApi } from '../api/client';
+import { authApi, requirePasswordChangeSignal } from '../api/client';
 import { t } from '../i18n';
 
 const router = useRouter();
@@ -75,7 +75,10 @@ async function submit() {
   try {
     const { token, requirePasswordChange } = await authApi.login(form.username, form.password, captchaToken.value, form.captchaAnswer);
     localStorage.setItem('token', token);
-    if (requirePasswordChange) localStorage.setItem('bemby:requirePasswordChange', '1');
+    if (requirePasswordChange) {
+      localStorage.setItem('bemby:requirePasswordChange', '1');
+      requirePasswordChangeSignal.value = true;
+    }
     router.push('/');
   } catch (err: unknown) {
     const status = (err as { response?: { status?: number } })?.response?.status;

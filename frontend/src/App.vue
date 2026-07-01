@@ -89,12 +89,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onUnmounted, ref, type Component } from 'vue';
+import { computed, onUnmounted, ref, watch, type Component } from 'vue';
 import TgClientPopup from './components/TgClientPopup.vue';
 import { useRoute, useRouter } from 'vue-router';
 import { version as APP_VERSION } from '../package.json';
 import { t, locale, setLocale } from './i18n';
-import { authApi } from './api/client';
+import { authApi, requirePasswordChangeSignal } from './api/client';
 import AccountsView from './views/AccountsView.vue';
 import JobsView from './views/JobsView.vue';
 import TemplatesView from './views/TemplatesView.vue';
@@ -163,7 +163,14 @@ function logout() {
 }
 
 const FORCE_PWD_KEY = 'bemby:requirePasswordChange';
-const showForceChangePassword = ref(localStorage.getItem(FORCE_PWD_KEY) === '1');
+const showForceChangePassword = ref(
+  localStorage.getItem(FORCE_PWD_KEY) === '1' || requirePasswordChangeSignal.value,
+);
+
+// Show modal whenever the signal fires (e.g. fresh login or 403 from backend)
+watch(requirePasswordChangeSignal, (val) => {
+  if (val) showForceChangePassword.value = true;
+});
 const forcePwdNew = ref('');
 const forcePwdConfirm = ref('');
 const forcePwdError = ref('');
@@ -188,6 +195,7 @@ async function submitForcePwdChange() {
     const { token } = await authApi.changeCredentials('changeme', undefined, forcePwdNew.value);
     if (token) localStorage.setItem('token', token);
     localStorage.removeItem(FORCE_PWD_KEY);
+    requirePasswordChangeSignal.value = false;
     showForceChangePassword.value = false;
   } catch (err: any) {
     forcePwdError.value = err.response?.data?.error ?? t('forcePwd.failed');

@@ -2,14 +2,15 @@ name: Publish Docker image
 
 on:
   release:
-    types: [published]   # fires when a GitHub release is published (any version tag)
+    types: [published]   # fires when a GitHub release is published (stable tags only)
   push:
     tags:
       - 'dev-*'          # dev builds via direct tag push only
+      - 'v*-beta*'       # beta builds via direct tag push only
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Image tag override (e.g. v0.9.6 or dev-v0.9.27-1)'
+        description: 'Image tag override (e.g. v0.9.6, dev-v0.9.28-1, or v0.9.28-beta.1)'
         required: false
 
 jobs:
@@ -18,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       semver: ${{ steps.resolve.outputs.semver }}
-      push_latest: ${{ steps.resolve.outputs.push_latest }}
+      channel: ${{ steps.resolve.outputs.channel }}
     steps:
       - name: Resolve image tag
         id: resolve
@@ -28,13 +29,18 @@ jobs:
           else
             TAG="${GITHUB_REF_NAME}"
           fi
-          # dev-* tags: use as-is, no latest; release tags: strip v prefix, push latest
+          # dev-*   → dev channel, keep tag as-is (no v-strip)
+          # *beta*  → beta channel, strip v prefix
+          # anything else → latest channel, strip v prefix
           if [[ "${TAG}" == dev-* ]]; then
             echo "semver=${TAG}" >> "$GITHUB_OUTPUT"
-            echo "push_latest=false" >> "$GITHUB_OUTPUT"
+            echo "channel=dev" >> "$GITHUB_OUTPUT"
+          elif [[ "${TAG}" == *beta* ]]; then
+            echo "semver=${TAG#v}" >> "$GITHUB_OUTPUT"
+            echo "channel=beta" >> "$GITHUB_OUTPUT"
           else
             echo "semver=${TAG#v}" >> "$GITHUB_OUTPUT"
-            echo "push_latest=true" >> "$GITHUB_OUTPUT"
+            echo "channel=latest" >> "$GITHUB_OUTPUT"
           fi
 
   # Build each platform natively -- no QEMU
@@ -95,17 +101,10 @@ jobs:
         run: |
           IMG="${{ secrets.DOCKERHUB_USERNAME }}/bemby"
           VER="${{ needs.meta.outputs.semver }}"
-          # latest is updated by all published releases; dev builds only update the dev tag
-          if [ "${{ needs.meta.outputs.push_latest }}" = "true" ]; then
-            docker buildx imagetools create \
-              -t "${IMG}:${VER}" \
-              -t "${IMG}:latest" \
-              "${IMG}:${VER}-amd64" \
-              "${IMG}:${VER}-arm64"
-          else
-            docker buildx imagetools create \
-              -t "${IMG}:${VER}" \
-              -t "${IMG}:dev" \
-              "${IMG}:${VER}-amd64" \
-              "${IMG}:${VER}-arm64"
-          fi
+          CHANNEL="${{ needs.meta.outputs.channel }}"
+          # Always push the versioned tag + the channel alias (latest / beta / dev)
+          docker buildx imagetools create \
+            -t "${IMG}:${VER}" \
+            -t "${IMG}:${CHANNEL}" \
+            "${IMG}:${VER}-amd64" \
+            "${IMG}:${VER}-arm64"

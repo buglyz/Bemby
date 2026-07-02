@@ -45,6 +45,7 @@
         <button class="btn btn-sm btn-secondary" @click="bulkEnableJobs"><i class="fa-solid fa-circle-check"></i> {{ t('jobs.bulkEnable').replace('{n}', String(selectedJobIds.length)) }}</button>
         <button class="btn btn-sm btn-secondary" @click="confirmBulkDisableJobs = true"><i class="fa-solid fa-ban"></i> {{ t('jobs.bulkDisable').replace('{n}', String(selectedJobIds.length)) }}</button>
         <button class="btn btn-sm btn-danger" @click="confirmBulkDeleteJobs = true"><i class="fa-solid fa-trash"></i> {{ t('jobs.bulkDelete').replace('{n}', String(selectedJobIds.length)) }}</button>
+        <button class="btn btn-sm btn-secondary" @click="showBulkWindowModal = true"><i class="fa-solid fa-clock"></i> {{ t('jobs.bulkWindow').replace('{n}', String(selectedJobIds.length)) }}</button>
         <button class="btn btn-sm btn-ghost" style="margin-left:auto" @click="selectedJobIds = []"><i class="fa-solid fa-xmark"></i></button>
       </div>
       <div class="table-wrap">
@@ -573,6 +574,29 @@
       </div>
     </div>
 
+    <!-- Bulk change window modal -->
+    <div v-if="showBulkWindowModal" class="modal-backdrop">
+      <div class="modal" style="width:380px">
+        <h3 class="modal-title">{{ t('jobs.bulkWindowTitle') }}</h3>
+        <div class="modal-body">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">{{ t('jobs.labelWindowStart') }}</label>
+              <input v-model.number="bulkWindowStart" type="number" class="form-input" placeholder="1400" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">{{ t('jobs.labelWindowEnd') }}</label>
+              <input v-model.number="bulkWindowEnd" type="number" class="form-input" placeholder="1600" />
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-ghost" @click="showBulkWindowModal = false"><i class="fa-solid fa-xmark"></i> {{ t('common.cancel') }}</button>
+          <button class="btn btn-primary" @click="executeBulkChangeWindow"><i class="fa-solid fa-clock"></i> {{ t('jobs.bulkWindowApply') }}</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Bulk disable confirmation -->
     <div v-if="confirmBulkDisableJobs" class="modal-backdrop">
       <div class="modal" style="width:380px">
@@ -694,6 +718,9 @@ const confirmBulkDisableJobs = ref(false);
 const confirmBulkDeleteJobs = ref(false);
 const showBulkRunModal = ref(false);
 const bulkRunDelay = ref(70);
+const showBulkWindowModal = ref(false);
+const bulkWindowStart = ref(1400);
+const bulkWindowEnd = ref(1600);
 
 function setSort(key: string) {
   if (sortKey.value === key) {
@@ -1312,6 +1339,16 @@ async function executeBulkDeleteJobs() {
   await Promise.all(selectedJobIds.value.map(id => jobsApi.delete(id)));
   await loadJobs();
   confirmBulkDeleteJobs.value = false;
+  selectedJobIds.value = [];
+}
+
+async function executeBulkChangeWindow() {
+  await Promise.all(selectedJobIds.value.map(id => jobsApi.update(id, {
+    scheduleWindowStart: bulkWindowStart.value,
+    scheduleWindowEnd: bulkWindowEnd.value,
+  })));
+  await Promise.all([loadJobs(), loadStatus()]);
+  showBulkWindowModal.value = false;
   selectedJobIds.value = [];
 }
 

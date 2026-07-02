@@ -34,6 +34,7 @@
           <option value="">{{ t('jobs.allBotUrlTpl') }}</option>
           <option v-for="opt in botUrlTplOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
         </select>
+        <input v-model="filterName" class="form-input" style="width:160px;height:30px;font-size:13px;padding:0 8px" :placeholder="t('jobs.filterPlaceholder')" />
         <button v-if="sortedJobs.length" class="btn btn-sm btn-secondary" style="margin-left:auto" @click="toggleAllJobs">
           {{ allJobsSelected ? t('common.deselectAll') : t('common.selectAll') }}
         </button>
@@ -715,6 +716,7 @@ const running = ref(new Set<number>());
 const filterType = usePersistedRef<string>('bemby:jobs:filterType', '');
 const filterAccountId = usePersistedRef<number | ''>('bemby:jobs:filterAccountId', '');
 const filterBotUrlTpl = usePersistedRef<string>('bemby:jobs:filterBotUrlTpl', '');
+const filterName = usePersistedRef<string>('bemby:jobs:filterName', '');
 const filterOptions = computed(() => [
   { value: '', label: t('common.all') },
   { value: 'checkin', label: t('logs.jobType.checkin') },
@@ -756,7 +758,9 @@ function sortIcon(key: string): string {
 }
 
 const sortedJobs = computed(() => {
+  const nameQ = filterName.value.trim().toLowerCase();
   const filtered = jobs.value.filter(j => {
+    if (nameQ && !j.name.toLowerCase().includes(nameQ)) return false;
     if (filterType.value && j.jobType !== filterType.value) return false;
     if (filterAccountId.value !== '' && j.accountId !== filterAccountId.value) return false;
     if (filterBotUrlTpl.value) {

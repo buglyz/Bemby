@@ -79,6 +79,7 @@
                 <td class="msg-cell">
                   <div style="display: flex; align-items: center; gap: 8px">
                     <span
+                      :title="l.message ?? undefined"
                       style="
                         overflow: hidden;
                         text-overflow: ellipsis;
@@ -100,6 +101,16 @@
                           ? t("common.stopping")
                           : t("common.stop")
                       }}
+                    </button>
+                    <button
+                      v-if="l.status === 'failed'"
+                      class="btn btn-sm btn-ghost btn-icon"
+                      style="flex-shrink: 0; color: #aaa"
+                      :title="t('common.run')"
+                      :disabled="rerunning.has(l.id)"
+                      @click.stop="rerunJob(l)"
+                    >
+                      <i class="fa-solid fa-rotate-right"></i>
                     </button>
                     <button
                       v-if="l.status !== 'running'"
@@ -893,6 +904,7 @@ const expandedId = ref<number | null>(null);
 const expandedDetail = ref<CheckinAttemptLog[] | EmbywatchLog[] | null>(null);
 const detailLoading = ref(false);
 const stopping = ref(new Set<number>());
+const rerunning = ref(new Set<number>());
 let pollTimer: ReturnType<typeof setTimeout> | null = null;
 let detailPollTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -1075,6 +1087,17 @@ async function stopJob(log: Log) {
   } catch {
     stopping.value.delete(log.id);
     stopping.value = new Set(stopping.value);
+  }
+}
+
+async function rerunJob(log: Log) {
+  rerunning.value.add(log.id);
+  rerunning.value = new Set(rerunning.value);
+  try {
+    await jobsApi.run(log.jobId);
+  } finally {
+    rerunning.value.delete(log.id);
+    rerunning.value = new Set(rerunning.value);
   }
 }
 

@@ -928,7 +928,7 @@
         </div>
       </div>
 
-      <!-- AI button detection -->
+      <!-- AI settings -->
       <div class="card s-col-12">
         <div class="card-body">
           <div class="card-section-title">{{ t("settings.aiSection") }}</div>

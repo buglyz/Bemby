@@ -66,6 +66,7 @@ db.exec(`
     ('ai_api_key',           ''),
     ('ai_model',             'nvidia/nemotron-nano-12b-v2-vl:free'),
     ('ai_timeout_ms',        '25000'),
+    ('ai_fallback_enabled',  'true'),
     ('ua_presets',           '[{"name":"SenPlayer (Mac)","value":"SenPlayer/6.1.2 CFNetwork/1490.0.4 Darwin/23.2.0"},{"name":"Yamby (Android TV)","value":"Yamby/2.0.3.4(Android)"},{"name":"Hills (Windows)","value":"Hills/0.2.1"},{"name":"Lenna (iOS)","value":"Lenna/1.0.15 CFNetwork/1494.0.7 Darwin/23.4.0"},{"name":"VidHub (iOS)","value":"VidHub/2.2.4"}]');
 `);
 
@@ -77,6 +78,27 @@ try {
   );
 } catch {}
 
+/**
+ * Runs a data fix-up exactly once, recording completion in the settings table
+ * under a migration:<id> key. Value-matching UPDATEs must not re-run on every
+ * boot or they silently revert values the user has deliberately set.
+ */
+function runOnce(id: string, fn: () => void): void {
+  const flagKey = `migration:${id}`;
+  try {
+    const done = db
+      .prepare("SELECT 1 FROM settings WHERE key = ?")
+      .get(flagKey);
+    if (done) return;
+    fn();
+    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, '1')").run(
+      flagKey,
+    );
+  } catch (e) {
+    console.error(`[db] migration ${id} failed:`, e);
+  }
+}
+
 // Migrations for columns added after initial schema
 try {
   db.exec(
@@ -86,34 +108,34 @@ try {
 try {
   db.exec("ALTER TABLE jobs ADD COLUMN config TEXT");
 } catch {}
-try {
+runOnce("device-name-tg-runner-to-yamby", () => {
   db.exec(
     "UPDATE settings SET value = 'Yamby' WHERE key = 'default_device_name' AND value = 'tg-runner'",
   );
-} catch {}
-try {
+});
+runOnce("device-name-yamby-to-mac", () => {
   db.exec(
     "UPDATE settings SET value = 'Mac' WHERE key = 'default_device_name' AND value = 'Yamby'",
   );
-} catch {}
-try {
+});
+runOnce("ua-chrome-to-senplayer", () => {
   db.exec(
     "UPDATE settings SET value = 'SenPlayer/6.1.0 CFNetwork/1490.0.4 Darwin/23.2.0' WHERE key = 'default_ua' AND value = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'",
   );
-} catch {}
-try {
+});
+runOnce("ua-senplayer-610-to-612", () => {
   db.exec(
     "UPDATE settings SET value = 'SenPlayer/6.1.2 CFNetwork/1490.0.4 Darwin/23.2.0' WHERE key = 'default_ua' AND value = 'SenPlayer/6.1.0 CFNetwork/1490.0.4 Darwin/23.2.0'",
   );
-} catch {}
+});
 // Overwrite placeholder preset values written before correct UAs were researched
-try {
+runOnce("ua-presets-placeholder-fix", () => {
   db.prepare(
     "UPDATE settings SET value = ? WHERE key = 'ua_presets' AND (value LIKE '%ExoPlayerLib%' OR value LIKE '%VidHub/2.1.0%')",
   ).run(
     '[{"name":"SenPlayer (Mac)","value":"SenPlayer/6.1.2 CFNetwork/1490.0.4 Darwin/23.2.0"},{"name":"Yamby (Android TV)","value":"Yamby/2.0.3.4(Android)"},{"name":"Hills (Windows)","value":"Hills/0.2.1"},{"name":"Lenna (iOS)","value":"Lenna/1.0.15 CFNetwork/1494.0.7 Darwin/23.4.0"},{"name":"VidHub (iOS)","value":"VidHub/2.2.4"}]',
   );
-} catch {}
+});
 try {
   db.exec(
     "ALTER TABLE jobs ADD COLUMN start_command TEXT NOT NULL DEFAULT '/start'",
@@ -310,9 +332,13 @@ try {
     // job_logs.job_id -> jobs(id) ON DELETE CASCADE: with foreign_keys on,
     // DROP TABLE jobs below fires that cascade and wipes all job history.
     // Turn enforcement off for the swap, per SQLite's documented table-rebuild pattern.
+    // The pragma is a no-op inside a transaction, so it must sit outside; the
+    // copy/drop/rename runs in one transaction so a crash mid-swap rolls back
+    // instead of leaving jobs dropped and the data stranded in jobs_v2.
     db.pragma("foreign_keys = OFF");
     try {
-      db.exec(`
+      db.transaction(() => {
+        db.exec(`
         DROP TABLE IF EXISTS jobs_v2;
         CREATE TABLE jobs_v2 (
           id                    INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -337,6 +363,7 @@ try {
         DROP TABLE jobs;
         ALTER TABLE jobs_v2 RENAME TO jobs;
       `);
+      })();
       console.log("[db] Migrated jobs.account_id to nullable");
     } finally {
       db.pragma("foreign_keys = ON");
@@ -385,10 +412,13 @@ try {
     // on, DROP TABLE tg_accounts below fires that cascade on every linked job,
     // wiping account_id to NULL even though the account itself is preserved
     // under the same id in tg_accounts_v2. Turn enforcement off for the swap,
-    // per SQLite's documented table-rebuild pattern.
+    // per SQLite's documented table-rebuild pattern. The pragma is a no-op
+    // inside a transaction, so it must sit outside; the copy/drop/rename runs
+    // in one transaction so a crash mid-swap rolls back cleanly.
     db.pragma("foreign_keys = OFF");
     try {
-      db.exec(`
+      db.transaction(() => {
+        db.exec(`
         CREATE TABLE tg_accounts_v2 (
           id              INTEGER PRIMARY KEY AUTOINCREMENT,
           name            TEXT    NOT NULL,
@@ -416,6 +446,7 @@ try {
         DROP TABLE tg_accounts;
         ALTER TABLE tg_accounts_v2 RENAME TO tg_accounts;
       `);
+      })();
       console.log("[db] Migrated tg_accounts api_id/api_hash to nullable");
     } finally {
       db.pragma("foreign_keys = ON");

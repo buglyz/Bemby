@@ -936,6 +936,17 @@
             {{ t("settings.aiHint") }}
           </p>
 
+          <!-- Fallback toggle -->
+          <div class="form-group">
+            <label class="form-check">
+              <input v-model="form.ai_fallback_enabled" type="checkbox" @change="saveFallbackEnabled" />
+              <span>{{ t("settings.aiFallbackLabel") }}</span>
+            </label>
+            <p style="font-size: 12px; color: #888; margin: 4px 0 0 24px">
+              {{ t("settings.aiFallbackHint") }}
+            </p>
+          </div>
+
           <!-- Providers list -->
           <div
             style="
@@ -1256,6 +1267,7 @@ const form = reactive({
   default_play_duration: 300,
   default_device_name: "Mac",
   ai_model: "",
+  ai_fallback_enabled: true,
 });
 const saving = ref(false);
 const saveMsg = ref("");
@@ -1581,6 +1593,7 @@ onMounted(async () => {
     form.default_play_duration = Number(s.default_play_duration ?? 300);
     form.default_device_name = s.default_device_name ?? "Mac";
     form.ai_model = s.ai_model ?? "";
+    form.ai_fallback_enabled = s.ai_fallback_enabled !== "false";
     notifyForm.username = s.notify_tg_username ?? "";
     try {
       if (s.notify_tg_events)
@@ -1760,12 +1773,21 @@ async function saveAi() {
   aiError.value = "";
   aiSaving.value = true;
   try {
-    await settingsApi.update({ ai_model: form.ai_model });
+    await settingsApi.update({ ai_model: form.ai_model, ai_fallback_enabled: String(form.ai_fallback_enabled) });
     aiMsg.value = t("settings.saved");
   } catch (err: any) {
     aiError.value = err.response?.data?.error ?? t("settings.saveFailed");
   } finally {
     aiSaving.value = false;
+  }
+}
+
+async function saveFallbackEnabled() {
+  try {
+    await settingsApi.update({ ai_fallback_enabled: String(form.ai_fallback_enabled) });
+  } catch {
+    // revert on failure
+    form.ai_fallback_enabled = !form.ai_fallback_enabled;
   }
 }
 

@@ -124,38 +124,55 @@ export function parseAiBtnHint(val: string): string | undefined {
   return m ? m[1].trim() : undefined;
 }
 
-/** Generic AI call: sends images + prompt, returns the raw text response. */
-export async function callAI(
-  images: string[],
-  prompt: string,
-  maxTokens = 200,
-  modelOverride?: string,
-): Promise<{ response: string }> {
-  const model = modelOverride?.trim() || getAiSetting('ai_model', 'AI_MODEL', 'nvidia/nemotron-nano-12b-v2-vl:free');
+type AICreds = { modelId: string; apiKey: string; baseUrl: string; timeoutMs: number };
 
-  // Resolve credentials from the suppliers table (model_id → supplier)
-  type SupplierCreds = { api_key: string; base_url: string; timeout_ms: number };
-  const supplierRow = db.prepare(`
+function resolveAICreds(modelId?: string): AICreds {
+  const model = modelId?.trim() || getAiSetting('ai_model', 'AI_MODEL', 'nvidia/nemotron-nano-12b-v2-vl:free');
+  type SupplierRow = { api_key: string; base_url: string; timeout_ms: number };
+  const row = db.prepare(`
     SELECT s.api_key, s.base_url, s.timeout_ms
     FROM ai_models m JOIN ai_suppliers s ON s.id = m.supplier_id
     WHERE m.model_id = ? LIMIT 1
-  `).get(model) as SupplierCreds | undefined;
+  `).get(model) as SupplierRow | undefined;
+  return {
+    modelId: model,
+    apiKey: row?.api_key ?? getAiSetting('ai_api_key', 'AI_API_KEY', ''),
+    baseUrl: (row?.base_url ?? getAiSetting('ai_base_url', 'AI_BASE_URL', 'https://openrouter.ai/api/v1')).replace(/\/$/, ''),
+    timeoutMs: row ? row.timeout_ms : Number(getAiSetting('ai_timeout_ms', 'AI_TIMEOUT_MS', '25000')),
+  };
+}
 
-  const apiKey  = supplierRow?.api_key  ?? getAiSetting('ai_api_key',   'AI_API_KEY',  '');
-  const baseUrl = (supplierRow?.base_url ?? getAiSetting('ai_base_url', 'AI_BASE_URL', 'https://openrouter.ai/api/v1')).replace(/\/$/, '');
-  const AI_TIMEOUT_MS = supplierRow ? supplierRow.timeout_ms : Number(getAiSetting('ai_timeout_ms', 'AI_TIMEOUT_MS', '25000'));
+function getAllModelCreds(): AICreds[] {
+  type Row = { model_id: string; api_key: string; base_url: string; timeout_ms: number };
+  return (db.prepare(`
+    SELECT m.model_id, s.api_key, s.base_url, s.timeout_ms
+    FROM ai_models m JOIN ai_suppliers s ON s.id = m.supplier_id
+    ORDER BY s.id, m.id
+  `).all() as Row[]).map(r => ({
+    modelId: r.model_id,
+    apiKey: r.api_key,
+    baseUrl: r.base_url.replace(/\/$/, ''),
+    timeoutMs: r.timeout_ms,
+  }));
+}
 
-  if (!apiKey) throw new Error('AI API key not configured — set it in Settings');
+async function callAIWithCreds(
+  images: string[],
+  prompt: string,
+  maxTokens: number,
+  creds: AICreds,
+): Promise<{ response: string }> {
+  if (!creds.apiKey) throw new Error('AI API key not configured — set it in Settings');
 
   const content: object[] = [];
   for (const img of images) content.push({ type: 'image_url', image_url: { url: img } });
   content.push({ type: 'text', text: prompt });
 
-  const res = await fetch(`${baseUrl}/chat/completions`, {
+  const res = await fetch(`${creds.baseUrl}/chat/completions`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model, messages: [{ role: 'user', content }], max_tokens: maxTokens }),
-    signal: AbortSignal.timeout(AI_TIMEOUT_MS),
+    headers: { Authorization: `Bearer ${creds.apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: creds.modelId, messages: [{ role: 'user', content }], max_tokens: maxTokens }),
+    signal: AbortSignal.timeout(creds.timeoutMs),
   });
 
   if (!res.ok) {
@@ -166,6 +183,47 @@ export async function callAI(
   const data = await res.json() as { choices?: { message?: { content?: string } }[] };
   const response = data.choices?.[0]?.message?.content?.trim() ?? '';
   return { response };
+}
+
+/** Generic AI call: sends images + prompt, returns the raw text response. */
+export async function callAI(
+  images: string[],
+  prompt: string,
+  maxTokens = 200,
+  modelOverride?: string,
+): Promise<{ response: string }> {
+  return callAIWithCreds(images, prompt, maxTokens, resolveAICreds(modelOverride));
+}
+
+/**
+ * Tries the default model first; on any API error, falls back to other configured
+ * suppliers/models in order (if ai_fallback_enabled is true).
+ */
+async function callAIWithFallback(
+  images: string[],
+  prompt: string,
+  maxTokens: number,
+): Promise<{ response: string }> {
+  const primary = resolveAICreds();
+  const fallbackEnabled = getAiSetting('ai_fallback_enabled', '', 'true') === 'true';
+
+  const candidates: AICreds[] = [primary];
+  if (fallbackEnabled) {
+    for (const c of getAllModelCreds()) {
+      if (c.modelId !== primary.modelId) candidates.push(c);
+    }
+  }
+
+  let lastError: Error = new Error('AI API key not configured — set it in Settings');
+  for (const creds of candidates) {
+    if (!creds.apiKey) continue;
+    try {
+      return await callAIWithCreds(images, prompt, maxTokens, creds);
+    } catch (err: any) {
+      lastError = err;
+    }
+  }
+  throw lastError;
 }
 
 /** Returns true if a command template contains an {aiInput} or {aiInput:N} placeholder */
@@ -192,36 +250,12 @@ export async function recognizeCaptchaWithAI(
   images: string[],
   length?: number,
 ): Promise<AiInputResult> {
-  const apiKey = getAiSetting('ai_api_key', 'AI_API_KEY', '');
-  if (!apiKey) throw new Error('{aiInput} requires an AI API key — configure it in Settings');
+  if (!resolveAICreds().apiKey) throw new Error('{aiInput} requires an AI API key — configure it in Settings');
   if (!images.length) throw new Error('{aiInput} requires an image in the previous message');
 
-  const baseUrl = getAiSetting('ai_base_url', 'AI_BASE_URL', 'https://openrouter.ai/api/v1').replace(/\/$/, '');
-  const model = getAiSetting('ai_model', 'AI_MODEL', 'nvidia/nemotron-nano-12b-v2-vl:free');
-
   const prompt = buildCaptchaPrompt(length);
-
-  const content: object[] = [];
-  for (const img of images) content.push({ type: 'image_url', image_url: { url: img } });
-  content.push({ type: 'text', text: prompt });
-
-  const AI_TIMEOUT_MS = Number(getAiSetting('ai_timeout_ms', 'AI_TIMEOUT_MS', '25000'));
-  const res = await fetch(`${baseUrl}/chat/completions`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model, messages: [{ role: 'user', content }], max_tokens: 20 }),
-    signal: AbortSignal.timeout(AI_TIMEOUT_MS),
-  });
-
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    throw new Error(`AI API error ${res.status}: ${body}`);
-  }
-
-  const data = await res.json() as { choices?: { message?: { content?: string } }[] };
-  const recognized = data.choices?.[0]?.message?.content?.trim() ?? '';
+  const { response: recognized } = await callAIWithFallback(images, prompt, 20);
   if (!recognized) throw new Error('AI returned empty response for captcha recognition');
-
   return { text: recognized, prompt, response: recognized };
 }
 
@@ -234,40 +268,18 @@ export async function selectButtonWithAI(
   hint?: string,
   maxRetries = 0,
 ): Promise<AiSelectionResult> {
-  const apiKey = getAiSetting('ai_api_key', 'AI_API_KEY', '');
-  if (!apiKey) throw new Error('{aiBtn} requires an AI API key — configure it in Settings');
-
-  const baseUrl = getAiSetting('ai_base_url', 'AI_BASE_URL', 'https://openrouter.ai/api/v1').replace(/\/$/, '');
-  const model = getAiSetting('ai_model', 'AI_MODEL', 'nvidia/nemotron-nano-12b-v2-vl:free');
+  if (!resolveAICreds().apiKey) throw new Error('{aiBtn} requires an AI API key — configure it in Settings');
 
   const flat = buttons.flat();
   const text = htmlToText(html);
   const task = hint ?? ('pick ONE button based on the message' + (images.length ? ' and attached image(s).' : ''));
   const prompt = `Task: "${task}".\n\nThe message:\n${text}\n\nThe available inline buttons are: ${JSON.stringify(flat)}\n\nWhich button should be clicked to "${task}"? If you don't know which button, please pick the most likely one. You MUST reply with ONLY the EXACT BUTTON TEXT from the available list, nothing else. Do NOT include any thinking logic.`;
 
-  const content: object[] = [];
-  for (const img of images) content.push({ type: 'image_url', image_url: { url: img } });
-  content.push({ type: 'text', text: prompt });
-
-  const AI_TIMEOUT_MS = Number(getAiSetting('ai_timeout_ms', 'AI_TIMEOUT_MS', '25000'));
   const effectiveMax = Math.min(maxRetries, 5); // hard cap to avoid exhausting AI credits
   const failedResponses: string[] = [];
 
   for (let attempt = 0; attempt <= effectiveMax; attempt++) {
-    const res = await fetch(`${baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, messages: [{ role: 'user', content }], max_tokens: 50 }),
-      signal: AbortSignal.timeout(AI_TIMEOUT_MS),
-    });
-
-    if (!res.ok) {
-      const body = await res.text().catch(() => '');
-      throw new Error(`AI API error ${res.status}: ${body}`);
-    }
-
-    const data = await res.json() as { choices?: { message?: { content?: string } }[] };
-    const picked = data.choices?.[0]?.message?.content?.trim() ?? '';
+    const { response: picked } = await callAIWithFallback(images, prompt, 50);
     if (!picked) throw new Error('AI API returned an empty response');
 
     const exact = flat.find(b => b === picked);

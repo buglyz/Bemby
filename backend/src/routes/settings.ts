@@ -16,6 +16,7 @@ export const ALLOWED_KEYS = [
   "default_play_duration",
   "default_device_name",
   "ai_model",
+  "ai_fallback_enabled",
   "notify_tg_username",
   "notify_tg_events",
   "ua_presets",
@@ -33,16 +34,21 @@ function maskApiHash(hash: string): string {
   return `${hash.slice(0, 4)}****${hash.slice(-4)}`;
 }
 
-router.get("/", (_req, res) => {
+/** Returns all settings minus internal migration flags, with the API hash masked. */
+function getClientSettings(): Record<string, string> {
   const rows = db
-    .prepare("SELECT key, value FROM settings")
+    .prepare("SELECT key, value FROM settings WHERE key NOT LIKE 'migration:%'")
     .all() as SettingRow[];
   const result = Object.fromEntries(rows.map((r) => [r.key, r.value]));
   // Never expose the raw hash to the client
   if (result.default_tg_api_hash) {
     result.default_tg_api_hash = maskApiHash(result.default_tg_api_hash);
   }
-  res.json(result);
+  return result;
+}
+
+router.get("/", (_req, res) => {
+  res.json(getClientSettings());
 });
 
 router.put("/", (req, res) => {
@@ -67,14 +73,7 @@ router.put("/", (req, res) => {
   // Reschedule if daily-run check toggled
   if ("check_daily_run" in updates) refreshScheduler();
 
-  const rows = db
-    .prepare("SELECT key, value FROM settings")
-    .all() as SettingRow[];
-  const result = Object.fromEntries(rows.map((r) => [r.key, r.value]));
-  if (result.default_tg_api_hash) {
-    result.default_tg_api_hash = maskApiHash(result.default_tg_api_hash);
-  }
-  res.json(result);
+  res.json(getClientSettings());
 });
 
 // Test TCP reachability through a SOCKS proxy (target: 1.1.1.1:80)

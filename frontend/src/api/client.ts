@@ -148,6 +148,12 @@ export type Proxy = {
 export type CustomAction =
   | { type: "send_command"; content: string; maxRetries?: number }
   | {
+      type: "send_contact_message";
+      contact: string;
+      content: string;
+      maxRetries?: number;
+    }
+  | {
       type: "wait_reply";
       maxWaitMs: number;
       successContains?: string;
@@ -157,6 +163,15 @@ export type CustomAction =
   | { type: "delay"; waitMs: number }
   | {
       type: "click_button";
+      button: string;
+      maxRetries: number;
+      maxWaitMs: number;
+      successContains?: string;
+      failContains?: string;
+    }
+  | {
+      type: "click_message_button";
+      contact: string;
       button: string;
       maxRetries: number;
       maxWaitMs: number;
@@ -1012,6 +1027,13 @@ export const tgClientApi = {
         joined?: boolean;
         requestSent?: boolean;
       }>(`/tg-client/${accountId}/join/${encodeURIComponent(chatId)}`)
+      .then((r) => r.data),
+
+  leave: (accountId: number, chatId: string) =>
+    api
+      .post<{ ok: boolean }>(
+        `/tg-client/${accountId}/leave/${encodeURIComponent(chatId)}`,
+      )
       .then((r) => r.data),
 
   membership: (accountId: number, chatId: string) =>

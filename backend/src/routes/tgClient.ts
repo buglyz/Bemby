@@ -34,6 +34,7 @@ import {
   clearCachedMessages,
   syncMessagesInBackground,
   joinChannel,
+  leaveChat,
   getCachedDialogs,
   cacheDialogs,
   syncDialogsInBackground,
@@ -745,6 +746,18 @@ router.post("/:accountId/join/:chatId", async (req, res) => {
     const entry = await getLiveClient(accountId);
     const result = await joinChannel(entry, chatId);
     res.json({ ok: true, ...result });
+  } catch (err: any) {
+    tgError(err, accountId, res);
+  }
+});
+
+router.post("/:accountId/leave/:chatId", async (req, res) => {
+  const accountId = Number(req.params.accountId);
+  const chatId = decodeURIComponent(req.params.chatId);
+  try {
+    const entry = await getLiveClient(accountId);
+    await leaveChat(entry, chatId);
+    res.json({ ok: true });
   } catch (err: any) {
     tgError(err, accountId, res);
   }

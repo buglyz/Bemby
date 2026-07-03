@@ -898,6 +898,20 @@
           </button>
         </template>
       </template>
+      <template
+        v-if="ctxMenu?.dialog.type === 'group' || ctxMenu?.dialog.type === 'channel'"
+      >
+        <div class="tgc-ctx-divider"></div>
+        <button class="tgc-ctx-item tgc-ctx-danger" @click.stop="ctxLeave">
+          <i class="fa-solid fa-arrow-right-from-bracket"></i>
+          <template v-if="ctxConfirmLeave">
+            {{ ctxMenu?.dialog.type === "channel" ? "Confirm leave channel" : "Confirm leave group" }}
+          </template>
+          <template v-else>
+            {{ ctxMenu?.dialog.type === "channel" ? "Leave channel" : "Leave group" }}
+          </template>
+        </button>
+      </template>
     </div>
 
     <!-- Emoji reaction picker -->
@@ -1269,6 +1283,7 @@ const threadEl = ref<HTMLElement | null>(null);
 // Context menu for dialog actions
 const ctxMenu = ref<{ dialog: TgDialog; x: number; y: number } | null>(null);
 const ctxFolderExpanded = ref(false);
+const ctxConfirmLeave = ref(false);
 // ── Priority request management ───────────────────────────────────────────────
 // bgDialogCtrl: the in-flight background 200-dialog fetch -- aborted when the
 // user initiates any action so their request gets the connection immediately.
@@ -1429,6 +1444,7 @@ function onDialogTouchEnd() {
 function closeCtx() {
   ctxMenu.value = null;
   ctxFolderExpanded.value = false;
+  ctxConfirmLeave.value = false;
 }
 
 async function ctxMute(secs: number) {
@@ -1471,6 +1487,39 @@ async function ctxPin(pinned: boolean) {
     }, 2000);
   } catch {
     /* silent */
+  }
+}
+
+async function ctxLeave() {
+  if (!ctxMenu.value || !selectedAccountId.value) return;
+  // First click arms the confirmation; second click performs the leave.
+  if (!ctxConfirmLeave.value) {
+    ctxConfirmLeave.value = true;
+    return;
+  }
+  const { dialog } = ctxMenu.value;
+  const isChannel = dialog.type === "channel";
+  closeCtx();
+  try {
+    await tgClientApi.leave(selectedAccountId.value, dialog.chatId);
+    // Remove from the dialog list; close the chat if it was open
+    const idx = dialogs.value.findIndex((d) => d.chatId === dialog.chatId);
+    if (idx !== -1) dialogs.value.splice(idx, 1);
+    if (activeChatId.value === dialog.chatId) {
+      if (activeChat.value) activeChat.value = { ...activeChat.value, left: true };
+    }
+    copyToast.value = isChannel ? "Left channel" : "Left group";
+    if (copyToastTimer) clearTimeout(copyToastTimer);
+    copyToastTimer = setTimeout(() => {
+      copyToast.value = "";
+    }, 2000);
+  } catch (e: any) {
+    copyToast.value =
+      e?.response?.data?.error ?? e?.message ?? "Failed to leave";
+    if (copyToastTimer) clearTimeout(copyToastTimer);
+    copyToastTimer = setTimeout(() => {
+      copyToast.value = "";
+    }, 4000);
   }
 }
 
@@ -4995,6 +5044,15 @@ async function saveContactEdit() {
   width: 16px;
   text-align: center;
   color: #666;
+}
+
+.tgc-ctx-danger,
+.tgc-ctx-danger i {
+  color: #e0245e;
+}
+
+.tgc-ctx-danger:hover {
+  background: #fdecef;
 }
 
 .tgc-ctx-divider {

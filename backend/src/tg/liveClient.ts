@@ -1525,6 +1525,32 @@ export async function joinChannel(
   }
 }
 
+// Leave a group or channel. Branches on entity type: supergroups/channels use
+// channels.LeaveChannel; legacy basic groups use messages.DeleteChatUser.
+export async function leaveChat(
+  entry: LiveEntry,
+  chatId: string,
+): Promise<void> {
+  await ensureEntityCached(entry, chatId);
+  const entity = entry.entityCache.get(chatId);
+  if (!entity) throw new Error("Chat not found");
+  if (entity instanceof Api.Channel) {
+    await entry.client.invoke(
+      new Api.channels.LeaveChannel({ channel: entity }),
+    );
+    (entity as any).left = true;
+  } else if (entity instanceof Api.Chat) {
+    await entry.client.invoke(
+      new Api.messages.DeleteChatUser({
+        chatId: (entity as any).id,
+        userId: new Api.InputUserSelf(),
+      }),
+    );
+  } else {
+    throw new Error("Only groups and channels can be left");
+  }
+}
+
 export async function markRead(
   entry: LiveEntry,
   chatId: string,

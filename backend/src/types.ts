@@ -77,6 +77,14 @@ export type JobTemplate = {
 export type CustomAction =
   | { type: "send_command"; content: string; maxRetries?: number }
   | {
+      // Send a message/command to a specific contact (bot/group/user), rather than the
+      // job's configured bot. Supports the same {aiInput} and command expansion as send_command.
+      type: "send_contact_message";
+      contact: string;
+      content: string;
+      maxRetries?: number;
+    }
+  | {
       type: "wait_reply";
       maxWaitMs: number;
       successContains?: string;
@@ -86,6 +94,18 @@ export type CustomAction =
   | { type: "delay"; waitMs: number }
   | {
       type: "click_button";
+      button: string;
+      maxRetries: number;
+      maxWaitMs: number;
+      successContains?: string;
+      failContains?: string;
+    }
+  | {
+      // Click a button on the latest message from a specific contact (bot/group/user),
+      // rather than from the job's configured bot. Seeds from the contact's last received
+      // message and otherwise waits up to maxWaitMs for an incoming one with buttons.
+      type: "click_message_button";
+      contact: string;
       button: string;
       maxRetries: number;
       maxWaitMs: number;

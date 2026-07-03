@@ -93,6 +93,33 @@ function waitForButtonsInChat(
   });
 }
 
+// Waits for the next new message arriving in a specific chat. Never rejects -- resolves null
+// on timeout or abort.
+function waitForNewMessageInChat(
+  client: TelegramClient,
+  chat: Api.TypeEntityLike,
+  maxMs: number,
+  signal?: AbortSignal,
+): Promise<Api.Message | null> {
+  return new Promise((resolve) => {
+    if (signal?.aborted) {
+      resolve(null);
+      return;
+    }
+    const finish = (msg: Api.Message | null) => {
+      clearTimeout(timer);
+      client.removeEventHandler(handler, new NewMessage({}));
+      signal?.removeEventListener("abort", onAbort);
+      resolve(msg);
+    };
+    const timer = setTimeout(() => finish(null), maxMs);
+    const onAbort = () => finish(null);
+    signal?.addEventListener("abort", onAbort, { once: true });
+    const handler = async (event: NewMessageEvent) => finish(event.message as Api.Message);
+    client.addEventHandler(handler, new NewMessage({ chats: [chat] }));
+  });
+}
+
 // Some groups post an in-group verification message with a button that must be clicked to
 // gain real access after joining. Best-effort: waits for that message, clicks the button whose
 // text contains buttonMatch (or the sole button), and appends the outcome to step.result.
@@ -146,12 +173,23 @@ async function clickGroupVerification(
   }
 
   const peer = await client.getInputEntity(chat);
-  const answer = (await client.invoke(
-    new Api.messages.GetBotCallbackAnswer({ peer, msgId: buttonsMsg.id, data }),
-  )) as Api.messages.BotCallbackAnswer;
   step.clickedButton = (target as any).text as string;
-  if (answer.message) step.callbackAnswer = answer.message;
-  step.result = `${step.result} + verified`;
+  try {
+    const answer = (await client.invoke(
+      new Api.messages.GetBotCallbackAnswer({ peer, msgId: buttonsMsg.id, data }),
+    )) as Api.messages.BotCallbackAnswer;
+    if (answer.message) step.callbackAnswer = answer.message;
+    step.result = `${step.result} + verified`;
+  } catch (err: any) {
+    // The callback reached the bot but it never answered -- common for verification bots
+    // that process the click without calling answerCallbackQuery. The click was delivered,
+    // so treat the verification as done rather than failing the whole join.
+    if (err?.message?.includes("BOT_RESPONSE_TIMEOUT")) {
+      step.result = `${step.result} + verify clicked (no bot confirmation)`;
+    } else {
+      throw err;
+    }
+  }
 }
 
 // Collects messages from the target until one has buttons or timeout fires.
@@ -449,6 +487,48 @@ export async function runCustom(
                 break;
               }
 
+              case "send_contact_message": {
+                const contact = action.contact.trim();
+                const entity = await client.getEntity(contact);
+                let content = action.content;
+                if (hasAiInput(content)) {
+                  const length = parseAiInputLength(content);
+                  const parsed = await parseMessages(
+                    lastMessages,
+                    client,
+                    signal,
+                  );
+                  if (parsed.images[0]) step.preClickImage = parsed.images[0];
+                  step.aiPrompt = buildCaptchaPrompt(length);
+                  const aiStart = Date.now();
+                  const aiResult = await recognizeCaptchaWithAI(
+                    parsed.images,
+                    length,
+                  )
+                    .then((r) => {
+                      step.aiResponse = r.response;
+                      return r;
+                    })
+                    .finally(() => {
+                      step.aiDurationMs = Date.now() - aiStart;
+                    });
+                  if (length && aiResult.text.length !== length) {
+                    throw new Error(
+                      `AI returned ${aiResult.text.length} chars ("${aiResult.text}") but expected ${length}`,
+                    );
+                  }
+                  content = content.replace(
+                    /\{aiInput(?::\d+)?\}/,
+                    aiResult.text,
+                  );
+                }
+                const expanded = expandCommand(content);
+                step.label = `Send to ${contact}: "${expanded}"`;
+                await client.sendMessage(entity, { message: expanded });
+                step.result = "Sent";
+                break;
+              }
+
               case "wait_reply": {
                 const { successContains, failContains } = action;
                 const hints = [
@@ -723,6 +803,234 @@ export async function runCustom(
                       }
 
                       // Check success/fail text in callback answer or response message
+                      if (action.successContains || action.failContains) {
+                        const texts = [answer.message ?? '', responseMsg?.message ?? ''].filter(Boolean).join('\n');
+                        if (action.failContains && texts.includes(action.failContains)) {
+                          throw new Error(`Reply indicates failure: "${action.failContains}" detected`);
+                        }
+                        if (action.successContains && !texts.includes(action.successContains)) {
+                          throw new Error(`Expected success indicator "${action.successContains}" not found in response`);
+                        }
+                      }
+
+                      step.clickedButton = btnText;
+                      step.result = `Clicked "${btnText}"`;
+                      break;
+                    }
+                    if (clicked) break;
+                  }
+                }
+
+                if (!clicked)
+                  throw new Error(
+                    `Button "${targetText!}" not found after ${action.maxRetries + 1} attempt(s)`,
+                  );
+                break;
+              }
+
+              case "click_message_button": {
+                const contact = action.contact.trim();
+                step.label = `Click button "${action.button}" from ${contact}`;
+
+                const entity = await client.getEntity(contact);
+                const peer = await client.getInputEntity(entity);
+
+                const findButtonsMsg = (msgs: Api.Message[]): Api.Message | null =>
+                  msgs.find(
+                    (m) =>
+                      (m as any).replyMarkup instanceof Api.ReplyInlineMarkup,
+                  ) ?? null;
+
+                // Seed from the contact's most recent messages (newest first); otherwise wait
+                // for an incoming message carrying buttons.
+                let buttonsMsg: Api.Message | null = findButtonsMsg(
+                  (await client.getMessages(entity, { limit: 10 })) as Api.Message[],
+                );
+                let preClickImages: string[] = [];
+                if (!buttonsMsg) {
+                  const msgs = await waitForButtonsInChat(
+                    client,
+                    entity,
+                    action.maxWaitMs,
+                    signal,
+                  );
+                  buttonsMsg =
+                    [...msgs]
+                      .reverse()
+                      .find(
+                        (m) =>
+                          (m as any).replyMarkup instanceof
+                          Api.ReplyInlineMarkup,
+                      ) ?? null;
+                }
+                if (buttonsMsg) {
+                  const preParsed = await parseMessages(
+                    [buttonsMsg],
+                    client,
+                    signal,
+                  );
+                  if (preParsed.html) step.preClickHtml = preParsed.html;
+                  if (preParsed.images.length) {
+                    step.preClickImage = preParsed.images[0];
+                    preClickImages = preParsed.images;
+                  }
+                  if (preParsed.hasMedia)
+                    step.preClickHasMedia = preParsed.hasMedia;
+                  if (preParsed.buttons.length)
+                    step.preClickButtons = preParsed.buttons;
+                }
+                if (!buttonsMsg)
+                  throw new Error("No message with buttons available");
+
+                const btnMarkup = (buttonsMsg as any)
+                  .replyMarkup as Api.ReplyInlineMarkup;
+                const allBtnRows = btnMarkup.rows;
+                const flat = allBtnRows.flatMap((row) =>
+                  row.buttons.map((b: any) => b.text as string),
+                );
+
+                let targetText: string;
+                let useExactMatch: boolean;
+
+                if (action.button === "{anyBtn}") {
+                  if (!flat.length)
+                    throw new Error("No buttons available for {anyBtn}");
+                  targetText = flat[Math.floor(Math.random() * flat.length)];
+                  useExactMatch = true;
+                } else if (isAiBtn(action.button)) {
+                  const buttons: string[][] = allBtnRows.map((row) =>
+                    row.buttons.map((b: any) => b.text as string),
+                  );
+                  const hint = parseAiBtnHint(action.button);
+                  const aiStart = Date.now();
+                  const aiResult = await selectButtonWithAI(
+                    buttons,
+                    step.preClickHtml ?? buttonsMsg.message ?? "",
+                    preClickImages,
+                    hint,
+                    action.maxRetries,
+                  )
+                    .then((r) => {
+                      step.aiPrompt = r.prompt;
+                      step.aiResponse = r.response;
+                      if (r.retries.length) step.aiRetries = r.retries;
+                      return r;
+                    })
+                    .finally(() => {
+                      step.aiDurationMs = Date.now() - aiStart;
+                    });
+                  targetText = aiResult.button;
+                  useExactMatch = true;
+                } else {
+                  targetText = action.button;
+                  useExactMatch = false;
+                }
+
+                let clicked = false;
+                let retryCount = 0;
+
+                for (
+                  let attempt = 0;
+                  attempt <= action.maxRetries && !clicked;
+                  attempt++
+                ) {
+                  if (attempt > 0) {
+                    retryCount = attempt;
+                    const msgs = await waitForButtonsInChat(
+                      client,
+                      entity,
+                      action.maxWaitMs,
+                      signal,
+                    ).catch(() => null);
+                    if (msgs) {
+                      const bm = [...msgs]
+                        .reverse()
+                        .find(
+                          (m) =>
+                            (m as any).replyMarkup instanceof
+                            Api.ReplyInlineMarkup,
+                        );
+                      if (bm) buttonsMsg = bm;
+                    }
+                  }
+
+                  const rows = (
+                    (buttonsMsg as any).replyMarkup as Api.ReplyInlineMarkup
+                  ).rows;
+                  for (const row of rows) {
+                    for (const btn of row.buttons) {
+                      const btnText = (btn as any).text as string;
+                      const matches = useExactMatch
+                        ? btnText === targetText
+                        : btnText.includes(targetText);
+                      if (!matches) continue;
+
+                      const clickAbort = new AbortController();
+                      const forwardAbort = () => clickAbort.abort();
+                      signal?.addEventListener("abort", forwardAbort, {
+                        once: true,
+                      });
+
+                      const editPromise = waitForBotMessageEdit(
+                        client,
+                        buttonsMsg!.id,
+                        10_000,
+                        clickAbort.signal,
+                      );
+                      const newMsgPromise = waitForNewMessageInChat(
+                        client,
+                        entity,
+                        10_000,
+                        clickAbort.signal,
+                      );
+
+                      const callbackData = (btn as Api.KeyboardButtonCallback)
+                        .data;
+                      let answer: Api.messages.BotCallbackAnswer;
+                      try {
+                        answer = (await client.invoke(
+                          new Api.messages.GetBotCallbackAnswer({
+                            peer,
+                            msgId: buttonsMsg!.id,
+                            data: callbackData,
+                          }),
+                        )) as Api.messages.BotCallbackAnswer;
+                      } catch (err) {
+                        clickAbort.abort();
+                        signal?.removeEventListener("abort", forwardAbort);
+                        throw err;
+                      }
+
+                      if (answer.message) step.callbackAnswer = answer.message;
+                      clicked = true;
+                      step.retryCount = retryCount;
+
+                      const taggedEdit = editPromise.then((m) => ({
+                        msg: m,
+                        src: "edit" as const,
+                      }));
+                      const taggedNew = newMsgPromise.then((m) => ({
+                        msg: m,
+                        src: "new_message" as const,
+                      }));
+                      const { msg: responseMsg, src: respSrc } =
+                        await Promise.race([taggedEdit, taggedNew]);
+                      signal?.removeEventListener("abort", forwardAbort);
+                      if (responseMsg && !signal?.aborted) {
+                        step.responseSource = respSrc;
+                        const parsed = await parseMessages(
+                          [responseMsg],
+                          client,
+                          signal,
+                        );
+                        step.responseHtml = parsed.html || undefined;
+                        step.responseImage = parsed.images[0];
+                        step.responseHasMedia = parsed.hasMedia || undefined;
+                        step.responseButtons = parsed.buttons.length
+                          ? parsed.buttons
+                          : undefined;
+                      }
+
                       if (action.successContains || action.failContains) {
                         const texts = [answer.message ?? '', responseMsg?.message ?? ''].filter(Boolean).join('\n');
                         if (action.failContains && texts.includes(action.failContains)) {

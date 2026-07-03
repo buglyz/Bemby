@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, raw } from "express";
 import dns from "dns";
 import net from "net";
 import {
@@ -6,6 +6,7 @@ import {
   loadDialogs,
   getMessages,
   sendMessage,
+  sendFile,
   getContacts,
   addContact,
   editContact,
@@ -366,6 +367,7 @@ router.post("/:accountId/messages/:chatId", async (req, res) => {
         hasPhoto: false,
         hasDocument: false,
         hasSticker: false,
+        fileName: null,
         buttons: null,
         reactions: null,
         replyToId: replyToMsgId ? Number(replyToMsgId) : null,
@@ -386,6 +388,69 @@ router.post("/:accountId/messages/:chatId", async (req, res) => {
     tgError(err, accountId, res);
   }
 });
+
+// POST /:accountId/messages/:chatId/file -- send a photo or document.
+// Body is the raw file bytes (application/octet-stream); metadata is passed as
+// query params so we skip base64/multipart overhead.
+router.post(
+  "/:accountId/messages/:chatId/file",
+  raw({ type: () => true, limit: "50mb" }),
+  async (req, res) => {
+    const accountId = Number(req.params.accountId);
+    const chatId = req.params.chatId;
+    const buf = req.body as Buffer;
+    if (!Buffer.isBuffer(buf) || buf.length === 0) {
+      res.status(400).json({ error: "file is required" });
+      return;
+    }
+    const filename = String(req.query.filename || "file");
+    const caption = req.query.caption ? String(req.query.caption) : undefined;
+    const forceDocument = req.query.asDocument === "1";
+    const replyToMsgId = req.query.replyToMsgId
+      ? Number(req.query.replyToMsgId)
+      : undefined;
+    try {
+      const entry = await getLiveClient(accountId);
+      const result = await sendFile(entry, chatId, {
+        buffer: buf,
+        filename,
+        caption,
+        forceDocument,
+        replyToMsgId,
+      });
+      cacheMessages(accountId, chatId, [
+        {
+          id: result.id,
+          text: caption ?? "",
+          html: null,
+          date: result.date,
+          fromMe: true,
+          isRead: false,
+          fromId: null,
+          fromName: null,
+          hasPhoto: result.hasPhoto,
+          hasDocument: result.hasDocument,
+          hasSticker: false,
+          fileName: result.hasDocument ? filename : null,
+          buttons: null,
+          reactions: null,
+          replyToId: replyToMsgId ?? null,
+          replyToText: null,
+          replyToName: null,
+          replyCount: null,
+        },
+      ]);
+      res.json(result);
+      for (const delay of [1500, 4000, 9000]) {
+        setTimeout(() => {
+          syncMessagesInBackground(accountId, chatId).catch(() => {});
+        }, delay);
+      }
+    } catch (err: any) {
+      tgError(err, accountId, res);
+    }
+  },
+);
 
 // GET /:accountId/contacts
 router.get("/:accountId/contacts", async (req, res) => {

@@ -1,4 +1,5 @@
 import { TelegramClient, Api, Logger } from "telegram";
+import { CustomFile } from "telegram/client/uploads";
 import { LogLevel } from "telegram/extensions/Logger";
 import { StringSession } from "telegram/sessions";
 import { NewMessage, Raw, type NewMessageEvent } from "telegram/events";
@@ -36,6 +37,7 @@ export type TgMsgPayload = {
   hasPhoto: boolean;
   hasDocument: boolean;
   hasSticker: boolean;
+  fileName: string | null;
   buttons: TgButton[][] | null;
   reactions: TgReaction[] | null;
   replyToId: number | null;
@@ -261,6 +263,19 @@ function isStickerDoc(media: Api.TypeMessageMedia | null | undefined): boolean {
   return doc.attributes.some((a) => a instanceof Api.DocumentAttributeSticker);
 }
 
+// Filename of a document attachment, if the sender provided one.
+function docFileName(
+  media: Api.TypeMessageMedia | null | undefined,
+): string | null {
+  if (!(media instanceof Api.MessageMediaDocument)) return null;
+  const doc = (media as Api.MessageMediaDocument).document;
+  if (!(doc instanceof Api.Document)) return null;
+  const attr = doc.attributes.find(
+    (a) => a instanceof Api.DocumentAttributeFilename,
+  ) as Api.DocumentAttributeFilename | undefined;
+  return attr?.fileName ?? null;
+}
+
 function resolveProxy(proxyId: string | null) {
   if (!proxyId) return undefined;
   try {
@@ -406,6 +421,7 @@ export async function getLiveClient(accountId: number): Promise<LiveEntry> {
           msg.media instanceof Api.MessageMediaDocument &&
           !isStickerDoc(msg.media),
         hasSticker: isStickerDoc(msg.media),
+        fileName: docFileName(msg.media),
         buttons: extractButtons(msg),
         reactions: extractReactions(msg),
         replyToId: (msg.replyTo as any)?.replyToMsgId ?? null,
@@ -589,6 +605,7 @@ export async function getMessages(
         msg.media instanceof Api.MessageMediaDocument &&
         !isStickerDoc(msg.media),
       hasSticker: isStickerDoc(msg.media),
+      fileName: docFileName(msg.media),
       buttons: extractButtons(msg as Api.Message),
       reactions: extractReactions(msg as Api.Message),
       replyToId,
@@ -641,6 +658,7 @@ export async function getPinnedMessage(
     hasDocument:
       msg.media instanceof Api.MessageMediaDocument && !isStickerDoc(msg.media),
     hasSticker: isStickerDoc(msg.media),
+    fileName: docFileName(msg.media),
     buttons: extractButtons(msg),
     reactions: null,
     replyToId: null,
@@ -666,6 +684,43 @@ export async function sendMessage(
     ...(replyToMsgId ? { replyTo: replyToMsgId } : {}),
   });
   return { id: result.id, date: result.date };
+}
+
+export async function sendFile(
+  entry: LiveEntry,
+  chatId: string,
+  opts: {
+    buffer: Buffer;
+    filename: string;
+    caption?: string;
+    forceDocument?: boolean;
+    replyToMsgId?: number;
+  },
+): Promise<{ id: number; date: number; hasPhoto: boolean; hasDocument: boolean }> {
+  await ensureEntityCached(entry, chatId);
+  const entity = entry.entityCache.get(chatId);
+  if (!entity) throw new Error("Chat not found");
+
+  const toUpload = new CustomFile(
+    opts.filename,
+    opts.buffer.length,
+    "",
+    opts.buffer,
+  );
+  const result = await entry.client.sendFile(entity, {
+    file: toUpload,
+    caption: opts.caption,
+    forceDocument: opts.forceDocument,
+    ...(opts.replyToMsgId ? { replyTo: opts.replyToMsgId } : {}),
+  });
+  // Telegram sends images without forceDocument as photos, everything else as documents.
+  const hasPhoto = result.photo != null;
+  return {
+    id: result.id,
+    date: result.date,
+    hasPhoto,
+    hasDocument: !hasPhoto,
+  };
 }
 
 export async function getContacts(entry: LiveEntry): Promise<TgContactItem[]> {
@@ -1257,6 +1312,7 @@ export async function getThreadMessages(
         msg.media instanceof Api.MessageMediaDocument &&
         !isStickerDoc(msg.media),
       hasSticker: isStickerDoc(msg.media),
+      fileName: docFileName(msg.media),
       buttons: extractButtons(msg),
       reactions: extractReactions(msg),
       replyToId: null,

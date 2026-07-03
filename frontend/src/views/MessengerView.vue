@@ -401,6 +401,7 @@
                         :src="photoUrl(msg.id)"
                         class="tgc-msg-photo"
                         loading="lazy"
+                        @click="lightboxUrl = photoUrl(msg.id)"
                         @error="
                           (e: Event) =>
                             ((e.target as HTMLImageElement).style.display =
@@ -418,18 +419,27 @@
                               'none')
                         "
                       />
+                      <a
+                        v-if="msg.hasDocument"
+                        class="tgc-msg-doc"
+                        :href="photoUrl(msg.id)"
+                        :download="msg.fileName || 'file'"
+                        target="_blank"
+                        rel="noopener"
+                      >
+                        <i
+                          class="fa-solid fa-file-arrow-down tgc-msg-doc-icon"
+                        ></i>
+                        <span class="tgc-msg-doc-name">{{
+                          msg.fileName || "File"
+                        }}</span>
+                      </a>
                       <div
                         v-if="msg.text || msg.html"
                         class="tgc-msg-text"
                         v-html="msg.html ?? escMsgText(msg.text)"
                         @click="onMsgLinkClick($event)"
                       ></div>
-                      <div
-                        v-if="!msg.text && msg.hasDocument"
-                        class="tgc-msg-text tgc-msg-doc"
-                      >
-                        <i class="fa-solid fa-file"></i> Document
-                      </div>
                       <!-- Reactions -->
                       <div v-if="msg.reactions?.length" class="tgc-reactions">
                         <button
@@ -561,6 +571,29 @@
                   <i class="fa-solid fa-xmark"></i>
                 </button>
               </div>
+              <!-- Pending attachment preview -->
+              <div v-if="pendingFile" class="tgc-attach-strip">
+                <img
+                  v-if="pendingPreviewUrl"
+                  :src="pendingPreviewUrl"
+                  class="tgc-attach-thumb"
+                />
+                <i v-else class="fa-solid fa-file tgc-attach-icon"></i>
+                <div class="tgc-attach-info">
+                  <div class="tgc-attach-name">{{ pendingFile.name }}</div>
+                  <label class="tgc-attach-asdoc">
+                    <input type="checkbox" v-model="sendAsDocument" />
+                    Send as file
+                  </label>
+                </div>
+                <button
+                  class="tgc-icon-btn"
+                  @click="clearPendingFile"
+                  title="Remove attachment"
+                >
+                  <i class="fa-solid fa-xmark"></i>
+                </button>
+              </div>
               <div class="tgc-compose-row">
                 <!-- Commands button for bots -->
                 <button
@@ -572,12 +605,26 @@
                 >
                   /
                 </button>
+                <button
+                  class="tgc-attach-btn"
+                  title="Attach photo or file"
+                  @click="triggerFilePick"
+                >
+                  <i class="fa-solid fa-paperclip"></i>
+                </button>
+                <input
+                  ref="fileInput"
+                  type="file"
+                  style="display: none"
+                  @change="onFileSelected"
+                />
                 <textarea
                   v-model="inputText"
                   class="tgc-input"
-                  placeholder="Write a message..."
+                  :placeholder="pendingFile ? 'Add a caption...' : 'Write a message...'"
                   rows="1"
                   @keydown="onComposeKey"
+                  @paste="onPaste"
                   @compositionstart="composing = true"
                   @compositionend="composing = false"
                   @input="autoResize"
@@ -585,7 +632,7 @@
                 ></textarea>
                 <button
                   class="tgc-send-btn"
-                  :disabled="!inputText.trim() || sending"
+                  :disabled="(!inputText.trim() && !pendingFile) || sending"
                   @click="sendMessage"
                   title="Send (Enter)"
                 >
@@ -1097,6 +1144,13 @@
       </div>
     </div>
   </div>
+  <!-- Image lightbox -->
+  <div v-if="lightboxUrl" class="tgc-lightbox" @click="lightboxUrl = null">
+    <button class="tgc-lightbox-close" title="Close" @click.stop="lightboxUrl = null">
+      <i class="fa-solid fa-xmark"></i>
+    </button>
+    <img :src="lightboxUrl" class="tgc-lightbox-img" @click.stop />
+  </div>
   <!-- end tgc-page -->
 </template>
 
@@ -1219,6 +1273,15 @@ const addContactOk = ref(false);
 const messagesEl = ref<HTMLElement | null>(null);
 const inputEl = ref<HTMLTextAreaElement | null>(null);
 const composing = ref(false);
+
+// Attachment composer state
+const fileInput = ref<HTMLInputElement | null>(null);
+const pendingFile = ref<File | null>(null);
+const pendingPreviewUrl = ref<string | null>(null);
+const sendAsDocument = ref(false);
+
+// Image lightbox
+const lightboxUrl = ref<string | null>(null);
 const showMobileChat = ref(false);
 const showProfile = ref(false);
 const webViewPanel = ref<{ url: string; title: string } | null>(null);
@@ -2426,6 +2489,7 @@ async function sendThreadMessage() {
       hasPhoto: false,
       hasDocument: false,
       hasSticker: false,
+      fileName: null,
       buttons: null,
       reactions: null,
       replyToId: threadRootMsg.value.id,
@@ -3015,7 +3079,119 @@ function onComposeKey(e: KeyboardEvent) {
   }
 }
 
+function triggerFilePick() {
+  fileInput.value?.click();
+}
+
+function onFileSelected(e: Event) {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = ""; // allow re-selecting the same file later
+  if (!file) return;
+  if (pendingPreviewUrl.value) URL.revokeObjectURL(pendingPreviewUrl.value);
+  pendingFile.value = file;
+  pendingPreviewUrl.value = file.type.startsWith("image/")
+    ? URL.createObjectURL(file)
+    : null;
+  // Non-image files default to being sent as a document.
+  sendAsDocument.value = !file.type.startsWith("image/");
+  nextTick(() => inputEl.value?.focus());
+}
+
+function clearPendingFile() {
+  if (pendingPreviewUrl.value) URL.revokeObjectURL(pendingPreviewUrl.value);
+  pendingFile.value = null;
+  pendingPreviewUrl.value = null;
+  sendAsDocument.value = false;
+}
+
+// Attach an image pasted from the clipboard (e.g. a screenshot).
+function onPaste(e: ClipboardEvent) {
+  const items = e.clipboardData?.items;
+  if (!items) return;
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    if (item.kind !== "file" || !item.type.startsWith("image/")) continue;
+    const blob = item.getAsFile();
+    if (!blob) continue;
+    e.preventDefault();
+    const ext = item.type.split("/")[1] || "png";
+    const file = new File([blob], `pasted-image.${ext}`, { type: item.type });
+    if (pendingPreviewUrl.value) URL.revokeObjectURL(pendingPreviewUrl.value);
+    pendingFile.value = file;
+    pendingPreviewUrl.value = URL.createObjectURL(file);
+    sendAsDocument.value = false;
+    return;
+  }
+}
+
+async function sendFileMessage() {
+  const file = pendingFile.value;
+  if (!file || !selectedAccountId.value || !activeChatId.value || sending.value)
+    return;
+  sending.value = true;
+  const caption = inputText.value.trim();
+  const replyMsg = replyingTo.value;
+  const asDocument = sendAsDocument.value;
+  inputText.value = "";
+  replyingTo.value = null;
+  clearPendingFile();
+  if (inputEl.value) inputEl.value.style.height = "auto";
+  try {
+    const result = await tgClientApi.sendFile(
+      selectedAccountId.value,
+      activeChatId.value,
+      file,
+      { caption: caption || undefined, asDocument, replyToMsgId: replyMsg?.id },
+    );
+    messages.value.push({
+      id: result.id,
+      text: caption,
+      html: null,
+      date: result.date,
+      fromMe: true,
+      isRead: false,
+      fromId: null,
+      fromName: null,
+      hasPhoto: result.hasPhoto,
+      hasDocument: result.hasDocument,
+      hasSticker: false,
+      fileName: result.hasDocument ? file.name : null,
+      buttons: null,
+      reactions: null,
+      replyToId: replyMsg?.id ?? null,
+      replyToText: replyMsg?.text ?? null,
+      replyToName: null,
+      replyCount: null,
+    });
+    await scrollBottom(true);
+    const idx = dialogs.value.findIndex((d) => d.chatId === activeChatId.value);
+    if (idx !== -1) {
+      dialogs.value[idx] = {
+        ...dialogs.value[idx],
+        lastMessage: {
+          text: caption || (asDocument ? "File" : "Photo"),
+          date: result.date,
+          fromMe: true,
+        },
+      };
+      const [moved] = dialogs.value.splice(idx, 1);
+      dialogs.value.unshift(moved);
+    }
+  } catch (e: any) {
+    console.error("Send file failed:", e);
+  } finally {
+    sending.value = false;
+    await nextTick();
+    inputEl.value?.focus();
+  }
+}
+
 async function sendMessage() {
+  if (pendingFile.value) {
+    await sendFileMessage();
+    return;
+  }
   const text = inputText.value.trim();
   if (!text || !selectedAccountId.value || !activeChatId.value || sending.value)
     return;
@@ -3045,6 +3221,7 @@ async function sendMessage() {
       hasPhoto: false,
       hasDocument: false,
       hasSticker: false,
+      fileName: null,
       buttons: null,
       reactions: null,
       replyToId: replyMsg?.id ?? null,
@@ -3874,9 +4051,33 @@ async function saveContactEdit() {
 }
 
 .tgc-msg-doc {
-  color: #999;
-  font-style: italic;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 240px;
+  padding: 8px 12px;
+  margin-bottom: 4px;
+  background: rgba(67, 97, 238, 0.08);
+  border-radius: 8px;
+  color: #4361ee;
   font-size: 13px;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.tgc-msg-doc:hover {
+  background: rgba(67, 97, 238, 0.16);
+}
+
+.tgc-msg-doc-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.tgc-msg-doc-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tgc-msg-photo {
@@ -3885,6 +4086,7 @@ async function saveContactEdit() {
   border-radius: 8px;
   display: block;
   margin-bottom: 4px;
+  cursor: pointer;
 }
 
 .tgc-msg-sticker {
@@ -4260,6 +4462,126 @@ async function saveContactEdit() {
 .tgc-slash-btn.active {
   background: #eef1fb;
   border-color: #4361ee;
+}
+
+/* Attach (paperclip) button */
+.tgc-attach-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #f5f6fa;
+  border: 1px solid #dde0e8;
+  color: #4361ee;
+  font-size: 15px;
+  cursor: pointer;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+
+.tgc-attach-btn:hover {
+  background: #eef1fb;
+  border-color: #4361ee;
+}
+
+/* Pending attachment strip */
+.tgc-attach-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: #f8f9fb;
+  border-bottom: 1px solid #e8e9ed;
+}
+
+.tgc-attach-thumb {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.tgc-attach-icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #eef1fb;
+  border-radius: 6px;
+  color: #4361ee;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.tgc-attach-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.tgc-attach-name {
+  font-size: 13px;
+  color: #1a1a2e;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tgc-attach-asdoc {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #6b7280;
+  cursor: pointer;
+  margin-top: 2px;
+}
+
+/* ── Image lightbox ─────────────────────────────────────────────────────────── */
+.tgc-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  cursor: zoom-out;
+}
+
+.tgc-lightbox-img {
+  max-width: 95vw;
+  max-height: 95vh;
+  object-fit: contain;
+  border-radius: 6px;
+  cursor: default;
+}
+
+.tgc-lightbox-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tgc-lightbox-close:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
 
 /* ── Reply compose strip ────────────────────────────────────────────────────── */

@@ -783,6 +783,7 @@ export type TgMessage = {
   hasPhoto: boolean;
   hasDocument: boolean;
   hasSticker: boolean;
+  fileName: string | null;
   buttons: TgButton[][] | null;
   reactions: TgReaction[] | null;
   replyToId: number | null;
@@ -868,6 +869,35 @@ export const tgClientApi = {
         ...(replyToMsgId ? { replyToMsgId } : {}),
       })
       .then((r) => r.data),
+
+  sendFile: (
+    accountId: number,
+    chatId: string,
+    file: File,
+    opts?: { caption?: string; asDocument?: boolean; replyToMsgId?: number },
+  ) =>
+    file.arrayBuffer().then((buf) =>
+      api
+        .post<{
+          id: number;
+          date: number;
+          hasPhoto: boolean;
+          hasDocument: boolean;
+        }>(
+          `/tg-client/${accountId}/messages/${encodeURIComponent(chatId)}/file`,
+          buf,
+          {
+            headers: { "Content-Type": "application/octet-stream" },
+            params: {
+              filename: file.name,
+              ...(opts?.caption ? { caption: opts.caption } : {}),
+              ...(opts?.asDocument ? { asDocument: "1" } : {}),
+              ...(opts?.replyToMsgId ? { replyToMsgId: opts.replyToMsgId } : {}),
+            },
+          },
+        )
+        .then((r) => r.data),
+    ),
 
   contacts: (accountId: number) =>
     api

@@ -32,7 +32,7 @@
         </a>
       </div>
       <a class="nav-link" href="#" :class="{ active: currentView === 'accounts' }" @click.prevent="setView('accounts')"><i class="fa-solid fa-users"></i>{{ t('nav.accounts') }}</a>
-      <a class="nav-link" href="#" :class="{ active: showMessengerInline }" @click.prevent="openMessenger()"><i class="fa-brands fa-telegram"></i>{{ t('nav.messenger') }}</a>
+      <a class="nav-link" href="#" :class="{ active: currentView === 'messenger' }" @click.prevent="setView('messenger')"><i class="fa-brands fa-telegram"></i>{{ t('nav.messenger') }}</a>
       <a class="nav-link" href="#" :class="{ active: currentView === 'jobs' }" @click.prevent="setView('jobs')"><i class="fa-solid fa-robot"></i>{{ t('nav.jobs') }}</a>
       <a class="nav-link" href="#" :class="{ active: currentView === 'templates' }" @click.prevent="setView('templates')"><i class="fa-solid fa-layer-group"></i>{{ t('nav.templates') }}</a>
       <a class="nav-link" href="#" :class="{ active: currentView === 'logs' }" @click.prevent="setView('logs')"><i class="fa-solid fa-scroll"></i>{{ t('nav.logs') }}</a>
@@ -54,18 +54,10 @@
       </div>
     </nav>
 
-    <main class="main">
-      <TgClientPopup
-        v-if="showMessengerInline"
-        :inline="true"
-        @close="closeMessengerInline"
-      />
-      <component v-else :is="currentComponent" />
+    <main class="main" :class="{ 'main-flush': currentView === 'messenger' }">
+      <component :is="currentComponent" />
     </main>
   </div>
-
-  <!-- Desktop popup (non-mobile only) -->
-  <TgClientPopup v-if="showMessenger" @close="showMessenger = false" />
 
   <!-- Forced password change when default password is detected -->
   <div v-if="showForceChangePassword" class="force-pwd-overlay">
@@ -89,8 +81,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onUnmounted, ref, watch, type Component } from 'vue';
-import TgClientPopup from './components/TgClientPopup.vue';
+import { computed, ref, watch, type Component } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { version } from '../package.json';
 const APP_VERSION = version + (import.meta.env.DEV ? '-dev' : '');
@@ -102,14 +93,16 @@ import TemplatesView from './views/TemplatesView.vue';
 import LogsView from './views/LogsView.vue';
 import SettingsView from './views/SettingsView.vue';
 import HelpView from './views/HelpView.vue';
+import MessengerView from './views/MessengerView.vue';
 
-type ViewName = 'accounts' | 'jobs' | 'templates' | 'settings' | 'logs' | 'help';
+type ViewName = 'accounts' | 'messenger' | 'jobs' | 'templates' | 'settings' | 'logs' | 'help';
 
 const LAST_VIEW_KEY = 'bemby:lastView';
-const VALID_VIEWS: ViewName[] = ['accounts', 'jobs', 'templates', 'settings', 'logs', 'help'];
+const VALID_VIEWS: ViewName[] = ['accounts', 'messenger', 'jobs', 'templates', 'settings', 'logs', 'help'];
 
 const viewComponents: Record<ViewName, Component> = {
   accounts: AccountsView,
+  messenger: MessengerView,
   jobs: JobsView,
   templates: TemplatesView,
   settings: SettingsView,
@@ -121,33 +114,9 @@ const savedView = localStorage.getItem(LAST_VIEW_KEY) as ViewName;
 const currentView = ref<ViewName>(VALID_VIEWS.includes(savedView) ? savedView : 'accounts');
 const currentComponent = computed(() => viewComponents[currentView.value]);
 
-// Track whether the messenger is shown inline (mobile) or as a popup (desktop)
-const mq = window.matchMedia('(max-width: 768px)');
-const isMobile = ref(mq.matches);
-const mqHandler = (e: MediaQueryListEvent) => { isMobile.value = e.matches; };
-mq.addEventListener('change', mqHandler);
-onUnmounted(() => mq.removeEventListener('change', mqHandler));
-
-const showMessenger = ref(false);       // desktop popup
-const showMessengerInline = ref(false); // mobile inline view
-
-function openMessenger() {
-  sidebarOpen.value = false;
-  if (isMobile.value) {
-    showMessengerInline.value = true;
-  } else {
-    showMessenger.value = true;
-  }
-}
-
-function closeMessengerInline() {
-  showMessengerInline.value = false;
-}
-
 function setView(view: ViewName) {
   currentView.value = view;
   localStorage.setItem(LAST_VIEW_KEY, view);
-  showMessengerInline.value = false;
   sidebarOpen.value = false;
 }
 

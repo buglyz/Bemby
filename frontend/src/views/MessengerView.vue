@@ -1,14 +1,8 @@
 <template>
-  <div
-    :class="inline ? 'tgc-inline-wrap' : 'tgc-backdrop'"
-    @click.self="inline ? undefined : $emit('close')"
-  >
+  <div class="tgc-page">
     <div
-      class="tgc-popup"
-      :class="{
-        'mobile-chat-open': showMobileChat,
-        'tgc-popup-inline': inline,
-      }"
+      class="tgc-popup tgc-popup-inline"
+      :class="{ 'mobile-chat-open': showMobileChat }"
     >
       <!-- Header -->
       <div class="tgc-header">
@@ -47,13 +41,6 @@
             @click="showContacts = true"
           >
             <i class="fa-solid fa-address-book"></i>
-          </button>
-          <button
-            class="tgc-icon-btn tgc-close-btn"
-            @click="$emit('close')"
-            title="Close"
-          >
-            <i class="fa-solid fa-xmark"></i>
           </button>
         </div>
       </div>
@@ -1110,7 +1097,7 @@
       </div>
     </div>
   </div>
-  <!-- end tgc-backdrop -->
+  <!-- end tgc-page -->
 </template>
 
 <script setup lang="ts">
@@ -1138,9 +1125,6 @@ import {
 } from "../api/client";
 import { avatarCache, avatarQueue, avatarQueued, avatarFetching, avatarConcurrencyState, persistAvatarCache } from "../composables/avatarCache";
 import { t } from "../i18n";
-
-const { inline = false } = defineProps<{ inline?: boolean }>();
-const emit = defineEmits<{ close: [] }>();
 
 // ── Messenger state persistence ───────────────────────────────────────────────
 
@@ -3324,20 +3308,8 @@ async function saveContactEdit() {
 </script>
 
 <style scoped>
-/* ── Overlay (desktop popup mode) ───────────────────────────────────────────── */
-.tgc-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  z-index: 2000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 16px;
-}
-
-/* ── Inline mode (mobile full-page) ─────────────────────────────────────────── */
-.tgc-inline-wrap {
+/* ── Full-page layout ───────────────────────────────────────────────────────── */
+.tgc-page {
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -3437,11 +3409,6 @@ async function saveContactEdit() {
 .tgc-icon-btn--active {
   color: #4361ee;
   background: #eef0fd;
-}
-
-.tgc-close-btn:hover {
-  background: #fee2e2;
-  color: #e63946;
 }
 
 /* ── Body ───────────────────────────────────────────────────────────────────── */
@@ -5131,11 +5098,6 @@ async function saveContactEdit() {
 
 /* ── Responsive ─────────────────────────────────────────────────────────────── */
 @media (max-width: 768px) {
-  .tgc-backdrop {
-    padding: 0;
-    align-items: flex-end;
-  }
-
   .tgc-popup {
     height: 100dvh;
     height: 100vh; /* fallback for browsers without dvh */

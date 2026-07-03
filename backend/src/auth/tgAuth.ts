@@ -2,6 +2,11 @@ import { TelegramClient, Api, Logger, errors } from "telegram";
 import { LogLevel } from "telegram/extensions/Logger";
 import { StringSession } from "telegram/sessions";
 import type { TgProxy } from "../types";
+import {
+  invokeGetPasskeys,
+  invokeDeletePasskey,
+  type Passkey,
+} from "../tg/passkeys";
 
 export type TgDeviceParams = {
   deviceModel?: string;
@@ -548,6 +553,42 @@ export async function resendRecoveryEmail(
   try {
     await client.connect();
     await client.invoke(new Api.account.ResendPasswordEmail());
+  } finally {
+    await client.disconnect().catch(() => undefined);
+  }
+}
+
+// ── Passkeys ──────────────────────────────────────────────────────────────────
+// Uses raw TL requests (see tg/passkeys.ts) since GramJS lacks passkey types.
+
+export async function getPasskeys(
+  apiId: number,
+  apiHash: string,
+  sessionString: string,
+  proxy?: TgProxy,
+  deviceParams?: TgDeviceParams,
+): Promise<Passkey[]> {
+  const client = makeTgClient(sessionString, apiId, apiHash, proxy, deviceParams);
+  try {
+    await client.connect();
+    return await invokeGetPasskeys(client);
+  } finally {
+    await client.disconnect().catch(() => undefined);
+  }
+}
+
+export async function deletePasskey(
+  apiId: number,
+  apiHash: string,
+  sessionString: string,
+  passkeyId: string,
+  proxy?: TgProxy,
+  deviceParams?: TgDeviceParams,
+): Promise<boolean> {
+  const client = makeTgClient(sessionString, apiId, apiHash, proxy, deviceParams);
+  try {
+    await client.connect();
+    return await invokeDeletePasskey(client, passkeyId);
   } finally {
     await client.disconnect().catch(() => undefined);
   }

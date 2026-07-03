@@ -879,7 +879,51 @@
           <div class="form-section-label" style="margin-bottom: 8px">
             {{ t("accounts.passkeySection") }}
           </div>
-          <p class="form-hint">{{ t("accounts.passkeyNotSupported") }}</p>
+
+          <div v-if="passkeysLoading" style="color: #888; font-size: 13px">
+            <i class="fa-solid fa-spinner fa-spin"></i> {{ t("common.loading") }}
+          </div>
+          <div v-else-if="passkeysError" class="error-msg">
+            {{ passkeysError }}
+          </div>
+          <template v-else>
+            <p v-if="!passkeys.length" class="form-hint">
+              {{ t("accounts.passkeyNone") }}
+            </p>
+            <div v-else class="sessions-list">
+              <div
+                v-for="pk in passkeys"
+                :key="pk.id"
+                class="session-item"
+              >
+                <div class="session-info">
+                  <div class="session-device">
+                    <i class="fa-solid fa-key" style="margin-right: 6px"></i>
+                    {{ pk.name || t("accounts.passkeyUnnamed") }}
+                  </div>
+                  <div class="session-meta">
+                    {{ t("accounts.passkeyAdded") }}:
+                    {{ fmtSessionDate(pk.date) }}
+                  </div>
+                  <div v-if="pk.lastUsageDate" class="session-meta">
+                    {{ t("accounts.passkeyLastUsed") }}:
+                    {{ fmtSessionDate(pk.lastUsageDate) }}
+                  </div>
+                </div>
+                <button
+                  class="btn btn-xs btn-danger"
+                  :disabled="deletingPasskeyId === pk.id"
+                  @click="doDeletePasskey(pk)"
+                >
+                  {{
+                    deletingPasskeyId === pk.id
+                      ? t("accounts.passkeyDeleting")
+                      : t("accounts.passkeyRemove")
+                  }}
+                </button>
+              </div>
+            </div>
+          </template>
         </div>
         </div>
 
@@ -1191,6 +1235,7 @@ import {
   type TgSpamStatus,
   type SessionInfo,
   type PasswordInfo,
+  type Passkey,
 } from "../api/client";
 import { t, locale } from "../i18n";
 import { usePersistedRef } from "../composables/usePersistedRef";
@@ -1293,6 +1338,11 @@ const terminateMsg = ref("");
 // ── Recovery email state ──────────────────────────────────────────────────────
 const pwdInfo = ref<PasswordInfo | null>(null);
 const pwdInfoLoading = ref(false);
+const passkeys = ref<Passkey[]>([]);
+const passkeysLoading = ref(false);
+const passkeysError = ref("");
+const passkeysLoaded = ref(false);
+const deletingPasskeyId = ref<string | null>(null);
 const recoveryEmailBusy = ref(false);
 const recoveryEmailError = ref("");
 const recoveryEmailMsg = ref("");
@@ -1573,7 +1623,10 @@ const resendBusy = ref(false);
 watch(editTab, (tab) => {
   if (editTarget.value?.authStatus !== "authenticated") return;
   if (tab === "devices" && sessions.value.length === 0) loadSessions();
-  if (tab === "recovery" && !pwdInfo.value) loadPasswordInfo();
+  if (tab === "recovery") {
+    if (!pwdInfo.value) loadPasswordInfo();
+    if (!passkeysLoaded.value) loadPasskeys();
+  }
 });
 
 // ── Lifecycle ──────────────────────────────────────────────────────────────────
@@ -1668,6 +1721,10 @@ function openEdit(a: Account) {
   terminateMsg.value = "";
   pwdInfo.value = null;
   pwdInfoLoading.value = false;
+  passkeys.value = [];
+  passkeysLoaded.value = false;
+  passkeysError.value = "";
+  deletingPasskeyId.value = null;
   recoveryEmailBusy.value = false;
   recoveryEmailError.value = "";
   recoveryEmailMsg.value = "";
@@ -1816,6 +1873,36 @@ async function loadPasswordInfo() {
     // non-fatal: section just won't show
   } finally {
     pwdInfoLoading.value = false;
+  }
+}
+
+async function loadPasskeys() {
+  if (!editTarget.value) return;
+  passkeysLoading.value = true;
+  passkeysError.value = "";
+  try {
+    passkeys.value = await accountsApi.getPasskeys(editTarget.value.id);
+    passkeysLoaded.value = true;
+  } catch (err: any) {
+    passkeysError.value = err.response?.data?.error ?? err.message;
+  } finally {
+    passkeysLoading.value = false;
+  }
+}
+
+async function doDeletePasskey(pk: Passkey) {
+  if (!editTarget.value) return;
+  if (!confirm(t("accounts.passkeyRemoveConfirm").replace("{name}", pk.name || "?")))
+    return;
+  deletingPasskeyId.value = pk.id;
+  passkeysError.value = "";
+  try {
+    await accountsApi.deletePasskey(editTarget.value.id, pk.id);
+    passkeys.value = passkeys.value.filter((p) => p.id !== pk.id);
+  } catch (err: any) {
+    passkeysError.value = err.response?.data?.error ?? err.message;
+  } finally {
+    deletingPasskeyId.value = null;
   }
 }
 

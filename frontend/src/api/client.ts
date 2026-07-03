@@ -88,6 +88,14 @@ export type PasswordInfo = {
   emailUnconfirmedPattern: string | null;
 };
 
+export type Passkey = {
+  id: string;
+  name: string;
+  date: number;
+  softwareEmojiId: string | null;
+  lastUsageDate: number | null;
+};
+
 export type AccountExportItem = {
   name: string;
   phoneNumber: string;
@@ -484,6 +492,16 @@ export const accountsApi = {
     api.post(`/accounts/${id}/recovery-email/cancel`).then((r) => r.data),
   resendRecoveryEmail: (id: number) =>
     api.post(`/accounts/${id}/recovery-email/resend`).then((r) => r.data),
+  getPasskeys: (id: number) =>
+    api
+      .get<{ passkeys: Passkey[] }>(`/accounts/${id}/passkeys`)
+      .then((r) => r.data.passkeys),
+  deletePasskey: (id: number, passkeyId: string) =>
+    api
+      .delete<{ ok: boolean }>(
+        `/accounts/${id}/passkeys/${encodeURIComponent(passkeyId)}`,
+      )
+      .then((r) => r.data),
 };
 
 // ── Jobs ─────────────────────────────────────────────────────────────────────

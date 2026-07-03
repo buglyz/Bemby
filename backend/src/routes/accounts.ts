@@ -17,6 +17,8 @@ import {
   confirmRecoveryEmail,
   cancelRecoveryEmail,
   resendRecoveryEmail,
+  getPasskeys,
+  deletePasskey,
   type PasswordInfo,
 } from "../auth/tgAuth";
 import { checkSpamStatus } from "../jobs/checkin";
@@ -904,6 +906,51 @@ router.post("/:id/recovery-email/resend", async (req, res) => {
   } catch (err: any) {
     if (isAuthError(err?.message ?? "")) markSessionExpired(account!.id);
     internalError(res, err, "recovery-email/resend");
+  }
+});
+
+// ── Passkeys ──────────────────────────────────────────────────────────────────
+
+// GET /:id/passkeys -- list the account's passkeys
+router.get("/:id/passkeys", async (req, res) => {
+  const account = db
+    .prepare("SELECT * FROM tg_accounts WHERE id = ?")
+    .get(req.params.id) as AccountRow | undefined;
+  if (!requireAuth(account, res)) return;
+  try {
+    const { apiId, apiHash } = resolveApiCredentials(account);
+    const proxy = parseTgProxy(resolveProxyUrl(account.proxy_id));
+    const deviceParams = resolveAppClientParams(account.id, account.app_client_id);
+    const passkeys = await getPasskeys(apiId, apiHash, account.session_string, proxy, deviceParams);
+    res.json({ passkeys });
+  } catch (err: any) {
+    if (isAuthError(err?.message ?? "")) markSessionExpired(account!.id);
+    internalError(res, err, "passkeys/list");
+  }
+});
+
+// DELETE /:id/passkeys/:passkeyId -- revoke a passkey
+router.delete("/:id/passkeys/:passkeyId", async (req, res) => {
+  const account = db
+    .prepare("SELECT * FROM tg_accounts WHERE id = ?")
+    .get(req.params.id) as AccountRow | undefined;
+  if (!requireAuth(account, res)) return;
+  try {
+    const { apiId, apiHash } = resolveApiCredentials(account);
+    const proxy = parseTgProxy(resolveProxyUrl(account.proxy_id));
+    const deviceParams = resolveAppClientParams(account.id, account.app_client_id);
+    const ok = await deletePasskey(
+      apiId,
+      apiHash,
+      account.session_string,
+      req.params.passkeyId,
+      proxy,
+      deviceParams,
+    );
+    res.json({ ok });
+  } catch (err: any) {
+    if (isAuthError(err?.message ?? "")) markSessionExpired(account!.id);
+    internalError(res, err, "passkeys/delete");
   }
 });
 

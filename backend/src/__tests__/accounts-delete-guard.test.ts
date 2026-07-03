@@ -61,7 +61,8 @@ const SCHEMA = `
     account_id            INTEGER REFERENCES tg_accounts(id) ON DELETE SET NULL,
     job_type              TEXT    NOT NULL DEFAULT 'checkin',
     bot_username          TEXT    NOT NULL DEFAULT '',
-    enabled               INTEGER NOT NULL DEFAULT 1
+    enabled               INTEGER NOT NULL DEFAULT 1,
+    retired               TEXT
   );
 `;
 

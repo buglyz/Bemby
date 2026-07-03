@@ -33,6 +33,127 @@ export class CustomJobError extends Error {
   }
 }
 
+// Authoritative membership check: GetParticipant throws USER_NOT_PARTICIPANT for pending
+// join requests, unlike the Channel.left flag which can lag behind actual state.
+async function isChannelMember(client: TelegramClient, channel: Api.Channel): Promise<boolean> {
+  try {
+    const result = await client.invoke(
+      new Api.channels.GetParticipant({ channel, participant: "me" }),
+    );
+    return !(result.participant instanceof Api.ChannelParticipantLeft);
+  } catch (err: any) {
+    if (err?.message?.includes("USER_NOT_PARTICIPANT")) return false;
+    throw err;
+  }
+}
+
+// Waits for a message carrying inline buttons that arrives in a specific chat (e.g. the
+// group we just joined), rather than from a particular sender.
+function waitForButtonsInChat(
+  client: TelegramClient,
+  chat: Api.TypeEntityLike,
+  maxMs: number,
+  signal?: AbortSignal,
+): Promise<Api.Message[]> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new Error("Job cancelled"));
+      return;
+    }
+
+    const collected: Api.Message[] = [];
+
+    const cleanup = () => {
+      clearTimeout(timer);
+      client.removeEventHandler(handler, new NewMessage({}));
+      signal?.removeEventListener("abort", onAbort);
+    };
+
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new Error(`No message with buttons received within ${maxMs}ms`));
+    }, maxMs);
+
+    const onAbort = () => {
+      cleanup();
+      reject(new Error("Job cancelled"));
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+
+    const handler = async (event: NewMessageEvent) => {
+      const msg = event.message as Api.Message;
+      collected.push(msg);
+      if ((msg as any).replyMarkup) {
+        cleanup();
+        resolve(collected);
+      }
+    };
+
+    client.addEventHandler(handler, new NewMessage({ chats: [chat] }));
+  });
+}
+
+// Some groups post an in-group verification message with a button that must be clicked to
+// gain real access after joining. Best-effort: waits for that message, clicks the button whose
+// text contains buttonMatch (or the sole button), and appends the outcome to step.result.
+async function clickGroupVerification(
+  client: TelegramClient,
+  chat: Api.Channel,
+  buttonMatch: string,
+  maxMs: number,
+  step: CustomStepLog,
+  signal?: AbortSignal,
+): Promise<void> {
+  const findButtonsMsg = (msgs: Api.Message[]): Api.Message | null =>
+    [...msgs]
+      .reverse()
+      .find((m) => (m as any).replyMarkup instanceof Api.ReplyInlineMarkup) ??
+    null;
+
+  let buttonsMsg = await waitForButtonsInChat(client, chat, maxMs, signal)
+    .then(findButtonsMsg)
+    .catch(() => null);
+
+  // The prompt may have arrived in the brief gap before the listener attached -- fall back
+  // to scanning the most recent messages in the group.
+  if (!buttonsMsg) {
+    const recent = (await client.getMessages(chat, { limit: 5 })) as Api.Message[];
+    buttonsMsg = findButtonsMsg(recent);
+  }
+
+  if (!buttonsMsg) {
+    step.result = `${step.result} (no verification prompt)`;
+    return;
+  }
+
+  const rows = ((buttonsMsg as any).replyMarkup as Api.ReplyInlineMarkup).rows;
+  const flat = rows.flatMap((r) => r.buttons);
+  const match = buttonMatch.trim();
+  let target = match
+    ? flat.find((b: any) => ((b.text as string) ?? "").includes(match))
+    : undefined;
+  // Fall back to the sole button for single-button verifications.
+  if (!target && flat.length === 1) target = flat[0];
+  if (!target) {
+    step.result = `${step.result} (verification button not found)`;
+    return;
+  }
+
+  const data = (target as Api.KeyboardButtonCallback).data;
+  if (!data) {
+    step.result = `${step.result} (verification button not clickable)`;
+    return;
+  }
+
+  const peer = await client.getInputEntity(chat);
+  const answer = (await client.invoke(
+    new Api.messages.GetBotCallbackAnswer({ peer, msgId: buttonsMsg.id, data }),
+  )) as Api.messages.BotCallbackAnswer;
+  step.clickedButton = (target as any).text as string;
+  if (answer.message) step.callbackAnswer = answer.message;
+  step.result = `${step.result} + verified`;
+}
+
 // Collects messages from the target until one has buttons or timeout fires.
 // When successContains/failContains are set, checks message text to resolve or reject early.
 function waitForReply(
@@ -645,6 +766,7 @@ export async function runCustom(
                     }
                   }
 
+                  let pendingApproval = false;
                   try {
                     await client.invoke(new Api.messages.ImportChatInvite({ hash }));
                     step.result = "Joined via invite link";
@@ -653,38 +775,156 @@ export async function runCustom(
                       step.result = "Already a member";
                     } else if (err?.message?.includes("INVITE_REQUEST_SENT")) {
                       step.result = "Join request sent (pending approval)";
+                      pendingApproval = true;
                     } else {
                       throw err;
                     }
                   }
+
+                  if (action.checkMembership && !pendingApproval) {
+                    const check = await client.invoke(new Api.messages.CheckChatInvite({ hash }));
+                    if (!(check instanceof Api.ChatInviteAlready || check instanceof Api.ChatInvitePeek)) {
+                      step.result = "Join request sent (pending approval)";
+                      pendingApproval = true;
+                    }
+                  }
+
+                  if (pendingApproval && action.checkMembership)
+                    throw new Error("Join not confirmed: request is still pending approval");
                 } else {
                   // Public username: strip leading @
                   const username = raw.replace(/^@/, "");
                   const entity = await client.getEntity(username);
 
                   if (action.checkMembership && entity instanceof Api.Channel) {
-                    const channels = await client.invoke(
-                      new Api.channels.GetChannels({ id: [entity] }),
-                    ) as Api.messages.Chats;
-                    const fresh = channels.chats?.[0] as Api.Channel | undefined;
-                    if (fresh && !fresh.left) {
+                    if (await isChannelMember(client, entity)) {
                       step.result = "Already a member (verified)";
                       break;
                     }
                   }
 
+                  let pendingApproval = false;
+                  let freshlyJoined = false;
                   try {
                     await client.invoke(new Api.channels.JoinChannel({ channel: entity as any }));
                     step.result = "Joined";
+                    freshlyJoined = true;
                   } catch (err: any) {
                     if (err?.message?.includes("ALREADY_PARTICIPANT")) {
                       step.result = "Already a member";
                     } else if (err?.message?.includes("INVITE_REQUEST_SENT")) {
                       step.result = "Join request sent (pending approval)";
+                      pendingApproval = true;
                     } else {
                       throw err;
                     }
                   }
+
+                  if (action.checkMembership && !pendingApproval && entity instanceof Api.Channel) {
+                    if (!(await isChannelMember(client, entity))) {
+                      step.result = "Join request sent (pending approval)";
+                      pendingApproval = true;
+                    }
+                  }
+
+                  if (pendingApproval && action.checkMembership)
+                    throw new Error("Join not confirmed: request is still pending approval");
+
+                  // Only wait for the in-group verification prompt on a genuine fresh join --
+                  // an already-joined account won't get a new prompt, so don't stall on it.
+                  if (action.verifyButton && freshlyJoined && entity instanceof Api.Channel) {
+                    await clickGroupVerification(
+                      client,
+                      entity,
+                      action.verifyButton,
+                      action.verifyWaitMs ?? 30000,
+                      step,
+                      signal,
+                    );
+                  }
+                }
+                break;
+              }
+
+              case "subscribe_channel": {
+                const raw = action.channelId.trim();
+                step.label = `Subscribe to channel: ${raw}`;
+
+                // Detect invite link: https://t.me/+HASH or https://t.me/joinchat/HASH
+                const inviteMatch = raw.match(/(?:t\.me\/(?:joinchat\/|\+))([A-Za-z0-9_-]+)/);
+                if (inviteMatch) {
+                  const hash = inviteMatch[1];
+
+                  if (action.checkMembership) {
+                    // CheckChatInvite returns ChatInviteAlready when the user is already subscribed
+                    const check = await client.invoke(new Api.messages.CheckChatInvite({ hash }));
+                    if (check instanceof Api.ChatInviteAlready || check instanceof Api.ChatInvitePeek) {
+                      step.result = "Already subscribed (verified)";
+                      break;
+                    }
+                  }
+
+                  let pendingApproval = false;
+                  try {
+                    await client.invoke(new Api.messages.ImportChatInvite({ hash }));
+                    step.result = "Subscribed via invite link";
+                  } catch (err: any) {
+                    if (err?.message?.includes("ALREADY_PARTICIPANT")) {
+                      step.result = "Already subscribed";
+                    } else if (err?.message?.includes("INVITE_REQUEST_SENT")) {
+                      step.result = "Join request sent (pending approval)";
+                      pendingApproval = true;
+                    } else {
+                      throw err;
+                    }
+                  }
+
+                  if (action.checkMembership && !pendingApproval) {
+                    const check = await client.invoke(new Api.messages.CheckChatInvite({ hash }));
+                    if (!(check instanceof Api.ChatInviteAlready || check instanceof Api.ChatInvitePeek)) {
+                      step.result = "Join request sent (pending approval)";
+                      pendingApproval = true;
+                    }
+                  }
+
+                  if (pendingApproval && action.checkMembership)
+                    throw new Error("Subscription not confirmed: request is still pending approval");
+                } else {
+                  // Public username: strip leading @
+                  const username = raw.replace(/^@/, "");
+                  const entity = await client.getEntity(username);
+
+                  if (action.checkMembership && entity instanceof Api.Channel) {
+                    if (await isChannelMember(client, entity)) {
+                      step.result = "Already subscribed (verified)";
+                      break;
+                    }
+                  }
+
+                  let pendingApproval = false;
+                  try {
+                    await client.invoke(new Api.channels.JoinChannel({ channel: entity as any }));
+                    step.result = "Subscribed";
+                  } catch (err: any) {
+                    if (err?.message?.includes("ALREADY_PARTICIPANT")) {
+                      step.result = "Already subscribed";
+                    } else if (err?.message?.includes("INVITE_REQUEST_SENT")) {
+                      step.result = "Join request sent (pending approval)";
+                      pendingApproval = true;
+                    } else {
+                      throw err;
+                    }
+                  }
+
+                  if (action.checkMembership && !pendingApproval && entity instanceof Api.Channel) {
+                    if (!(await isChannelMember(client, entity))) {
+                      step.result = "Join request sent (pending approval)";
+                      pendingApproval = true;
+                    }
+                  }
+
+                  if (pendingApproval && action.checkMembership)
+                    throw new Error("Subscription not confirmed: request is still pending approval");
                 }
                 break;
               }

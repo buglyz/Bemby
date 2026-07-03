@@ -169,7 +169,14 @@ export type CustomAction =
       captchaLength?: number;
       maxRetries?: number;
     }
-  | { type: "join_group"; groupId: string; checkMembership?: boolean };
+  | {
+      type: "join_group";
+      groupId: string;
+      checkMembership?: boolean;
+      verifyButton?: string;
+      verifyWaitMs?: number;
+    }
+  | { type: "subscribe_channel"; channelId: string; checkMembership?: boolean };
 
 export type CustomConfig = {
   actions: CustomAction[];

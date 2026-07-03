@@ -98,7 +98,16 @@ export type CustomAction =
       captchaLength?: number;
       maxRetries?: number;
     }
-  | { type: "join_group"; groupId: string; checkMembership?: boolean };
+  | {
+      type: "join_group";
+      groupId: string;
+      checkMembership?: boolean;
+      // When set, after joining, wait for an in-group verification message and click the
+      // button whose text contains this string (bot-gated groups). verifyWaitMs bounds the wait.
+      verifyButton?: string;
+      verifyWaitMs?: number;
+    }
+  | { type: "subscribe_channel"; channelId: string; checkMembership?: boolean };
 
 export type CustomConfig = {
   actions: CustomAction[];

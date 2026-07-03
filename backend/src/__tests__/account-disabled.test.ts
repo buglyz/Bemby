@@ -65,7 +65,8 @@ const SCHEMA = `
     config                TEXT,
     start_command         TEXT    NOT NULL DEFAULT '/start',
     checkin_button        TEXT    NOT NULL DEFAULT '签到',
-    template_id           INTEGER
+    template_id           INTEGER,
+    retired               TEXT
   );
 `;
 

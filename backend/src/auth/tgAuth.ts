@@ -269,6 +269,67 @@ export async function updateTwoFa(
   }
 }
 
+export type TgOwnProfile = {
+  firstName: string;
+  lastName: string;
+  about: string;
+};
+
+// Read the account's own Telegram profile (first/last name + bio).
+export async function getProfile(
+  apiId: number,
+  apiHash: string,
+  sessionString: string,
+  proxy?: TgProxy,
+  deviceParams?: TgDeviceParams,
+): Promise<TgOwnProfile> {
+  const client = makeTgClient(sessionString, apiId, apiHash, proxy, deviceParams);
+  try {
+    await client.connect();
+    const me = (await client.getMe()) as Api.User;
+    const full = await client.invoke(
+      new Api.users.GetFullUser({ id: new Api.InputUserSelf() }),
+    );
+    return {
+      firstName: me?.firstName ?? "",
+      lastName: me?.lastName ?? "",
+      about: full.fullUser.about ?? "",
+    };
+  } finally {
+    await client.disconnect().catch(() => undefined);
+  }
+}
+
+// Update the account's own Telegram profile. Empty strings clear the field.
+export async function updateProfile(
+  apiId: number,
+  apiHash: string,
+  sessionString: string,
+  opts: { firstName: string; lastName?: string; about?: string },
+  proxy?: TgProxy,
+  deviceParams?: TgDeviceParams,
+): Promise<TgOwnProfile> {
+  const client = makeTgClient(sessionString, apiId, apiHash, proxy, deviceParams);
+  try {
+    await client.connect();
+    await client.invoke(
+      new Api.account.UpdateProfile({
+        firstName: opts.firstName,
+        lastName: opts.lastName ?? "",
+        about: opts.about ?? "",
+      }),
+    );
+    const me = (await client.getMe()) as Api.User;
+    return {
+      firstName: me?.firstName ?? "",
+      lastName: me?.lastName ?? "",
+      about: opts.about ?? "",
+    };
+  } finally {
+    await client.disconnect().catch(() => undefined);
+  }
+}
+
 export type SessionInfo = {
   hash: string;
   current: boolean;

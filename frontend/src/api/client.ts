@@ -81,6 +81,13 @@ export type Account = {
   notes: string | null;
 };
 
+// The account's own editable Telegram profile
+export type TgOwnProfile = {
+  firstName: string;
+  lastName: string;
+  about: string;
+};
+
 export type PasswordInfo = {
   hasPassword: boolean;
   hasRecovery: boolean;
@@ -425,6 +432,18 @@ export const accountsApi = {
     api
       .post<{ tgDisplayName: string | null; tgUsername: string | null }>(
         `/accounts/${id}/refresh-tg-meta`,
+      )
+      .then((r) => r.data),
+  getProfile: (id: number) =>
+    api.get<TgOwnProfile>(`/accounts/${id}/profile`).then((r) => r.data),
+  updateProfile: (
+    id: number,
+    data: { firstName: string; lastName?: string; about?: string },
+  ) =>
+    api
+      .post<TgOwnProfile & { tgDisplayName: string | null }>(
+        `/accounts/${id}/update-profile`,
+        data,
       )
       .then((r) => r.data),
   export: (ids?: number[], secret?: string) =>

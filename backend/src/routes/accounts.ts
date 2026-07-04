@@ -8,6 +8,8 @@ import {
   checkAccountStatus,
   resendCodeAsSms,
   updateTwoFa,
+  getProfile,
+  updateProfile,
   getSessions,
   terminateSession,
   terminateOtherSessions,
@@ -650,6 +652,89 @@ router.post("/:id/update-2fa", async (req, res) => {
   } catch (err: any) {
     if (isAuthError(err?.message ?? "")) markSessionExpired(account.id);
     internalError(res, err, 'update-2fa');
+  }
+});
+
+// GET /:id/profile -- fetch the account's own Telegram profile (first/last name + bio)
+router.get("/:id/profile", async (req, res) => {
+  const account = db
+    .prepare("SELECT * FROM tg_accounts WHERE id = ?")
+    .get(req.params.id) as AccountRow | undefined;
+  if (!account) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  if (!account.session_string) {
+    res.status(400).json({ error: "Account not authenticated" });
+    return;
+  }
+  try {
+    const { apiId, apiHash } = resolveApiCredentials(account);
+    const proxyUrl = resolveProxyUrl(account.proxy_id);
+    const proxy = parseTgProxy(proxyUrl);
+    const deviceParams = resolveAppClientParams(account.id, account.app_client_id);
+    const profile = await getProfile(
+      apiId,
+      apiHash,
+      account.session_string,
+      proxy,
+      deviceParams,
+    );
+    res.json(profile);
+  } catch (err: any) {
+    if (isAuthError(err?.message ?? "")) markSessionExpired(account.id);
+    internalError(res, err, "profile");
+  }
+});
+
+// POST /:id/update-profile -- update the account's own Telegram profile
+router.post("/:id/update-profile", async (req, res) => {
+  const account = db
+    .prepare("SELECT * FROM tg_accounts WHERE id = ?")
+    .get(req.params.id) as AccountRow | undefined;
+  if (!account) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  if (!account.session_string) {
+    res.status(400).json({ error: "Account not authenticated" });
+    return;
+  }
+  const { firstName, lastName, about } = req.body as {
+    firstName?: string;
+    lastName?: string;
+    about?: string;
+  };
+  if (!firstName || !firstName.trim()) {
+    res.status(400).json({ error: "firstName is required" });
+    return;
+  }
+  try {
+    const { apiId, apiHash } = resolveApiCredentials(account);
+    const proxyUrl = resolveProxyUrl(account.proxy_id);
+    const proxy = parseTgProxy(proxyUrl);
+    const deviceParams = resolveAppClientParams(account.id, account.app_client_id);
+    const profile = await updateProfile(
+      apiId,
+      apiHash,
+      account.session_string,
+      { firstName, lastName, about },
+      proxy,
+      deviceParams,
+    );
+    // Keep the cached display name in sync with the new profile
+    saveTgMeta(
+      account.id,
+      profile.firstName,
+      profile.lastName,
+      account.tg_username ?? undefined,
+    );
+    const tgDisplayName =
+      [profile.firstName, profile.lastName].filter(Boolean).join(" ") || null;
+    res.json({ ...profile, tgDisplayName });
+  } catch (err: any) {
+    if (isAuthError(err?.message ?? "")) markSessionExpired(account.id);
+    internalError(res, err, "update-profile");
   }
 });
 

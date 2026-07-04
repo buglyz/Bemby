@@ -436,6 +436,12 @@
             {{ t("accounts.tabBasic") }}
           </button>
           <button
+            :class="['edit-tab', editTab === 'profile' ? 'active' : '']"
+            @click="editTab = 'profile'"
+          >
+            {{ t("accounts.tabProfile") }}
+          </button>
+          <button
             :class="['edit-tab', editTab === 'twofa' ? 'active' : '']"
             @click="editTab = 'twofa'"
           >
@@ -562,6 +568,69 @@
               style="resize: vertical"
             ></textarea>
           </div>
+        </div>
+
+        <!-- Profile tab (authenticated accounts only) -->
+        <div
+          v-if="editTarget?.authStatus === 'authenticated'"
+          v-show="editTab === 'profile'"
+        >
+          <div class="form-section-label" style="margin-bottom: 12px">
+            {{ t("accounts.profileSection") }}
+          </div>
+
+          <div
+            v-if="profileLoading"
+            style="color: #888; font-size: 13px; margin-bottom: 12px"
+          >
+            <i class="fa-solid fa-spinner fa-spin"></i> {{ t("common.loading") }}
+          </div>
+
+          <template v-else>
+            <div class="form-group">
+              <label class="form-label">
+                {{ t("accounts.profileFirstName") }}
+              </label>
+              <input
+                v-model.trim="profileForm.firstName"
+                class="form-input"
+                maxlength="64"
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label">
+                {{ t("accounts.profileLastName") }}
+              </label>
+              <input
+                v-model.trim="profileForm.lastName"
+                class="form-input"
+                maxlength="64"
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label">{{ t("accounts.profileBio") }}</label>
+              <textarea
+                v-model="profileForm.about"
+                class="form-input"
+                rows="3"
+                maxlength="70"
+                :placeholder="t('accounts.profileBioPlaceholder')"
+                style="resize: vertical"
+              ></textarea>
+            </div>
+
+            <div v-if="profileError" class="error-msg">{{ profileError }}</div>
+            <div v-if="profileMsg" class="success-msg">{{ profileMsg }}</div>
+
+            <button
+              class="btn btn-primary btn-inline"
+              :disabled="profileBusy || !profileForm.firstName"
+              @click="doUpdateProfile"
+            >
+              <i class="fa-solid fa-floppy-disk"></i>
+              {{ profileBusy ? t("common.saving") : t("common.save") }}
+            </button>
+          </template>
         </div>
 
         <!-- 2FA tab (authenticated accounts only) -->
@@ -1303,7 +1372,9 @@ const defaultClientName = computed(() => {
 
 // ── Form state ────────────────────────────────────────────────────────────────
 const showForm = ref(false);
-const editTab = ref<"basic" | "twofa" | "devices" | "recovery">("basic");
+const editTab = ref<"basic" | "profile" | "twofa" | "devices" | "recovery">(
+  "basic",
+);
 const editTarget = ref<Account | null>(null);
 const form = reactive({
   name: "",
@@ -1325,6 +1396,14 @@ const twoFaHint = ref("");
 const twoFaBusy = ref(false);
 const twoFaError = ref("");
 const twoFaMsg = ref("");
+
+// ── Profile state ─────────────────────────────────────────────────────────────
+const profileForm = reactive({ firstName: "", lastName: "", about: "" });
+const profileLoaded = ref(false);
+const profileLoading = ref(false);
+const profileBusy = ref(false);
+const profileError = ref("");
+const profileMsg = ref("");
 
 // ── Sessions state ────────────────────────────────────────────────────────────
 const sessions = ref<SessionInfo[]>([]);
@@ -1622,6 +1701,7 @@ const resendBusy = ref(false);
 // Lazy-load each tab's data the first time it is opened
 watch(editTab, (tab) => {
   if (editTarget.value?.authStatus !== "authenticated") return;
+  if (tab === "profile" && !profileLoaded.value) loadProfile();
   if (tab === "devices" && sessions.value.length === 0) loadSessions();
   if (tab === "recovery") {
     if (!pwdInfo.value) loadPasswordInfo();
@@ -1712,6 +1792,12 @@ function openEdit(a: Account) {
   twoFaBusy.value = false;
   twoFaError.value = "";
   twoFaMsg.value = "";
+  Object.assign(profileForm, { firstName: "", lastName: "", about: "" });
+  profileLoaded.value = false;
+  profileLoading.value = false;
+  profileBusy.value = false;
+  profileError.value = "";
+  profileMsg.value = "";
   sessions.value = [];
   sessionsLoading.value = false;
   sessionsError.value = "";
@@ -1805,6 +1891,48 @@ async function doUpdateTwoFa() {
       : msg;
   } finally {
     twoFaBusy.value = false;
+  }
+}
+
+// ── Profile ───────────────────────────────────────────────────────────────────
+async function loadProfile() {
+  if (!editTarget.value) return;
+  profileLoading.value = true;
+  profileError.value = "";
+  try {
+    const p = await accountsApi.getProfile(editTarget.value.id);
+    Object.assign(profileForm, {
+      firstName: p.firstName,
+      lastName: p.lastName,
+      about: p.about,
+    });
+    profileLoaded.value = true;
+  } catch (err: any) {
+    profileError.value = err.response?.data?.error ?? err.message;
+  } finally {
+    profileLoading.value = false;
+  }
+}
+
+async function doUpdateProfile() {
+  if (!editTarget.value || !profileForm.firstName) return;
+  profileBusy.value = true;
+  profileError.value = "";
+  profileMsg.value = "";
+  try {
+    const res = await accountsApi.updateProfile(editTarget.value.id, {
+      firstName: profileForm.firstName,
+      lastName: profileForm.lastName || undefined,
+      about: profileForm.about || undefined,
+    });
+    profileMsg.value = t("accounts.profileUpdated");
+    // Reflect the refreshed display name in the accounts table
+    const target = accounts.value.find((a) => a.id === editTarget.value!.id);
+    if (target) target.tgDisplayName = res.tgDisplayName;
+  } catch (err: any) {
+    profileError.value = err.response?.data?.error ?? err.message;
+  } finally {
+    profileBusy.value = false;
   }
 }
 

@@ -6,20 +6,34 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 let testDb!: InstanceType<typeof Database>;
 
-const { mockTestEmby, mockGetLiveClient, mockResolvePeer } = vi.hoisted(() => ({
+const { mockTestEmby, mockGetLiveClient, mockResolvePeer, mockRunJob } = vi.hoisted(() => ({
   mockTestEmby: vi.fn(),
   mockGetLiveClient: vi.fn(),
   mockResolvePeer: vi.fn(),
+  mockRunJob: vi.fn(),
 }));
 
-vi.mock("../db/database", () => ({ get db() { return testDb; } }));
+vi.mock("../db/database", () => ({
+  get db() { return testDb; },
+  getDefaultTgApiCredentials: () => {
+    const idRow = testDb
+      .prepare("SELECT value FROM settings WHERE key = ?")
+      .get("default_tg_api_id") as { value: string } | undefined;
+    const hashRow = testDb
+      .prepare("SELECT value FROM settings WHERE key = ?")
+      .get("default_tg_api_hash") as { value: string } | undefined;
+    const apiId = Number(idRow?.value);
+    const apiHash = hashRow?.value ?? "";
+    return apiId && apiHash ? { apiId, apiHash } : null;
+  },
+}));
 vi.mock("../scheduler", () => ({ refreshScheduler: vi.fn() }));
 vi.mock("../jobs/embywatch", () => ({ testEmbywatchConnection: mockTestEmby }));
 vi.mock("../tg/liveClient", () => ({
   getLiveClient: mockGetLiveClient,
   resolvePeer: mockResolvePeer,
 }));
-vi.mock("../jobs/runner", () => ({ runJob: vi.fn() }));
+vi.mock("../jobs/runner", () => ({ runJob: mockRunJob }));
 vi.mock("../jobs/cancellation", () => ({
   registerJob: vi.fn().mockReturnValue(new AbortController().signal),
   unregisterJob: vi.fn(),
@@ -72,6 +86,19 @@ const SCHEMA = `
     template_id INTEGER,
     run_every_days INTEGER NOT NULL DEFAULT 1,
     retired TEXT
+  );
+  CREATE TABLE settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
+  CREATE TABLE job_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id INTEGER NOT NULL,
+    ran_at TEXT NOT NULL,
+    status TEXT NOT NULL,
+    message TEXT,
+    source TEXT NOT NULL DEFAULT 'scheduler',
+    detail TEXT
   );
 `;
 
@@ -162,5 +189,36 @@ describe("jobs preflight route", () => {
 
     expect(mockGetLiveClient).toHaveBeenCalledWith(1);
     expect(mockResolvePeer).toHaveBeenCalledWith(expect.anything(), "TestBot");
+  });
+
+  it("manual run uses global default API credentials when the account has none", async () => {
+    testDb
+      .prepare("INSERT INTO settings (key, value) VALUES (?, ?), (?, ?)")
+      .run("default_tg_api_id", "12345", "default_tg_api_hash", "global-hash");
+    const { lastInsertRowid: accountId } = testDb
+      .prepare(
+        "INSERT INTO tg_accounts (name, phone_number, api_id, api_hash, session_string, auth_status) VALUES ('A', '+1', NULL, NULL, 'sess', 'authenticated')",
+      )
+      .run();
+    const { lastInsertRowid: jobId } = testDb
+      .prepare(
+        "INSERT INTO jobs (name, account_id, job_type, bot_username) VALUES ('Check', ?, 'checkin', 'TestBot')",
+      )
+      .run(accountId);
+    mockRunJob.mockResolvedValue(undefined);
+
+    await withServer(async (baseUrl) => {
+      const res = await fetch(`${baseUrl}/jobs/${jobId}/run`, { method: "POST" });
+      const body = await res.json() as { logId: number };
+      expect(res.status).toBe(200);
+      expect(body.logId).toBe(1);
+    });
+
+    expect(mockRunJob).toHaveBeenCalledWith(
+      expect.objectContaining({ id: jobId }),
+      expect.objectContaining({ apiId: 12345, apiHash: "global-hash" }),
+      expect.any(Array),
+      expect.any(AbortSignal),
+    );
   });
 });

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db } from "../db/database";
+import { db, getDefaultTgApiCredentials } from "../db/database";
 import { runJob, type JobDetailLog } from "../jobs/runner";
 import {
   sendTgNotify,
@@ -42,8 +42,8 @@ type AccountRow = {
   id: number;
   name: string;
   phone_number: string;
-  api_id: number;
-  api_hash: string;
+  api_id: number | null;
+  api_hash: string | null;
   session_string: string | null;
   auth_status: string;
   proxy_id: string | null;
@@ -51,6 +51,23 @@ type AccountRow = {
   app_client_id: string | null;
   created_at: string;
 };
+
+function rowToAccount(row: AccountRow): TgAccount {
+  const defaults = !row.api_id || !row.api_hash ? getDefaultTgApiCredentials() : null;
+  return {
+    id: row.id,
+    name: row.name,
+    phoneNumber: row.phone_number,
+    apiId: row.api_id || defaults?.apiId || null,
+    apiHash: row.api_hash || defaults?.apiHash || null,
+    sessionString: row.session_string,
+    authStatus: row.auth_status as TgAccount["authStatus"],
+    proxyId: row.proxy_id ?? null,
+    disabled: Boolean(row.disabled),
+    appClientId: row.app_client_id ?? null,
+    createdAt: row.created_at,
+  };
+}
 
 function rowToJob(row: JobRow): Job & { accountName?: string } {
   return {
@@ -366,38 +383,20 @@ router.post("/:id/run", async (req, res) => {
       res.status(400).json({ error: "Account is not authenticated" });
       return;
     }
-    account = {
-      id: accountRow.id,
-      name: accountRow.name,
-      phoneNumber: accountRow.phone_number,
-      apiId: accountRow.api_id,
-      apiHash: accountRow.api_hash,
-      sessionString: accountRow.session_string,
-      authStatus: accountRow.auth_status as TgAccount["authStatus"],
-      proxyId: accountRow.proxy_id ?? null,
-      disabled: Boolean(accountRow.disabled),
-      appClientId: accountRow.app_client_id ?? null,
-      createdAt: accountRow.created_at,
-    };
+    account = rowToAccount(accountRow);
+    if (!account.apiId || !account.apiHash) {
+      res.status(400).json({
+        error: "No API credentials available for this account. Add credentials to this account or configure global defaults in Settings.",
+      });
+      return;
+    }
   } else if (job.accountId) {
     // Optional linked account (e.g. embywatch) — used for notifications only; don't block if not authenticated
     const accountRow = db
       .prepare("SELECT * FROM tg_accounts WHERE id = ?")
       .get(job.accountId) as AccountRow | undefined;
     if (accountRow?.session_string) {
-      account = {
-        id: accountRow.id,
-        name: accountRow.name,
-        phoneNumber: accountRow.phone_number,
-        apiId: accountRow.api_id,
-        apiHash: accountRow.api_hash,
-        sessionString: accountRow.session_string,
-        authStatus: accountRow.auth_status as TgAccount["authStatus"],
-        proxyId: accountRow.proxy_id ?? null,
-        disabled: Boolean(accountRow.disabled),
-        appClientId: accountRow.app_client_id ?? null,
-        createdAt: accountRow.created_at,
-      };
+      account = rowToAccount(accountRow);
     }
   }
 

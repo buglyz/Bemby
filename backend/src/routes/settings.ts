@@ -28,6 +28,13 @@ export const ALLOWED_KEYS = [
   "account_display_with_tg_name",
 ];
 
+/** Settings keys that must never be sent to the client. */
+export const CLIENT_HIDDEN_KEYS = new Set([
+  "admin_password_hash",
+  "admin_username",
+  "jwt_secret",
+]);
+
 /** Returns first 4 chars + **** + last 4 chars, or **** for short values. */
 function maskApiHash(hash: string): string {
   if (!hash) return "";
@@ -35,12 +42,14 @@ function maskApiHash(hash: string): string {
   return `${hash.slice(0, 4)}****${hash.slice(-4)}`;
 }
 
-/** Returns all settings minus internal migration flags, with the API hash masked. */
+/** Returns client-safe settings: migration flags and secret keys removed, API hash masked. */
 function getClientSettings(): Record<string, string> {
   const rows = db
     .prepare("SELECT key, value FROM settings WHERE key NOT LIKE 'migration:%'")
     .all() as SettingRow[];
-  const result = Object.fromEntries(rows.map((r) => [r.key, r.value]));
+  const result = Object.fromEntries(
+    rows.filter((r) => !CLIENT_HIDDEN_KEYS.has(r.key)).map((r) => [r.key, r.value]),
+  );
   // Never expose the raw hash to the client
   if (result.default_tg_api_hash) {
     result.default_tg_api_hash = maskApiHash(result.default_tg_api_hash);

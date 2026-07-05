@@ -40,7 +40,17 @@ const DISPLAY_HOST = process.env.DISPLAY_HOST ?? BIND_HOST;
 const trustProxy = process.env.TRUST_PROXY ?? '0';
 app.set('trust proxy', /^\d+$/.test(trustProxy) ? Number(trustProxy) : trustProxy);
 
-app.use(cors());
+// CORS: the SPA is served same-origin in production, so no wildcard is needed.
+// CORS_ORIGIN (comma-separated) whitelists extra origins; defaults to the local
+// dev frontend. Same-origin requests don't require CORS headers regardless.
+const corsOrigins = (process.env.CORS_ORIGIN ?? "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+const allowedOrigins = corsOrigins.length
+  ? corsOrigins
+  : ["http://localhost:5173", "http://127.0.0.1:5173"];
+app.use(cors({ origin: allowedOrigins }));
 app.use(express.json());
 
 // Health check -- no auth required

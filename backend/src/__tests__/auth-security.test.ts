@@ -18,7 +18,7 @@ import jwt from 'jsonwebtoken';
 import type { SignOptions } from 'jsonwebtoken';
 import type { Request, Response, NextFunction } from 'express';
 import { requireAuth } from '../middleware/auth';
-import { ALLOWED_KEYS } from '../routes/settings';
+import { ALLOWED_KEYS, CLIENT_HIDDEN_KEYS } from '../routes/settings';
 
 const TEST_SECRET = 'test-only-secret-do-not-use-in-prod';
 
@@ -92,6 +92,47 @@ describe('requireAuth -- token validation', () => {
 
   it('calls next() for a valid Bearer token', () => {
     const token = makeToken({ sub: 'admin' });
+    const req   = mockReq({ headers: { authorization: `Bearer ${token}` } });
+    const res   = mockRes();
+    const next  = vi.fn();
+    requireAuth(req, res, next as NextFunction);
+    expect(next).toHaveBeenCalledOnce();
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  it('rejects a captcha token (has `cap`, no `sub`) used as a session token', () => {
+    // The public /api/auth/captcha endpoint signs this with the same secret.
+    const token = makeToken({ cap: 'abcde', typ: 'captcha' }, '5m');
+    const req   = mockReq({ headers: { authorization: `Bearer ${token}` } });
+    const res   = mockRes();
+    const next  = vi.fn();
+    requireAuth(req, res, next as NextFunction);
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('rejects a legacy captcha-shaped token with no typ claim', () => {
+    const token = makeToken({ cap: 'abcde' }, '5m');
+    const req   = mockReq({ headers: { authorization: `Bearer ${token}` } });
+    const res   = mockRes();
+    const next  = vi.fn();
+    requireAuth(req, res, next as NextFunction);
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('rejects a validly-signed token with a non-auth typ claim', () => {
+    const token = makeToken({ sub: 'admin', typ: 'captcha' });
+    const req   = mockReq({ headers: { authorization: `Bearer ${token}` } });
+    const res   = mockRes();
+    const next  = vi.fn();
+    requireAuth(req, res, next as NextFunction);
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('calls next() for a token with typ=auth', () => {
+    const token = makeToken({ sub: 'admin', typ: 'auth' });
     const req   = mockReq({ headers: { authorization: `Bearer ${token}` } });
     const res   = mockRes();
     const next  = vi.fn();
@@ -238,6 +279,22 @@ describe('ALLOWED_KEYS whitelist -- sensitive keys are excluded', () => {
   it('permits expected operational settings', () => {
     const expected = ['default_timezone', 'default_max_retry', 'check_daily_run', 'default_ua', 'proxies', 'tg_app_clients', 'tg_client_mode'];
     for (const key of expected) expect(ALLOWED_KEYS).toContain(key);
+  });
+});
+
+// ── Client settings response -- secret keys are never sent to the browser ──────
+
+describe('CLIENT_HIDDEN_KEYS -- secrets excluded from GET /api/settings', () => {
+  it('hides admin_password_hash from the settings response', () => {
+    expect(CLIENT_HIDDEN_KEYS.has('admin_password_hash')).toBe(true);
+  });
+
+  it('hides admin_username from the settings response', () => {
+    expect(CLIENT_HIDDEN_KEYS.has('admin_username')).toBe(true);
+  });
+
+  it('hides jwt_secret from the settings response', () => {
+    expect(CLIENT_HIDDEN_KEYS.has('jwt_secret')).toBe(true);
   });
 });
 

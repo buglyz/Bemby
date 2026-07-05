@@ -78,6 +78,7 @@ function isBlockedIp(ip: string): boolean {
 
 async function assertPublicUrl(rawUrl: string): Promise<void> {
   const parsed = new URL(rawUrl);
+  if (!/^https?:$/i.test(parsed.protocol)) throw new Error("Only http(s) allowed");
   const hostname = parsed.hostname;
   if (net.isIP(hostname)) {
     if (isBlockedIp(hostname)) throw new Error("Private IP not allowed");
@@ -88,6 +89,29 @@ async function assertPublicUrl(rawUrl: string): Promise<void> {
     dns.promises.lookup(hostname, { family: 6 }),
   );
   if (isBlockedIp(address)) throw new Error("Private IP not allowed");
+}
+
+// SSRF-safe fetch: validates the initial URL and every redirect target against
+// assertPublicUrl before following it, so a public host cannot 3xx-redirect the
+// request to localhost / cloud-metadata / other internal services.
+async function ssrfSafeFetch(
+  startUrl: string,
+  init: RequestInit,
+  maxHops = 5,
+): Promise<globalThis.Response> {
+  let current = startUrl;
+  for (let hop = 0; hop <= maxHops; hop++) {
+    await assertPublicUrl(current);
+    const resp = await fetch(current, { ...init, redirect: "manual" });
+    if (resp.status >= 300 && resp.status < 400) {
+      const location = resp.headers.get("location");
+      if (!location) return resp;
+      current = new URL(location, current).toString();
+      continue;
+    }
+    return resp;
+  }
+  throw new Error("Too many redirects");
 }
 
 // GET /miniapp-proxy -- proxy mini app content through the backend.
@@ -108,14 +132,13 @@ router.get("/miniapp-proxy", async (req, res) => {
     return;
   }
   try {
-    const upstream = await fetch(url, {
+    const upstream = await ssrfSafeFetch(url, {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Linux; Android 11; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Mobile Safari/537.36 Telegram/10.0",
         Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9",
       },
-      redirect: "follow",
     });
 
     const contentType = upstream.headers.get("content-type") ?? "text/html";

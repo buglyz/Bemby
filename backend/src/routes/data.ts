@@ -9,6 +9,28 @@ import {
   getStoredCredentials,
 } from '../auth/credentials';
 
+// Admin/JWT secrets are instance-local and must never travel in a backup.
+export const EXPORT_EXCLUDED_SETTINGS = new Set([
+  'admin_password_hash',
+  'admin_username',
+  'jwt_secret',
+]);
+
+// Settings whose presence forces the export to be encrypted.
+export const SENSITIVE_SETTING_KEYS = ['default_tg_api_hash', 'proxies'];
+
+// Encryption is mandatory when the payload carries any credential-bearing field:
+// session strings, API keys, per-account API hashes, or sensitive settings.
+export function exportRequiresEncryption(
+  payload: Pick<ExportPayload, 'accounts' | 'aiSuppliers' | 'settings'>,
+): boolean {
+  return (
+    payload.accounts.some((a) => a.sessionString || a.apiHash) ||
+    (payload.aiSuppliers ?? []).some((s) => s.apiKey) ||
+    SENSITIVE_SETTING_KEYS.some((k) => Boolean(payload.settings?.[k]))
+  );
+}
+
 type EncryptedEnvelope = {
   encrypted: true;
   version: '1';
@@ -227,12 +249,14 @@ router.post('/export', (req, res) => {
         modelId: m.model_id,
         label: m.label,
       })),
-    settings: Object.fromEntries(settings.map(s => [s.key, s.value])),
+    settings: Object.fromEntries(
+      settings
+        .filter(s => !EXPORT_EXCLUDED_SETTINGS.has(s.key))
+        .map(s => [s.key, s.value]),
+    ),
   };
 
-  // Encryption is mandatory when the payload contains sensitive credentials
-  const hasSecrets = payload.accounts.some(a => a.sessionString)
-    || (payload.aiSuppliers ?? []).some(s => s.apiKey);
+  const hasSecrets = exportRequiresEncryption(payload);
 
   if (hasSecrets && !secret) {
     res.status(400).json({
@@ -435,10 +459,11 @@ router.post('/import', async (req, res) => {
       }
     }
 
-    // Merge settings
+    // Merge settings -- never let a backup overwrite instance-local admin/JWT secrets
     if (payload.settings && typeof payload.settings === 'object') {
       const stmt = db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
       for (const [key, value] of Object.entries(payload.settings)) {
+        if (EXPORT_EXCLUDED_SETTINGS.has(key)) continue;
         if (typeof value === 'string') { stmt.run(key, value); results.settingsUpdated++; }
       }
     }

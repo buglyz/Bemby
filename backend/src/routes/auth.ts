@@ -32,7 +32,7 @@ const ADMIN_PASSWORD_HASH_FALLBACK: string | null = (() => {
 router.get('/captcha', (_req, res) => {
   const captcha = svgCaptcha.create({ noise: 2, color: true, size: 5, ignoreChars: '0oO1lI' });
   // Store the answer (lowercase) in a short-lived signed token — no session needed
-  const captchaToken = jwt.sign({ cap: captcha.text.toLowerCase() }, getJwtSecret(), { expiresIn: '5m' });
+  const captchaToken = jwt.sign({ cap: captcha.text.toLowerCase(), typ: 'captcha' }, getJwtSecret(), { expiresIn: '5m' });
   res.json({ svg: captcha.data, captchaToken });
 });
 
@@ -93,7 +93,9 @@ router.post('/login', loginLimiter, async (req, res) => {
 
   const defaultPwd = process.env.ADMIN_DEFAULT_PASSWORD ?? 'changeme';
   const requirePasswordChange = password === defaultPwd;
-  const payload = requirePasswordChange ? { sub: username, requirePasswordChange: true } : { sub: username };
+  const payload = requirePasswordChange
+    ? { sub: username, typ: 'auth', requirePasswordChange: true }
+    : { sub: username, typ: 'auth' };
   const token = jwt.sign(payload, getJwtSecret(), { expiresIn: '7d' });
   res.json(requirePasswordChange ? { token, requirePasswordChange: true } : { token });
 });
@@ -136,7 +138,7 @@ router.put('/credentials', requireAuth, async (req, res) => {
 
   // Issue a fresh token so any requirePasswordChange claim is cleared
   const newUsername = username || stored.username;
-  const freshToken = jwt.sign({ sub: newUsername }, getJwtSecret(), { expiresIn: '7d' });
+  const freshToken = jwt.sign({ sub: newUsername, typ: 'auth' }, getJwtSecret(), { expiresIn: '7d' });
   res.json({ message: 'Credentials updated', token: freshToken });
 });
 

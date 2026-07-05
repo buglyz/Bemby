@@ -6,6 +6,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import Database from 'better-sqlite3';
 import crypto from 'crypto';
 import type { ExportPayload } from '../routes/data';
+import { exportRequiresEncryption, EXPORT_EXCLUDED_SETTINGS } from '../routes/data';
 
 type DB = InstanceType<typeof Database>;
 
@@ -258,6 +259,44 @@ describe('AES-256-GCM encryption', () => {
     expect(e1.data).not.toBe(e2.data);
     expect(e1.iv).not.toBe(e2.iv);
     expect(e1.salt).not.toBe(e2.salt);
+  });
+});
+
+// ── Export encryption trigger (plaintext-leak guard) ─────────────────────────
+
+describe('exportRequiresEncryption -- forces encryption for any credential', () => {
+  const base = { accounts: [], aiSuppliers: [], settings: {} } as Pick<ExportPayload, 'accounts' | 'aiSuppliers' | 'settings'>;
+
+  it('is false for a payload with no credentials', () => {
+    expect(exportRequiresEncryption(base)).toBe(false);
+  });
+
+  it('is true when an account has a session string', () => {
+    expect(exportRequiresEncryption({ ...base, accounts: [{ name: 'A', phoneNumber: '+1', apiId: 1, apiHash: '', sessionString: 'sess', authStatus: 'authenticated' }] })).toBe(true);
+  });
+
+  it('is true when an account has an API hash but no session (regression: was plaintext)', () => {
+    expect(exportRequiresEncryption({ ...base, accounts: [{ name: 'A', phoneNumber: '+1', apiId: 1, apiHash: 'h', sessionString: null, authStatus: 'unauthenticated' }] })).toBe(true);
+  });
+
+  it('is true when an AI supplier has an API key', () => {
+    expect(exportRequiresEncryption({ ...base, aiSuppliers: [{ name: 'x', baseUrl: 'u', apiKey: 'sk', timeoutMs: 1 }] })).toBe(true);
+  });
+
+  it('is true when settings contain default_tg_api_hash', () => {
+    expect(exportRequiresEncryption({ ...base, settings: { default_tg_api_hash: 'abc' } })).toBe(true);
+  });
+
+  it('is true when settings contain proxies', () => {
+    expect(exportRequiresEncryption({ ...base, settings: { proxies: 'socks5://u:p@host:1080' } })).toBe(true);
+  });
+});
+
+describe('export excludes instance-local secrets', () => {
+  it('never carries admin/JWT secrets in a backup', () => {
+    expect(EXPORT_EXCLUDED_SETTINGS.has('admin_password_hash')).toBe(true);
+    expect(EXPORT_EXCLUDED_SETTINGS.has('admin_username')).toBe(true);
+    expect(EXPORT_EXCLUDED_SETTINGS.has('jwt_secret')).toBe(true);
   });
 });
 

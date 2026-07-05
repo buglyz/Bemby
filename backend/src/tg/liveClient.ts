@@ -122,13 +122,21 @@ function chatIdToPeer(chatId: string): Api.TypePeer | null {
 }
 
 function escHtml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 // Only allow http/https/tg URLs in href attributes -- strips anything else.
+// Returns the normalised href (not the raw input) so quotes and other unsafe
+// characters cannot break out of the attribute once escaped.
 function safeHref(url: string): string {
   try {
-    return /^(https?|tg):$/i.test(new URL(url).protocol) ? url : "";
+    const parsed = new URL(url);
+    return /^(https?|tg):$/i.test(parsed.protocol) ? parsed.href : "";
   } catch {
     return "";
   }

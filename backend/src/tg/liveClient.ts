@@ -351,10 +351,12 @@ export async function getLiveClient(accountId: number): Promise<LiveEntry> {
   if (!account?.session_string)
     throw new Error("Account not found or not authenticated");
 
-  const defaults =
-    !account.api_id || !account.api_hash ? getDefaultTgApiCredentials() : null;
-  const apiId = account.api_id ?? defaults?.apiId;
-  const apiHash = account.api_hash ?? defaults?.apiHash;
+  const ownCredentials = account.api_id && account.api_hash
+    ? { apiId: account.api_id, apiHash: account.api_hash }
+    : null;
+  const credentials = ownCredentials ?? getDefaultTgApiCredentials();
+  const apiId = credentials?.apiId;
+  const apiHash = credentials?.apiHash;
   if (!apiId || !apiHash)
     throw new Error("No API credentials available for this account");
 

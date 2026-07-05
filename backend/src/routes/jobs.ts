@@ -53,13 +53,16 @@ type AccountRow = {
 };
 
 function rowToAccount(row: AccountRow): TgAccount {
-  const defaults = !row.api_id || !row.api_hash ? getDefaultTgApiCredentials() : null;
+  const ownCredentials = row.api_id && row.api_hash
+    ? { apiId: row.api_id, apiHash: row.api_hash }
+    : null;
+  const credentials = ownCredentials ?? getDefaultTgApiCredentials();
   return {
     id: row.id,
     name: row.name,
     phoneNumber: row.phone_number,
-    apiId: row.api_id || defaults?.apiId || null,
-    apiHash: row.api_hash || defaults?.apiHash || null,
+    apiId: credentials?.apiId ?? null,
+    apiHash: credentials?.apiHash ?? null,
     sessionString: row.session_string,
     authStatus: row.auth_status as TgAccount["authStatus"],
     proxyId: row.proxy_id ?? null,

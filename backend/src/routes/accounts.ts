@@ -117,8 +117,12 @@ function resolveApiCredentials(account: AccountRow): {
   apiId: number;
   apiHash: string;
 } {
-  const apiId = account.api_id || getDefaultTgApiCredentials()?.apiId;
-  const apiHash = account.api_hash || getDefaultTgApiCredentials()?.apiHash;
+  const ownCredentials = account.api_id && account.api_hash
+    ? { apiId: account.api_id, apiHash: account.api_hash }
+    : null;
+  const credentials = ownCredentials ?? getDefaultTgApiCredentials();
+  const apiId = credentials?.apiId;
+  const apiHash = credentials?.apiHash;
   if (!apiId || !apiHash) {
     throw new Error(
       "No API credentials available. Add credentials to this account or configure global defaults in Settings.",
@@ -163,6 +167,18 @@ function toJson(row: AccountRow) {
     notes: row.notes ?? null,
     resolvedDeviceModel: previewDeviceModel(row.id, row.app_client_id),
   };
+}
+
+function normalizeApiId(value: unknown, fallback: number | null = null): number | null {
+  if (value === undefined) return fallback;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function normalizeApiHash(value: unknown, fallback: string | null = null): string | null {
+  if (value === undefined) return fallback;
+  const trimmed = String(value ?? "").trim();
+  return trimmed || null;
 }
 
 function saveTgMeta(
@@ -380,8 +396,8 @@ router.post("/import", (req, res) => {
     ).run(
       a.name || a.phoneNumber,
       a.phoneNumber,
-      Number(a.apiId),
-      a.apiHash,
+      normalizeApiId(a.apiId),
+      normalizeApiHash(a.apiHash),
       forceReauth ? null : (a.sessionString ?? null),
       forceReauth ? "unauthenticated" : (a.authStatus ?? "unauthenticated"),
       a.proxyId ?? null,
@@ -420,14 +436,24 @@ router.put("/:id", (req, res) => {
   const newAppClientId =
     appClientId !== undefined ? appClientId || null : existing.app_client_id;
   const newNotes = notes !== undefined ? (notes as string) || null : existing.notes;
+  const newApiId = normalizeApiId(apiId, existing.api_id);
+  const newApiHash = normalizeApiHash(apiHash, existing.api_hash);
+
+  if ((!newApiId || !newApiHash) && !getDefaultTgApiCredentials()) {
+    res.status(400).json({
+      error:
+        "apiId and apiHash are required (or configure global defaults in Settings)",
+    });
+    return;
+  }
 
   db.prepare(
     "UPDATE tg_accounts SET name = ?, phone_number = ?, api_id = ?, api_hash = ?, proxy_id = ?, disabled = ?, app_client_id = ?, notes = ? WHERE id = ?",
   ).run(
     name ?? existing.name,
     phoneNumber ?? existing.phone_number,
-    Number(apiId ?? existing.api_id),
-    apiHash ?? existing.api_hash,
+    newApiId,
+    newApiHash,
     newProxyId,
     newDisabled,
     newAppClientId,

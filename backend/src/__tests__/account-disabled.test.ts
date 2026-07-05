@@ -6,12 +6,13 @@
 import Database from "better-sqlite3";
 
 let testDb!: InstanceType<typeof Database>;
+let defaultCreds: { apiId: number; apiHash: string } | null = null;
 
 vi.mock("../db/database", () => ({
   get db() {
     return testDb;
   },
-  getDefaultTgApiCredentials: () => null,
+  getDefaultTgApiCredentials: () => defaultCreds,
 }));
 vi.mock("../jobs/runner", () => ({ runJob: vi.fn() }));
 vi.mock("../jobs/notify", () => ({
@@ -138,6 +139,7 @@ beforeAll(() => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  defaultCreds = null;
   testDb.exec("DELETE FROM jobs; DELETE FROM tg_accounts;");
 });
 
@@ -202,6 +204,18 @@ describe("loadEligibleJobs — disabled account filter", () => {
     const eligible = loadEligibleJobs();
 
     expect(eligible.map((e) => e.job.id)).toContain(job.id);
+  });
+
+  it("uses global API credentials for enabled legacy accounts with zero/blank credentials", () => {
+    defaultCreds = { apiId: 12345, apiHash: "global-hash" };
+    const enabledAcct = insertAccount({ disabled: 0 });
+    const job = insertJob({ accountId: enabledAcct.id, jobType: "checkin" });
+
+    const eligible = loadEligibleJobs();
+    const entry = eligible.find((e) => e.job.id === job.id);
+
+    expect(entry?.account?.apiId).toBe(12345);
+    expect(entry?.account?.apiHash).toBe("global-hash");
   });
 
   it("includes an embywatch job with no account regardless of other disabled accounts", () => {

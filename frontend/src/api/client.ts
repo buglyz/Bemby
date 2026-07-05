@@ -69,7 +69,7 @@ export type Account = {
   id: number;
   name: string;
   phoneNumber: string;
-  apiId: number;
+  apiId: number | null;
   authStatus: AuthStatus;
   proxyId: string | null;
   disabled: boolean;

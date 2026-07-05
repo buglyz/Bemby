@@ -8,6 +8,7 @@ const {
   MockMessage, MockMessageMediaPhoto, MockMessageMediaDocument, MockReplyInlineMarkup,
   MockTelegramClient, mockClientInstance,
   mockAddEventHandler, mockGetDialogs, mockGetMessages, mockSendMessage, mockInvoke,
+  mockGetDefaultTgApiCredentials,
 } = vi.hoisted(() => {
   class MockUser { constructor(d: Record<string, any>) { Object.assign(this, d); } }
   class MockChat { constructor(d: Record<string, any>) { Object.assign(this, d); } }
@@ -28,6 +29,7 @@ const {
   const mockGetMessages     = vi.fn().mockResolvedValue([]);
   const mockSendMessage     = vi.fn().mockResolvedValue({ id: 1, date: 1700000000 });
   const mockInvoke          = vi.fn().mockResolvedValue({ users: [], chats: [] });
+  const mockGetDefaultTgApiCredentials = vi.fn().mockReturnValue(null);
 
   const mockClientInstance = {
     connect:         vi.fn().mockResolvedValue(undefined),
@@ -50,6 +52,7 @@ const {
     MockMessage, MockMessageMediaPhoto, MockMessageMediaDocument, MockReplyInlineMarkup,
     MockTelegramClient, mockClientInstance,
     mockAddEventHandler, mockGetDialogs, mockGetMessages, mockSendMessage, mockInvoke,
+    mockGetDefaultTgApiCredentials,
   };
 });
 
@@ -97,6 +100,7 @@ vi.mock('../db/database', () => ({
     prepare:     vi.fn(),
     transaction: vi.fn().mockImplementation((fn: () => void) => fn),
   },
+  getDefaultTgApiCredentials: mockGetDefaultTgApiCredentials,
 }));
 
 vi.mock('../jobs/runner', () => ({
@@ -150,6 +154,7 @@ function makeEntry(cacheEntries: [string, any][] = []) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockGetDefaultTgApiCredentials.mockReturnValue(null);
   setupDb();
 });
 
@@ -203,6 +208,28 @@ describe('getLiveClient', () => {
     const args = vi.mocked(TelegramClient).mock.calls[0];
     expect(args[1]).toBe(12345);
     expect(args[2]).toBe('abc123');
+  });
+
+  it('falls back to global credentials for legacy zero/blank account credentials', async () => {
+    mockGetDefaultTgApiCredentials.mockReturnValue({ apiId: 99999, apiHash: 'global-hash' });
+    setupDb({ ...DEFAULT_ACCOUNT, api_id: 0, api_hash: '' });
+
+    await getLiveClient(304);
+
+    const args = vi.mocked(TelegramClient).mock.calls[0];
+    expect(args[1]).toBe(99999);
+    expect(args[2]).toBe('global-hash');
+  });
+
+  it('uses the global credential pair when only one per-account credential is present', async () => {
+    mockGetDefaultTgApiCredentials.mockReturnValue({ apiId: 88888, apiHash: 'global-pair' });
+    setupDb({ ...DEFAULT_ACCOUNT, api_id: 12345, api_hash: '' });
+
+    await getLiveClient(305);
+
+    const args = vi.mocked(TelegramClient).mock.calls[0];
+    expect(args[1]).toBe(88888);
+    expect(args[2]).toBe('global-pair');
   });
 
   it('returns the cached entry on a second call without creating a new client', async () => {

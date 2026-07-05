@@ -17,16 +17,21 @@ const { MockTelegramClient, mockConnect, mockSendCode, mockGetMe, mockDisconnect
     firstName: 'Test', deleted: false, restricted: false, restrictionReason: [],
   });
   const mockDisconnect = vi.fn().mockResolvedValue(undefined);
-  const MockTelegramClient = vi.fn().mockReturnValue({
-    connect: mockConnect, sendCode: mockSendCode, getMe: mockGetMe,
-    disconnect: mockDisconnect, session: { save: vi.fn().mockReturnValue('') },
+  const MockTelegramClient = vi.fn().mockImplementation(function () {
+    return {
+      connect: mockConnect,
+      sendCode: mockSendCode,
+      getMe: mockGetMe,
+      disconnect: mockDisconnect,
+      session: { save: vi.fn().mockReturnValue('') },
+    };
   });
   return { MockTelegramClient, mockConnect, mockSendCode, mockGetMe, mockDisconnect };
 });
 
-vi.mock('telegram', () => ({ TelegramClient: MockTelegramClient, Api: {}, Logger: vi.fn().mockReturnValue({}) }));
+vi.mock('telegram', () => ({ TelegramClient: MockTelegramClient, Api: {}, Logger: class {} }));
 vi.mock('telegram/extensions/Logger', () => ({ LogLevel: { NONE: 0 } }));
-vi.mock('telegram/sessions', () => ({ StringSession: vi.fn().mockReturnValue({}) }));
+vi.mock('telegram/sessions', () => ({ StringSession: class {} }));
 vi.mock('../db/database', () => ({ get db() { return testDb; } }));
 
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';

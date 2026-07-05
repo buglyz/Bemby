@@ -31,6 +31,7 @@ type JobRow = {
   checkin_button: string;
   template_id: number | null;
   run_every_days: number;
+  retired: string | null;
   account_name?: string;
 };
 
@@ -68,6 +69,7 @@ function rowToJob(row: JobRow): Job & { accountName?: string } {
     checkinButton: row.checkin_button || "签到",
     templateId: row.template_id ?? null,
     runEveryDays: row.run_every_days ?? 1,
+    retired: row.retired ?? null,
   };
 }
 
@@ -78,6 +80,7 @@ router.get("/", (_req, res) => {
     SELECT j.*, a.name AS account_name
     FROM jobs j
     LEFT JOIN tg_accounts a ON j.account_id = a.id
+    WHERE j.retired IS NULL
     ORDER BY j.name COLLATE NOCASE
   `,
     )
@@ -226,7 +229,7 @@ router.put("/:id", (req, res) => {
 });
 
 router.delete("/:id", (req, res) => {
-  db.prepare("DELETE FROM jobs WHERE id = ?").run(req.params.id);
+  db.prepare("UPDATE jobs SET retired = datetime('now') WHERE id = ?").run(req.params.id);
   refreshScheduler();
   res.status(204).send();
 });

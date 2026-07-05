@@ -8,6 +8,7 @@
             <i :class="sharedMulti ? 'fa-solid fa-check' : 'fa-solid fa-share-nodes'"></i>
             {{ t('templates.shareSelectedBtn').replace('{n}', String(selectedIds.length)) }}
           </button>
+          <button class="btn btn-secondary" :disabled="isMutingBot" @click="bulkMuteBotForever"><i class="fa-solid fa-bell-slash"></i> {{ t('templates.bulkMuteBotForever') }}</button>
           <button class="btn btn-secondary" @click="bulkEnableTpls"><i class="fa-solid fa-circle-check"></i> {{ t('templates.bulkEnable').replace('{n}', String(selectedIds.length)) }}</button>
           <button class="btn btn-secondary" @click="confirmBulkDisableTpls = true"><i class="fa-solid fa-ban"></i> {{ t('templates.bulkDisable').replace('{n}', String(selectedIds.length)) }}</button>
           <button class="btn btn-danger" @click="confirmBulkDeleteTpls = true"><i class="fa-solid fa-trash"></i> {{ t('templates.bulkDelete').replace('{n}', String(selectedIds.length)) }}</button>
@@ -60,7 +61,6 @@
               <td @click.stop>
                 <div class="actions hide-mobile">
                   <button
-                    v-if="(tpl.linkedJobCount ?? 0) > 0"
                     class="btn btn-sm btn-ghost btn-icon"
                     :title="t('templates.createJobsBtn')"
                     @click="openCreateJobs(tpl)"
@@ -172,6 +172,13 @@
               </label>
               <div style="font-size:11px;color:#aaa;margin-top:4px;padding-left:24px">{{ t('jobs.markWatchedHint') }}</div>
             </div>
+            <div class="form-group" style="margin-top:4px">
+              <label class="form-check">
+                <input v-model="embyCfg.verifyPlayable" type="checkbox" />
+                <span>{{ t('jobs.labelVerifyPlayable') }}</span>
+              </label>
+              <div style="font-size:11px;color:#aaa;margin-top:4px;padding-left:24px">{{ t('jobs.verifyPlayableHint') }}</div>
+            </div>
             <div class="form-row">
               <div class="form-group">
                 <label class="form-label">{{ t('jobs.labelRunEveryDays') }}</label>
@@ -205,10 +212,14 @@
                   <span class="custom-action-num">{{ i + 1 }}</span>
                   <select v-model="action.type" class="form-select custom-action-type-select">
                     <option value="send_command">{{ t('jobs.custom.actionSendCommand') }}</option>
+                    <option value="send_contact_message">{{ t('jobs.custom.actionSendContactMessage') }}</option>
                     <option value="wait_reply">{{ t('jobs.custom.actionWaitReply') }}</option>
                     <option value="delay">{{ t('jobs.custom.actionDelay') }}</option>
                     <option value="click_button">{{ t('jobs.custom.actionClickButton') }}</option>
+                    <option value="click_message_button">{{ t('jobs.custom.actionClickMessageButton') }}</option>
                     <option value="enter_captcha" :disabled="aiKeyMissing">{{ t('jobs.custom.actionEnterCaptcha') }}{{ aiKeyMissing ? ' (' + t('jobs.noApiKey') + ')' : '' }}</option>
+                    <option value="join_group">{{ t('jobs.custom.actionJoinGroup') }}</option>
+                    <option value="subscribe_channel">{{ t('jobs.custom.actionSubscribeChannel') }}</option>
                   </select>
                   <button type="button" class="btn btn-ghost btn-sm btn-icon" :disabled="i === 0" @click="moveUp(i)"><i class="fa-solid fa-arrow-up"></i></button>
                   <button type="button" class="btn btn-ghost btn-sm btn-icon" :disabled="i === customActions.length - 1" @click="moveDown(i)"><i class="fa-solid fa-arrow-down"></i></button>
@@ -218,6 +229,37 @@
                 <!-- send_command -->
                 <div v-if="action.type === 'send_command'" class="custom-action-params">
                   <div class="form-row" style="margin-bottom:0">
+                    <div class="form-group">
+                      <label class="form-label">{{ t('jobs.custom.labelContent') }}</label>
+                      <select v-model="action.contentDropdown" class="form-select">
+                        <option value="/start">/start</option>
+                        <option value="/checkin">/checkin</option>
+                        <option value="{aiInput}" :disabled="aiKeyMissing">{{ t('jobs.aiInputOption') }}{{ aiKeyMissing ? ' (' + t('jobs.noApiKey') + ')' : '' }}</option>
+                        <option value="custom">{{ t('common.custom') }}...</option>
+                      </select>
+                      <input v-if="action.contentDropdown === 'custom'" v-model="action.contentCustom" class="form-input" style="margin-top:6px" placeholder="/mycommand" />
+                      <template v-if="action.contentDropdown === '{aiInput}'">
+                        <input v-model.trim="action.contentAiInputLength" class="form-input" style="margin-top:6px" type="number" min="1" max="20" :placeholder="t('jobs.aiInputLengthPlaceholder')" />
+                        <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.aiInputLengthHint') }}</div>
+                        <div v-if="aiKeyMissing" style="font-size:11px;color:#e63946;margin-top:4px">{{ t('jobs.aiKeyWarning') }}</div>
+                      </template>
+                      <div v-else style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.contentHint') }}</div>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">{{ t('jobs.custom.labelMaxRetries') }}</label>
+                      <input v-model.number="action.maxRetries" class="form-input" type="number" min="0" max="10" />
+                    </div>
+                  </div>
+                </div>
+
+                <!-- send_contact_message -->
+                <div v-if="action.type === 'send_contact_message'" class="custom-action-params">
+                  <div class="form-group" style="margin-bottom:0">
+                    <label class="form-label">{{ t('jobs.custom.labelContact') }}</label>
+                    <input v-model.trim="action.contact" class="form-input" :placeholder="t('jobs.custom.contactPlaceholder')" />
+                    <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.contactHint') }}</div>
+                  </div>
+                  <div class="form-row" style="margin-bottom:0;margin-top:8px">
                     <div class="form-group">
                       <label class="form-label">{{ t('jobs.custom.labelContent') }}</label>
                       <select v-model="action.contentDropdown" class="form-select">
@@ -311,6 +353,51 @@
                   </div>
                 </div>
 
+                <!-- click_message_button -->
+                <div v-if="action.type === 'click_message_button'" class="custom-action-params">
+                  <div class="form-group" style="margin-bottom:0">
+                    <label class="form-label">{{ t('jobs.custom.labelContact') }}</label>
+                    <input v-model.trim="action.contact" class="form-input" :placeholder="t('jobs.custom.contactPlaceholder')" />
+                    <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.contactHint') }}</div>
+                  </div>
+                  <div class="form-row" style="margin-bottom:0;margin-top:8px">
+                    <div class="form-group">
+                      <label class="form-label">{{ t('jobs.custom.labelButton') }}</label>
+                      <select v-model="action.buttonDropdown" class="form-select">
+                        <option value="签到">签到</option>
+                        <option value="{aiBtn}" :disabled="aiKeyMissing">{{ t('jobs.aiBtnOption') }}{{ aiKeyMissing ? ' (' + t('jobs.noApiKey') + ')' : '' }}</option>
+                        <option value="{anyBtn}">{{ t('jobs.anyBtnOption') }}</option>
+                        <option value="custom">{{ t('common.custom') }}...</option>
+                      </select>
+                      <input v-if="action.buttonDropdown === 'custom'" v-model="action.buttonCustom" class="form-input" style="margin-top:6px" placeholder="Custom button text" />
+                      <template v-if="action.buttonDropdown === '{aiBtn}'">
+                        <input v-model.trim="action.buttonAiHint" class="form-input" style="margin-top:6px" :placeholder="t('jobs.aiHintPlaceholder')" />
+                        <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.aiHintHint') }}</div>
+                        <div v-if="aiKeyMissing" style="font-size:11px;color:#e63946;margin-top:4px">{{ t('jobs.aiKeyWarning') }}</div>
+                      </template>
+                      <div v-else style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.buttonHint') }}</div>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">{{ t('jobs.custom.labelMaxRetries') }}</label>
+                      <input v-model.number="action.maxRetries" class="form-input" type="number" min="0" max="10" />
+                    </div>
+                  </div>
+                  <div class="form-group" style="margin-bottom:0">
+                    <label class="form-label">{{ t('jobs.custom.labelMaxWait') }}</label>
+                    <input v-model.number="action.maxWaitMs" class="form-input" type="number" min="1000" step="1000" />
+                  </div>
+                  <div class="form-group" style="margin-bottom:0">
+                    <label class="form-label">{{ t('jobs.custom.labelSuccessContains') }}</label>
+                    <input v-model.trim="action.successContains" class="form-input" :placeholder="t('jobs.custom.successContainsPlaceholder')" />
+                    <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.successContainsHint') }}</div>
+                  </div>
+                  <div class="form-group" style="margin-bottom:0">
+                    <label class="form-label">{{ t('jobs.custom.labelFailContains') }}</label>
+                    <input v-model.trim="action.failContains" class="form-input" :placeholder="t('jobs.custom.failContainsPlaceholder')" />
+                    <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.failContainsHint') }}</div>
+                  </div>
+                </div>
+
                 <!-- enter_captcha -->
                 <div v-if="action.type === 'enter_captcha'" class="custom-action-params">
                   <div class="form-row" style="margin-bottom:0">
@@ -329,6 +416,47 @@
                   </div>
                   <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.aiInputLengthHint') }}</div>
                   <div v-if="aiKeyMissing" style="font-size:11px;color:#e63946;margin-top:4px">{{ t('jobs.aiKeyWarning') }}</div>
+                </div>
+
+                <!-- join_group -->
+                <div v-if="action.type === 'join_group'" class="custom-action-params">
+                  <div class="form-group" style="margin-bottom:0">
+                    <label class="form-label">{{ t('jobs.custom.labelGroupId') }}</label>
+                    <input v-model.trim="action.groupId" class="form-input" :placeholder="t('jobs.custom.groupIdPlaceholder')" />
+                    <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.groupIdHint') }}</div>
+                  </div>
+                  <div class="form-group" style="margin-bottom:0;margin-top:8px">
+                    <label class="form-checkbox-label">
+                      <input type="checkbox" v-model="action.checkMembership" />
+                      {{ t('jobs.custom.labelCheckMembership') }}
+                    </label>
+                    <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.checkMembershipHint') }}</div>
+                  </div>
+                  <div class="form-group" style="margin-bottom:0;margin-top:8px">
+                    <label class="form-label">{{ t('jobs.custom.labelVerifyButton') }}</label>
+                    <input v-model.trim="action.verifyButton" class="form-input" :placeholder="t('jobs.custom.verifyButtonPlaceholder')" />
+                    <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.verifyButtonHint') }}</div>
+                  </div>
+                  <div v-if="action.verifyButton" class="form-group" style="margin-bottom:0;margin-top:8px">
+                    <label class="form-label">{{ t('jobs.custom.labelVerifyWaitMs') }}</label>
+                    <input v-model.number="action.verifyWaitMs" type="number" min="1000" step="1000" class="form-input" />
+                  </div>
+                </div>
+
+                <!-- subscribe_channel -->
+                <div v-if="action.type === 'subscribe_channel'" class="custom-action-params">
+                  <div class="form-group" style="margin-bottom:0">
+                    <label class="form-label">{{ t('jobs.custom.labelChannelId') }}</label>
+                    <input v-model.trim="action.channelId" class="form-input" :placeholder="t('jobs.custom.channelIdPlaceholder')" />
+                    <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.channelIdHint') }}</div>
+                  </div>
+                  <div class="form-group" style="margin-bottom:0;margin-top:8px">
+                    <label class="form-checkbox-label">
+                      <input type="checkbox" v-model="action.checkMembership" />
+                      {{ t('jobs.custom.labelCheckSubscription') }}
+                    </label>
+                    <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.checkSubscriptionHint') }}</div>
+                  </div>
                 </div>
               </div>
               <button type="button" class="btn btn-ghost btn-sm" style="margin-top:8px" @click="addAction">
@@ -451,7 +579,7 @@
                     :disabled="row.account.authStatus !== 'authenticated'"
                     @change="row.selected = ($event.target as HTMLInputElement).checked"
                   />
-                  <span class="create-job-account-name">{{ row.account.name }}</span>
+                  <span class="create-job-account-name">{{ formatAccountLabel(row.account) }}</span>
                   <span style="font-size:11px;color:#aaa">{{ row.account.phoneNumber }}</span>
                   <span v-if="row.account.authStatus !== 'authenticated'" class="badge badge-grey" style="font-size:10px">
                     {{ t('templates.createJobsNotAuth') }}
@@ -589,17 +717,20 @@
         </button>
       </div>
     </div>
+    <!-- Mute toast -->
+    <div v-if="muteToast" class="tpl-toast">{{ muteToast }}</div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue';
-import { templatesApi, settingsApi, type JobTemplate, type Settings, type UAPreset, type Proxy, type EmbywatchConfig, type CustomConfig, type CustomAction, type AvailableAccount } from '../api/client';
+import { templatesApi, settingsApi, accountsApi, tgClientApi, type JobTemplate, type Settings, type UAPreset, type Proxy, type EmbywatchConfig, type CustomConfig, type CustomAction, type AvailableAccount } from '../api/client';
 import { t } from '../i18n';
 import { usePersistedRef } from '../composables/usePersistedRef';
+import { formatAccountLabel, loadAccountDisplaySetting } from '../composables/accountDisplay';
 
 type CustomActionForm = {
-  type: 'send_command' | 'wait_reply' | 'delay' | 'click_button' | 'enter_captcha';
+  type: 'send_command' | 'send_contact_message' | 'wait_reply' | 'delay' | 'click_button' | 'click_message_button' | 'enter_captcha' | 'join_group' | 'subscribe_channel';
   content: string;
   contentDropdown: string;
   contentCustom: string;
@@ -614,6 +745,12 @@ type CustomActionForm = {
   captchaLength: string;
   successContains: string;
   failContains: string;
+  contact: string;
+  groupId: string;
+  checkMembership: boolean;
+  verifyButton: string;
+  verifyWaitMs: number;
+  channelId: string;
 };
 
 const templates = ref<JobTemplate[]>([]);
@@ -721,12 +858,13 @@ const form = reactive({
   runEveryDays: 1,
 });
 
-const embyCfg = reactive<{ username: string; password: string; playDuration: number | string; userAgent: string; markWatched: boolean }>({
+const embyCfg = reactive<{ username: string; password: string; playDuration: number | string; userAgent: string; markWatched: boolean; verifyPlayable: boolean }>({
   username: '',
   password: '',
   playDuration: '',
   userAgent: '',
   markWatched: true,
+  verifyPlayable: true,
 });
 const tplProxyId = ref('');
 const embyUaDropdown = ref('');
@@ -778,7 +916,7 @@ function onUaDropdownChange() {
 }
 
 function onJobTypeChange() {
-  Object.assign(embyCfg, { username: '', password: '', playDuration: '', userAgent: '', markWatched: true });
+  Object.assign(embyCfg, { username: '', password: '', playDuration: '', userAgent: '', markWatched: true, verifyPlayable: true });
   Object.assign(embyServer, { protocol: 'https', host: '', port: 443 });
   embyUaDropdown.value = '';
   tplProxyId.value = '';
@@ -795,7 +933,8 @@ function defaultAction(): CustomActionForm {
     type: 'send_command', content: '/start', contentDropdown: '/start', contentCustom: '',
     contentAiInputLength: '', maxWaitMs: 30000, waitMs: 2000, button: '签到',
     buttonDropdown: '签到', buttonCustom: '', buttonAiHint: '', maxRetries: 3,
-    captchaLength: '', successContains: '', failContains: '',
+    captchaLength: '', successContains: '', failContains: '', contact: '', groupId: '', checkMembership: false,
+    verifyButton: '', verifyWaitMs: 30000, channelId: '',
   };
 }
 
@@ -841,6 +980,7 @@ function buildConfig(): EmbywatchConfig | CustomConfig | null {
     if (embyCfg.playDuration !== '') cfg.playDuration = Number(embyCfg.playDuration as string | number);
     if (embyCfg.userAgent) cfg.userAgent = embyCfg.userAgent;
     cfg.markWatched = embyCfg.markWatched;
+    cfg.verifyPlayable = embyCfg.verifyPlayable;
     if (tplProxyId.value) cfg.proxyId = tplProxyId.value;
     return cfg as EmbywatchConfig;
   }
@@ -856,6 +996,15 @@ function buildConfig(): EmbywatchConfig | CustomConfig | null {
           }
           return { type: 'send_command' as const, content, ...(a.maxRetries > 0 ? { maxRetries: a.maxRetries } : {}) };
         }
+        if (a.type === 'send_contact_message') {
+          let content: string;
+          if (a.contentDropdown === '{aiInput}') {
+            content = a.contentAiInputLength ? `{aiInput:${a.contentAiInputLength}}` : '{aiInput}';
+          } else {
+            content = a.contentDropdown === 'custom' ? a.contentCustom : a.contentDropdown;
+          }
+          return { type: 'send_contact_message' as const, contact: a.contact, content, ...(a.maxRetries > 0 ? { maxRetries: a.maxRetries } : {}) };
+        }
         if (a.type === 'wait_reply') {
           return {
             type: 'wait_reply' as const,
@@ -870,10 +1019,26 @@ function buildConfig(): EmbywatchConfig | CustomConfig | null {
           const captchaLength = a.captchaLength ? parseInt(a.captchaLength) || undefined : undefined;
           return { type: 'enter_captcha' as const, maxWaitMs: a.maxWaitMs, captchaLength, ...(a.maxRetries > 0 ? { maxRetries: a.maxRetries } : {}) };
         }
+        if (a.type === 'join_group') return {
+          type: 'join_group' as const,
+          groupId: a.groupId,
+          ...(a.checkMembership ? { checkMembership: true } : {}),
+          ...(a.verifyButton.trim() ? { verifyButton: a.verifyButton.trim(), verifyWaitMs: a.verifyWaitMs } : {}),
+        };
+        if (a.type === 'subscribe_channel') return { type: 'subscribe_channel' as const, channelId: a.channelId, ...(a.checkMembership ? { checkMembership: true } : {}) };
         let button: string;
         if (a.buttonDropdown === 'custom') button = a.buttonCustom;
         else if (a.buttonDropdown === '{aiBtn}') button = a.buttonAiHint.trim() ? `{aiBtn:${a.buttonAiHint.trim()}}` : '{aiBtn}';
         else button = a.buttonDropdown || '签到';
+        if (a.type === 'click_message_button') return {
+          type: 'click_message_button' as const,
+          contact: a.contact,
+          button,
+          maxRetries: a.maxRetries,
+          maxWaitMs: a.maxWaitMs,
+          ...(a.successContains.trim() ? { successContains: a.successContains.trim() } : {}),
+          ...(a.failContains.trim() ? { failContains: a.failContains.trim() } : {}),
+        };
         return {
           type: 'click_button' as const,
           button,
@@ -903,6 +1068,7 @@ function buildConfig(): EmbywatchConfig | CustomConfig | null {
 }
 
 onMounted(async () => {
+  loadAccountDisplaySetting();
   await Promise.all([loadTemplates(), loadSettings()]);
 });
 
@@ -924,7 +1090,7 @@ function openAdd() {
     replyTimeoutMs: 40000,
     retryMax: Number(settings.value?.default_max_retry ?? 5),
   });
-  Object.assign(embyCfg, { username: '', password: '', playDuration: '', userAgent: '', markWatched: true });
+  Object.assign(embyCfg, { username: '', password: '', playDuration: '', userAgent: '', markWatched: true, verifyPlayable: true });
   Object.assign(embyServer, { protocol: 'https', host: '', port: 443 });
   embyUaDropdown.value = '';
   tplProxyId.value = '';
@@ -969,19 +1135,20 @@ function openEdit(tpl: JobTemplate) {
           playDuration: c.playDuration ?? '',
           userAgent: c.userAgent ?? '',
           markWatched: c.markWatched !== false,
+          verifyPlayable: c.verifyPlayable !== false,
         });
         tplProxyId.value = c.proxyId ?? '';
         setUaState(c.userAgent ?? '');
       } catch {
-        Object.assign(embyCfg, { username: '', password: '', playDuration: '', userAgent: '', markWatched: true });
+        Object.assign(embyCfg, { username: '', password: '', playDuration: '', userAgent: '', markWatched: true, verifyPlayable: true });
         embyUaDropdown.value = '';
       }
     } else {
-      Object.assign(embyCfg, { username: '', password: '', playDuration: '', userAgent: '', markWatched: true });
+      Object.assign(embyCfg, { username: '', password: '', playDuration: '', userAgent: '', markWatched: true, verifyPlayable: true });
       embyUaDropdown.value = '';
     }
   } else if (tpl.jobType === 'custom') {
-    Object.assign(embyCfg, { username: '', password: '', playDuration: '', userAgent: '', markWatched: true });
+    Object.assign(embyCfg, { username: '', password: '', playDuration: '', userAgent: '', markWatched: true, verifyPlayable: true });
     Object.assign(embyServer, { protocol: 'https', host: '', port: 443 });
     if (tpl.config) {
       try {
@@ -998,9 +1165,19 @@ function openEdit(tpl: JobTemplate) {
             const contentDropdown = ACTION_CMD_PRESETS.has(a.content) ? a.content : 'custom';
             return { ...base, type: 'send_command' as const, content: a.content, contentDropdown, contentCustom: contentDropdown === 'custom' ? a.content : '', contentAiInputLength: '', maxRetries: a.maxRetries ?? 0 };
           }
+          if (a.type === 'send_contact_message') {
+            const aiInputMatch = a.content.match(/^\{aiInput(?::(\d+))?\}$/);
+            if (aiInputMatch) {
+              return { ...base, type: 'send_contact_message' as const, contact: a.contact, content: a.content, contentDropdown: '{aiInput}', contentCustom: '', contentAiInputLength: aiInputMatch[1] ?? '', maxRetries: a.maxRetries ?? 0 };
+            }
+            const contentDropdown = ACTION_CMD_PRESETS.has(a.content) ? a.content : 'custom';
+            return { ...base, type: 'send_contact_message' as const, contact: a.contact, content: a.content, contentDropdown, contentCustom: contentDropdown === 'custom' ? a.content : '', contentAiInputLength: '', maxRetries: a.maxRetries ?? 0 };
+          }
           if (a.type === 'wait_reply') return { ...base, type: 'wait_reply' as const, maxWaitMs: a.maxWaitMs, successContains: a.successContains ?? '', failContains: a.failContains ?? '', maxRetries: a.maxRetries ?? 0 };
           if (a.type === 'delay') return { ...base, type: 'delay' as const, waitMs: a.waitMs };
           if (a.type === 'enter_captcha') return { ...base, type: 'enter_captcha' as const, maxWaitMs: a.maxWaitMs, captchaLength: String(a.captchaLength ?? ''), maxRetries: a.maxRetries ?? 0 };
+          if (a.type === 'join_group') return { ...base, type: 'join_group' as const, groupId: a.groupId, checkMembership: a.checkMembership ?? false, verifyButton: a.verifyButton ?? '', verifyWaitMs: a.verifyWaitMs ?? 30000 };
+          if (a.type === 'subscribe_channel') return { ...base, type: 'subscribe_channel' as const, channelId: a.channelId, checkMembership: a.checkMembership ?? false };
           if (a.type === 'click_button') {
             const aiMatch = a.button.match(/^\{aiBtn(?::(.+))?\}$/);
             let buttonDropdown: string, buttonCustom = '', buttonAiHint = '';
@@ -1013,6 +1190,18 @@ function openEdit(tpl: JobTemplate) {
             }
             return { ...base, type: 'click_button' as const, button: a.button, buttonDropdown, buttonCustom, buttonAiHint, maxRetries: a.maxRetries, maxWaitMs: a.maxWaitMs, successContains: a.successContains ?? '', failContains: a.failContains ?? '' };
           }
+          if (a.type === 'click_message_button') {
+            const aiMatch = a.button.match(/^\{aiBtn(?::(.+))?\}$/);
+            let buttonDropdown: string, buttonCustom = '', buttonAiHint = '';
+            if (aiMatch) {
+              buttonDropdown = '{aiBtn}'; buttonAiHint = aiMatch[1]?.trim() ?? '';
+            } else if (ACTION_BTN_PRESETS.has(a.button)) {
+              buttonDropdown = a.button;
+            } else {
+              buttonDropdown = 'custom'; buttonCustom = a.button;
+            }
+            return { ...base, type: 'click_message_button' as const, contact: a.contact, button: a.button, buttonDropdown, buttonCustom, buttonAiHint, maxRetries: a.maxRetries, maxWaitMs: a.maxWaitMs, successContains: a.successContains ?? '', failContains: a.failContains ?? '' };
+          }
           return base;
         });
       } catch { customActions.value = []; customJobMaxRetries.value = 1; }
@@ -1022,7 +1211,7 @@ function openEdit(tpl: JobTemplate) {
     }
   } else {
     // checkin
-    Object.assign(embyCfg, { username: '', password: '', playDuration: '', userAgent: '', markWatched: true });
+    Object.assign(embyCfg, { username: '', password: '', playDuration: '', userAgent: '', markWatched: true, verifyPlayable: true });
     Object.assign(embyServer, { protocol: 'https', host: '', port: 443 });
     customActions.value = [];
     tplCheckinSuccessContains.value = '';
@@ -1200,6 +1389,48 @@ async function executeBulkDeleteTpls() {
   await loadTemplates();
   confirmBulkDeleteTpls.value = false;
   selectedIds.value = [];
+}
+
+const muteToast = ref('');
+const isMutingBot = ref(false);
+let muteToastTimer: ReturnType<typeof setTimeout> | null = null;
+
+// ~15 calls/min -- safe for Telegram's account.UpdateNotifySettings
+const MUTE_RATE_MS = 4000;
+
+async function bulkMuteBotForever() {
+  if (isMutingBot.value) return;
+
+  const botUsernames = [...new Set(
+    templates.value
+      .filter(t => selectedIds.value.includes(t.id) && t.botUsername)
+      .map(t => t.botUsername)
+  )];
+  if (!botUsernames.length) return;
+
+  const accounts = (await accountsApi.list()).filter(a => !a.disabled);
+  const MUTE_FOREVER = 365 * 24 * 3600;
+  const pairs = accounts.flatMap(acc => botUsernames.map(bot => ({ acc, bot })));
+
+  isMutingBot.value = true;
+  if (muteToastTimer) clearTimeout(muteToastTimer);
+
+  for (let i = 0; i < pairs.length; i++) {
+    const { acc, bot } = pairs[i];
+    muteToast.value = t('templates.bulkMutingProgress')
+      .replace('{done}', String(i + 1))
+      .replace('{total}', String(pairs.length));
+    try {
+      await tgClientApi.mute(acc.id, bot, MUTE_FOREVER);
+    } catch { /* continue on individual failure */ }
+    if (i < pairs.length - 1) {
+      await new Promise(resolve => setTimeout(resolve, MUTE_RATE_MS));
+    }
+  }
+
+  isMutingBot.value = false;
+  muteToast.value = t('templates.bulkMuteBotForeverDone');
+  muteToastTimer = setTimeout(() => { muteToast.value = ''; }, 3000);
 }
 
 const SHARE_KEYS: (keyof JobTemplate)[] = ['name', 'jobType', 'botUsername', 'timezone', 'replyTimeoutMs', 'retryMax', 'config', 'startCommand', 'checkinButton'];
@@ -1433,5 +1664,26 @@ tbody tr:nth-child(even):not(.row-selected) td {
   font-weight: 500;
   font-size: 13px;
   flex: 1;
+}
+
+.tpl-toast {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(26, 26, 46, 0.88);
+  color: #fff;
+  font-size: 13px;
+  padding: 8px 20px;
+  border-radius: 20px;
+  pointer-events: none;
+  z-index: 9999;
+  white-space: nowrap;
+  animation: tpl-fade-in 0.15s ease;
+}
+
+@keyframes tpl-fade-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(6px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 </style>

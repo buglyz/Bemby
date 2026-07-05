@@ -3,7 +3,11 @@
     <div class="page-header">
       <h2 class="page-title">{{ t("accounts.title") }}</h2>
       <div class="page-header-actions">
-        <button v-if="accounts.length" class="btn btn-secondary" @click="toggleSelectAll">
+        <button
+          v-if="accounts.length"
+          class="btn btn-secondary"
+          @click="toggleSelectAll"
+        >
           {{ allSelected ? t("common.deselectAll") : t("common.selectAll") }}
         </button>
         <button
@@ -18,6 +22,14 @@
         <button
           v-if="selectedIds.size > 0"
           class="btn btn-secondary"
+          @click="openBulkNotes"
+        >
+          <i class="fa-solid fa-note-sticky"></i>
+          {{ t("accounts.setNotesSelected") }} ({{ selectedIds.size }})
+        </button>
+        <button
+          v-if="selectedIds.size > 0"
+          class="btn btn-secondary"
           @click="openExportWarn"
         >
           <i class="fa-solid fa-file-export"></i>
@@ -25,6 +37,17 @@
         </button>
         <button v-else class="btn btn-secondary" @click="openExportWarn">
           <i class="fa-solid fa-file-export"></i> {{ t("accounts.exportBtn") }}
+        </button>
+        <button class="btn btn-secondary" @click="showNotes = !showNotes">
+          <i
+            class="fa-solid"
+            :class="showNotes ? 'fa-eye-slash' : 'fa-eye'"
+          ></i>
+          {{
+            showNotes
+              ? t("accounts.hideNotesToggle")
+              : t("accounts.showNotesToggle")
+          }}
         </button>
         <button class="btn btn-secondary" @click="openImport">
           <i class="fa-solid fa-file-import"></i> {{ t("accounts.importBtn") }}
@@ -45,13 +68,14 @@
               <th>{{ t("accounts.colPhone") }}</th>
               <th class="col-hide-mobile">{{ t("accounts.colTgName") }}</th>
               <th>{{ t("accounts.colStatus") }}</th>
+              <th :class="notesColClass">{{ t("accounts.colNotes") }}</th>
               <th class="col-hide-mobile">{{ t("accounts.colAdded") }}</th>
               <th>{{ t("common.actions") }}</th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="!accounts.length">
-              <td colspan="7" class="empty">{{ t("accounts.noAccounts") }}</td>
+              <td :colspan="showNotes ? 8 : 7" class="empty">{{ t("accounts.noAccounts") }}</td>
             </tr>
             <tr
               v-for="(a, idx) in accounts"
@@ -61,7 +85,7 @@
                 dragOverIdx === idx ? 'drag-over' : '',
                 selectedIds.has(a.id) ? 'row-selected' : '',
               ]"
-              style="cursor:pointer"
+              style="cursor: pointer"
               draggable="true"
               @click="toggleSelect(a.id)"
               @dragstart="onDragStart(idx, $event)"
@@ -102,6 +126,14 @@
                     proxiesList.find((p) => p.id === a.proxyId)?.name ?? "Proxy"
                   }}</span
                 >
+                <div
+                  v-if="a.resolvedDeviceModel"
+                  class="device-model-preview"
+                  :title="t('accounts.deviceModelPreview')"
+                >
+                  <i class="fa-solid fa-mobile-screen"></i>
+                  {{ a.resolvedDeviceModel }}
+                </div>
               </td>
               <td>{{ a.phoneNumber }}</td>
               <td class="col-hide-mobile">
@@ -111,7 +143,9 @@
                   </span>
                   <template v-else-if="a.tgDisplayName">
                     <span class="tg-name-text">{{ a.tgDisplayName }}</span>
-                    <span v-if="a.tgUsername" class="tg-name-username">@{{ a.tgUsername }}</span>
+                    <span v-if="a.tgUsername" class="tg-name-username"
+                      >@{{ a.tgUsername }}</span
+                    >
                   </template>
                   <button
                     v-if="a.authStatus === 'authenticated'"
@@ -133,7 +167,11 @@
                   class="badge badge-grey"
                   style="margin-left: 6px"
                 >
-                  <i class="fa-solid fa-spinner fa-spin" style="margin-right: 3px"></i>{{ t("accounts.spamChecking") }}
+                  <i
+                    class="fa-solid fa-spinner fa-spin"
+                    style="margin-right: 3px"
+                  ></i
+                  >{{ t("accounts.spamChecking") }}
                 </span>
                 <span
                   v-else-if="spamStatuses.get(a.id)"
@@ -141,9 +179,16 @@
                   :title="spamStatuses.get(a.id)!.rawMessage"
                   style="margin-left: 6px; cursor: help"
                 >
-                  <i class="fa-solid fa-shield-halved" style="margin-right: 3px"></i>{{ t(`accounts.spam.${spamStatuses.get(a.id)!.spamStatus}`) }}
+                  <i
+                    class="fa-solid fa-shield-halved"
+                    style="margin-right: 3px"
+                  ></i
+                  >{{
+                    t(`accounts.spam.${spamStatuses.get(a.id)!.spamStatus}`)
+                  }}
                 </span>
               </td>
+              <td :class="notesColClass" style="max-width: 200px; white-space: pre-wrap; word-break: break-word">{{ a.notes }}</td>
               <td class="col-hide-mobile">{{ fmtDate(a.createdAt) }}</td>
               <td @click.stop>
                 <!-- desktop: icon buttons -->
@@ -166,10 +211,20 @@
                   </button>
                   <button
                     class="btn btn-sm btn-ghost btn-icon"
-                    :title="a.disabled ? t('accounts.enableAccount') : t('accounts.disableAccount')"
+                    :title="
+                      a.disabled
+                        ? t('accounts.enableAccount')
+                        : t('accounts.disableAccount')
+                    "
                     @click="toggleDisabled(a)"
                   >
-                    <i :class="a.disabled ? 'fa-solid fa-circle-play' : 'fa-solid fa-ban'"></i>
+                    <i
+                      :class="
+                        a.disabled
+                          ? 'fa-solid fa-circle-play'
+                          : 'fa-solid fa-ban'
+                      "
+                    ></i>
                   </button>
                   <button
                     class="btn btn-sm btn-ghost btn-icon"
@@ -187,13 +242,51 @@
                   </button>
                 </div>
                 <!-- mobile: ... opens action sheet -->
-                <button class="btn btn-sm btn-ghost btn-icon show-mobile" @click="actionMenuAccount = a">
+                <button
+                  class="btn btn-sm btn-ghost btn-icon show-mobile"
+                  @click="actionMenuAccount = a"
+                >
                   <i class="fa-solid fa-ellipsis-vertical"></i>
                 </button>
               </td>
             </tr>
           </tbody>
         </table>
+      </div>
+    </div>
+
+    <!-- Bulk notes modal -->
+    <div v-if="showBulkNotes" class="modal-backdrop">
+      <div class="modal" style="max-width: 420px">
+        <h3 class="modal-title">
+          {{ t("accounts.bulkNotesTitle") }} ({{ selectedIds.size }})
+        </h3>
+        <div class="form-group">
+          <label class="form-label">{{ t("accounts.labelNotes") }}</label>
+          <textarea
+            v-model="bulkNotesText"
+            class="form-input"
+            rows="4"
+            :placeholder="t('accounts.notesPlaceholder')"
+            style="resize: vertical"
+          ></textarea>
+        </div>
+        <div class="modal-actions">
+          <button
+            class="btn btn-ghost"
+            :disabled="bulkNotesSaving"
+            @click="showBulkNotes = false"
+          >
+            {{ t("common.cancel") }}
+          </button>
+          <button
+            class="btn btn-primary"
+            :disabled="bulkNotesSaving"
+            @click="saveBulkNotes"
+          >
+            {{ bulkNotesSaving ? t("common.saving") : t("common.save") }}
+          </button>
+        </div>
       </div>
     </div>
 
@@ -219,6 +312,34 @@
                 : `Exporting all ${accounts.length} account(s)`
           }}
         </p>
+        <div class="form-group" style="margin-top: 12px">
+          <label class="form-label">{{
+            t("accounts.exportSecretLabel")
+          }}</label>
+          <div class="input-with-toggle">
+            <input
+              v-model="exportSecret"
+              :type="showExportSecret ? 'text' : 'password'"
+              class="form-input"
+              :placeholder="t('accounts.exportSecretPlaceholder')"
+              autocomplete="new-password"
+            />
+            <button
+              type="button"
+              class="toggle-secret-btn"
+              @click="showExportSecret = !showExportSecret"
+            >
+              <i
+                :class="
+                  showExportSecret ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye'
+                "
+              ></i>
+            </button>
+          </div>
+          <p style="font-size: 11px; color: #888; margin: 4px 0 0">
+            {{ t("accounts.exportSecretHint") }}
+          </p>
+        </div>
         <div class="modal-footer">
           <button class="btn btn-ghost" @click="showExportWarn = false">
             <i class="fa-solid fa-xmark"></i> {{ t("common.cancel") }}
@@ -244,6 +365,45 @@
             class="form-input"
             @change="onImportFile"
           />
+        </div>
+        <div v-if="importFileEncrypted" class="form-group">
+          <label class="form-label">{{
+            t("accounts.importSecretLabel")
+          }}</label>
+          <div class="input-with-toggle">
+            <input
+              v-model="importSecret"
+              :type="showImportSecret ? 'text' : 'password'"
+              class="form-input"
+              :placeholder="t('accounts.importSecretPlaceholder')"
+              autocomplete="current-password"
+            />
+            <button
+              type="button"
+              class="toggle-secret-btn"
+              @click="showImportSecret = !showImportSecret"
+            >
+              <i
+                :class="
+                  showImportSecret ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye'
+                "
+              ></i>
+            </button>
+          </div>
+        </div>
+        <div class="form-group" style="margin-top: 12px">
+          <label class="form-check">
+            <input type="checkbox" v-model="importForceReauth" />
+            <span>{{ t("accounts.forceReauthLabel") }}</span>
+          </label>
+          <div class="form-hint">{{ t("accounts.forceReauthHint") }}</div>
+          <div
+            v-if="!importForceReauth"
+            class="warn-box"
+            style="margin-top: 8px"
+          >
+            {{ t("accounts.forceReauthRisk") }}
+          </div>
         </div>
         <div v-if="importError" class="error-msg">{{ importError }}</div>
         <div v-if="importResult" class="success-msg">{{ importResult }}</div>
@@ -271,97 +431,612 @@
         <h3 class="modal-title">
           {{ t(editTarget ? "accounts.editTitle" : "accounts.addTitle") }}
         </h3>
-        <div v-if="formError" class="error-msg">{{ formError }}</div>
-        <div class="form-group">
-          <label class="form-label">{{ t("accounts.labelName") }}</label>
-          <input
-            v-model.trim="form.name"
-            class="form-input"
-            placeholder="e.g. My Account"
-          />
-        </div>
-        <div class="form-group">
-          <label class="form-label">{{ t("accounts.labelPhone") }}</label>
-          <input
-            v-model.trim="form.phoneNumber"
-            class="form-input"
-            placeholder="+61412345678"
-          />
-        </div>
-        <div class="form-group" style="max-width: 140px">
-          <label class="form-label">{{ t("accounts.labelApiId") }}</label>
-          <input v-model.trim="form.apiId" class="form-input" type="number" />
-        </div>
-        <div class="form-group">
-          <label class="form-label">{{ t("accounts.labelApiHash") }}</label>
-          <input
-            v-model.trim="form.apiHash"
-            class="form-input"
-            placeholder="32-char hex"
-            style="font-family: monospace"
-          />
-        </div>
-        <p
-          style="
-            font-size: 12px;
-            color: #888;
-            margin-top: -8px;
-            margin-bottom: 14px;
-          "
+
+        <!-- Tabs: only shown when editing an authenticated account -->
+        <div
+          v-if="editTarget?.authStatus === 'authenticated'"
+          class="edit-tabs"
         >
-          {{ t("accounts.apiHint") }}
-          <a href="https://my.telegram.org/apps" target="_blank"
-            >my.telegram.org/apps</a
+          <button
+            :class="['edit-tab', editTab === 'basic' ? 'active' : '']"
+            @click="editTab = 'basic'"
           >
-        </p>
-        <div v-if="proxiesList.length" class="form-group">
-          <label class="form-label">{{ t("accounts.labelProxy") }}</label>
-          <select v-model="form.proxyId" class="form-select">
-            <option value="">{{ t("accounts.proxyNone") }}</option>
-            <option v-for="p in proxiesList" :key="p.id" :value="p.id">
-              {{ p.name }}
-            </option>
-          </select>
+            {{ t("accounts.tabBasic") }}
+          </button>
+          <button
+            :class="['edit-tab', editTab === 'profile' ? 'active' : '']"
+            @click="editTab = 'profile'"
+          >
+            {{ t("accounts.tabProfile") }}
+          </button>
+          <button
+            :class="['edit-tab', editTab === 'twofa' ? 'active' : '']"
+            @click="editTab = 'twofa'"
+          >
+            {{ t("accounts.tab2fa") }}
+          </button>
+          <button
+            :class="['edit-tab', editTab === 'devices' ? 'active' : '']"
+            @click="editTab = 'devices'"
+          >
+            {{ t("accounts.tabDevices") }}
+          </button>
+          <button
+            :class="['edit-tab', editTab === 'recovery' ? 'active' : '']"
+            @click="editTab = 'recovery'"
+          >
+            {{ t("accounts.tabRecovery") }}
+          </button>
         </div>
-        <div class="form-group">
-          <label class="form-label">{{ t("accounts.labelAppClient") }}</label>
-          <select v-model="form.appClientId" class="form-select">
-            <option value="">
+
+        <div class="modal-body">
+        <!-- Basic tab -->
+        <div v-show="editTab === 'basic'">
+          <div v-if="formError" class="error-msg">{{ formError }}</div>
+          <div class="form-group">
+            <label class="form-label">{{ t("accounts.labelName") }}</label>
+            <input
+              v-model.trim="form.name"
+              class="form-input"
+              placeholder="e.g. My Account"
+            />
+          </div>
+          <div class="form-group">
+            <label class="form-label">{{ t("accounts.labelPhone") }}</label>
+            <input
+              v-model.trim="form.phoneNumber"
+              class="form-input"
+              placeholder="+61412345678"
+            />
+          </div>
+          <div class="form-group" style="max-width: 140px">
+            <label class="form-label">
               {{
-                tgClientMode === "random"
-                  ? t("accounts.appClientRandom")
-                  : `${t("accounts.appClientDefault")}${defaultClientName ? ` (${defaultClientName})` : ""}`
+                hasGlobalTgCreds
+                  ? t("accounts.apiIdOptional")
+                  : t("accounts.labelApiId")
               }}
-            </option>
-            <option v-for="c in appClientsList" :key="c.id" :value="c.id">
-              {{ c.name }}
-            </option>
-          </select>
+            </label>
+            <input v-model.trim="form.apiId" class="form-input" type="number" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">
+              {{
+                hasGlobalTgCreds
+                  ? t("accounts.apiHashOptional")
+                  : t("accounts.labelApiHash")
+              }}
+            </label>
+            <input
+              v-model.trim="form.apiHash"
+              class="form-input"
+              :placeholder="
+                hasGlobalTgCreds ? t('accounts.apiHashOptional') : '32-char hex'
+              "
+              style="font-family: monospace"
+            />
+          </div>
+          <p
+            v-if="hasGlobalTgCreds"
+            style="
+              font-size: 12px;
+              color: #2ec4b6;
+              margin-top: -8px;
+              margin-bottom: 14px;
+            "
+          >
+            <i class="fa-solid fa-circle-info" style="margin-right: 4px"></i
+            >{{ t("accounts.apiOptionalHint") }}
+          </p>
+          <p
+            v-else
+            style="
+              font-size: 12px;
+              color: #888;
+              margin-top: -8px;
+              margin-bottom: 14px;
+            "
+          >
+            {{ t("accounts.apiHint") }}
+            <a href="https://my.telegram.org/apps" target="_blank"
+              >my.telegram.org/apps</a
+            >
+          </p>
+          <div v-if="proxiesList.length" class="form-group">
+            <label class="form-label">{{ t("accounts.labelProxy") }}</label>
+            <select v-model="form.proxyId" class="form-select">
+              <option value="">{{ t("accounts.proxyNone") }}</option>
+              <option v-for="p in proxiesList" :key="p.id" :value="p.id">
+                {{ p.name }}
+              </option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">{{ t("accounts.labelAppClient") }}</label>
+            <select v-model="form.appClientId" class="form-select">
+              <option value="">
+                {{
+                  tgClientMode === "random"
+                    ? t("accounts.appClientRandom")
+                    : `${t("accounts.appClientDefault")}${defaultClientName ? ` (${defaultClientName})` : ""}`
+                }}
+              </option>
+              <option v-for="c in appClientsList" :key="c.id" :value="c.id">
+                {{ c.name }}
+              </option>
+            </select>
+            <div v-if="deviceModelPreview" class="device-model-preview-form">
+              <i class="fa-solid fa-mobile-screen"></i>
+              <span class="dmp-label"
+                >{{ t("accounts.deviceModelPreview") }}:</span
+              >
+              <span class="dmp-value">{{ deviceModelPreview }}</span>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">{{ t("accounts.labelNotes") }}</label>
+            <textarea
+              v-model="form.notes"
+              class="form-input"
+              rows="3"
+              :placeholder="t('accounts.notesPlaceholder')"
+              style="resize: vertical"
+            ></textarea>
+          </div>
         </div>
+
+        <!-- Profile tab (authenticated accounts only) -->
+        <div
+          v-if="editTarget?.authStatus === 'authenticated'"
+          v-show="editTab === 'profile'"
+        >
+          <div class="form-section-label" style="margin-bottom: 12px">
+            {{ t("accounts.profileSection") }}
+          </div>
+
+          <div
+            v-if="profileLoading"
+            style="color: #888; font-size: 13px; margin-bottom: 12px"
+          >
+            <i class="fa-solid fa-spinner fa-spin"></i> {{ t("common.loading") }}
+          </div>
+
+          <template v-else>
+            <div class="form-group">
+              <label class="form-label">
+                {{ t("accounts.profileFirstName") }}
+              </label>
+              <input
+                v-model.trim="profileForm.firstName"
+                class="form-input"
+                maxlength="64"
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label">
+                {{ t("accounts.profileLastName") }}
+              </label>
+              <input
+                v-model.trim="profileForm.lastName"
+                class="form-input"
+                maxlength="64"
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label">{{ t("accounts.profileBio") }}</label>
+              <textarea
+                v-model="profileForm.about"
+                class="form-input"
+                rows="3"
+                maxlength="70"
+                :placeholder="t('accounts.profileBioPlaceholder')"
+                style="resize: vertical"
+              ></textarea>
+            </div>
+
+            <div v-if="profileError" class="error-msg">{{ profileError }}</div>
+            <div v-if="profileMsg" class="success-msg">{{ profileMsg }}</div>
+
+            <button
+              class="btn btn-primary btn-inline"
+              :disabled="profileBusy || !profileForm.firstName"
+              @click="doUpdateProfile"
+            >
+              <i class="fa-solid fa-floppy-disk"></i>
+              {{ profileBusy ? t("common.saving") : t("common.save") }}
+            </button>
+          </template>
+        </div>
+
+        <!-- 2FA tab (authenticated accounts only) -->
+        <div
+          v-if="editTarget?.authStatus === 'authenticated'"
+          v-show="editTab === 'twofa'"
+        >
+          <div class="form-section-label" style="margin-bottom: 12px">
+            {{ t("accounts.twoFaSection") }}
+          </div>
+          <div class="form-group">
+            <label class="form-label">{{
+              t("accounts.twoFaCurrentPassword")
+            }}</label>
+            <p class="form-hint">
+              {{ t("accounts.twoFaCurrentPasswordHint") }}
+            </p>
+            <input
+              v-model="twoFaCurrentPwd"
+              type="password"
+              class="form-input"
+              autocomplete="current-password"
+            />
+          </div>
+          <div class="form-group">
+            <label class="form-label">{{
+              t("accounts.twoFaNewPassword")
+            }}</label>
+            <p class="form-hint">{{ t("accounts.twoFaNewPasswordHint") }}</p>
+            <input
+              v-model="twoFaNewPwd"
+              type="password"
+              class="form-input"
+              autocomplete="new-password"
+            />
+          </div>
+          <div v-if="twoFaNewPwd" class="form-group">
+            <label class="form-label">{{
+              t("accounts.twoFaNewPasswordConfirm")
+            }}</label>
+            <input
+              v-model="twoFaNewPwdConfirm"
+              type="password"
+              class="form-input"
+              autocomplete="new-password"
+            />
+          </div>
+          <div class="form-group">
+            <label class="form-label">{{ t("accounts.twoFaHint") }}</label>
+            <input v-model="twoFaHint" class="form-input" />
+          </div>
+          <div v-if="twoFaError" class="error-msg">{{ twoFaError }}</div>
+          <div v-if="twoFaMsg" class="success-msg">{{ twoFaMsg }}</div>
+          <button
+            class="btn btn-secondary btn-inline"
+            :disabled="twoFaBusy"
+            @click="doUpdateTwoFa"
+          >
+            <i class="fa-solid fa-lock"></i>
+            {{ twoFaBusy ? t("common.saving") : t("accounts.twoFaUpdate") }}
+          </button>
+        </div>
+
+        <!-- Devices tab (authenticated accounts only) -->
+        <div
+          v-if="editTarget?.authStatus === 'authenticated'"
+          v-show="editTab === 'devices'"
+        >
+          <div class="sessions-header">
+            <div class="form-section-label">
+              {{ t("accounts.sessionsSection") }}
+            </div>
+            <button
+              class="btn btn-xs btn-ghost"
+              :disabled="sessionsLoading"
+              @click="loadSessions"
+            >
+              <i
+                class="fa-solid fa-arrows-rotate"
+                :class="sessionsLoading ? 'fa-spin' : ''"
+              ></i>
+              {{ t("accounts.sessionsRefresh") }}
+            </button>
+          </div>
+
+          <div
+            v-if="sessionsLoading && !sessions.length"
+            class="sessions-empty"
+          >
+            <i class="fa-solid fa-spinner fa-spin"></i>
+            {{ t("accounts.sessionsLoading") }}
+          </div>
+          <div v-if="sessionsError" class="error-msg">{{ sessionsError }}</div>
+          <div v-if="terminateError" class="error-msg">
+            {{ terminateError }}
+          </div>
+          <div v-if="terminateMsg" class="success-msg">{{ terminateMsg }}</div>
+
+          <div class="sessions-list">
+            <div
+              v-for="s in sessions"
+              :key="s.hash"
+              :class="['session-item', s.current ? 'session-current' : '']"
+            >
+              <div class="session-info">
+                <div class="session-device">
+                  {{ s.deviceModel }}
+                  <span
+                    v-if="s.current"
+                    class="badge badge-green"
+                    style="font-size: 10px; margin-left: 6px"
+                    >{{ t("accounts.sessionsCurrent") }}</span
+                  >
+                </div>
+                <div class="session-meta">
+                  {{ s.appName }} · {{ s.ip }} · {{ s.country }}
+                </div>
+                <div class="session-meta">
+                  {{ t("accounts.sessionsLastActive") }}:
+                  {{ fmtSessionDate(s.dateActive) }}
+                </div>
+              </div>
+              <button
+                v-if="!s.current"
+                class="btn btn-xs btn-danger"
+                :disabled="terminatingHash === s.hash"
+                @click="doTerminateSession(s.hash)"
+              >
+                {{
+                  terminatingHash === s.hash
+                    ? t("accounts.sessionTerminating")
+                    : t("accounts.sessionTerminate")
+                }}
+              </button>
+            </div>
+          </div>
+
+          <div v-if="sessions.length > 1" style="margin-top: 10px">
+            <button
+              class="btn btn-ghost btn-inline"
+              :disabled="terminateBusy"
+              @click="doTerminateAllSessions"
+            >
+              <i class="fa-solid fa-right-from-bracket"></i>
+              {{
+                terminateBusy
+                  ? t("common.saving")
+                  : t("accounts.terminateSessions")
+              }}
+            </button>
+          </div>
+
+        </div>
+
+        <!-- Recovery email tab (authenticated accounts only) -->
+        <div
+          v-if="editTarget?.authStatus === 'authenticated'"
+          v-show="editTab === 'recovery'"
+        >
+          <!-- Recovery email section -->
+          <div class="form-section-label" style="margin-bottom: 12px">
+            {{ t("accounts.recoveryEmailSection") }}
+          </div>
+
+          <div v-if="pwdInfoLoading" style="color: #888; font-size: 13px; margin-bottom: 12px">
+            <i class="fa-solid fa-spinner fa-spin"></i> {{ t("common.loading") }}
+          </div>
+
+          <template v-else-if="pwdInfo">
+            <div v-if="!pwdInfo.hasPassword" class="form-hint" style="margin-bottom: 12px">
+              {{ t("accounts.recoveryEmailNoPassword") }}
+            </div>
+
+            <template v-else>
+              <!-- Status row -->
+              <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap">
+                <span class="badge" :class="pwdInfo.hasRecovery ? 'badge-green' : 'badge-grey'">
+                  {{ pwdInfo.hasRecovery ? t("accounts.recoveryEmailSet") : t("accounts.recoveryEmailNone") }}
+                </span>
+                <span v-if="pwdInfo.emailUnconfirmedPattern" class="badge badge-orange">
+                  {{ t("accounts.recoveryEmailPending") }}
+                </span>
+                <span v-if="recoveryEmailRevealed" style="font-size: 13px; font-family: monospace">
+                  {{ recoveryEmailRevealed }}
+                </span>
+                <button
+                  v-else-if="pwdInfo.hasRecovery && !recoveryEmailPendingConfirm"
+                  class="btn btn-xs btn-ghost"
+                  :disabled="recoveryEmailBusy"
+                  @click="openRevealEmail"
+                >
+                  <i class="fa-solid fa-eye"></i> {{ t("accounts.recoveryEmailReveal") }}
+                </button>
+              </div>
+
+              <!-- Pending confirmation flow -->
+              <template v-if="recoveryEmailPendingConfirm || pwdInfo.emailUnconfirmedPattern">
+                <p class="form-hint" style="margin-bottom: 8px">
+                  {{
+                    t("accounts.recoveryEmailPendingHint").replace(
+                      "{pattern}",
+                      recoveryEmailNewPattern || pwdInfo.emailUnconfirmedPattern || "?"
+                    )
+                  }}
+                </p>
+                <div class="form-group">
+                  <label class="form-label">{{ t("accounts.recoveryEmailConfirmCode") }}</label>
+                  <input v-model="recoveryEmailCode" class="form-input" maxlength="12" />
+                </div>
+                <div v-if="recoveryEmailError" class="error-msg">{{ recoveryEmailError }}</div>
+                <div v-if="recoveryEmailMsg" class="success-msg">{{ recoveryEmailMsg }}</div>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap">
+                  <button
+                    class="btn btn-primary btn-inline"
+                    :disabled="recoveryEmailBusy || !recoveryEmailCode"
+                    @click="doConfirmRecoveryEmail"
+                  >
+                    {{ recoveryEmailBusy ? t("common.saving") : t("accounts.recoveryEmailConfirm") }}
+                  </button>
+                  <button
+                    class="btn btn-ghost btn-inline"
+                    :disabled="recoveryEmailBusy"
+                    @click="doResendRecoveryEmail"
+                  >
+                    {{ t("accounts.recoveryEmailResend") }}
+                  </button>
+                  <button
+                    class="btn btn-ghost btn-inline"
+                    :disabled="recoveryEmailBusy"
+                    @click="doCancelRecoveryEmail"
+                  >
+                    {{ t("accounts.recoveryEmailCancel") }}
+                  </button>
+                </div>
+              </template>
+
+              <!-- Reveal email password input -->
+              <template v-else-if="recoveryEmailRevealMode">
+                <div class="form-group">
+                  <label class="form-label">{{ t("accounts.recoveryEmailRevealPwd") }}</label>
+                  <input v-model="recoveryEmailPwd" type="password" class="form-input" autocomplete="current-password" />
+                </div>
+                <div v-if="recoveryEmailError" class="error-msg">{{ recoveryEmailError }}</div>
+                <div style="display: flex; gap: 8px">
+                  <button class="btn btn-primary btn-inline" :disabled="recoveryEmailBusy" @click="doRevealEmail">
+                    {{ recoveryEmailBusy ? t("common.loading") : t("accounts.recoveryEmailReveal") }}
+                  </button>
+                  <button class="btn btn-ghost btn-inline" @click="recoveryEmailRevealMode = false">
+                    {{ t("common.cancel") }}
+                  </button>
+                </div>
+              </template>
+
+              <!-- Change / set / remove form -->
+              <template v-else-if="recoveryEmailChangeMode">
+                <div class="form-group">
+                  <label class="form-label">{{ t("accounts.recoveryEmailCurrentPwd") }}</label>
+                  <input v-model="recoveryEmailPwd" type="password" class="form-input" autocomplete="current-password" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">{{ t("accounts.recoveryEmailNewEmail") }}</label>
+                  <input v-model="recoveryEmailNew" type="email" class="form-input" />
+                </div>
+                <div v-if="recoveryEmailError" class="error-msg">{{ recoveryEmailError }}</div>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap">
+                  <button class="btn btn-primary btn-inline" :disabled="recoveryEmailBusy" @click="doUpdateRecoveryEmail">
+                    {{ recoveryEmailBusy ? t("common.saving") : t("accounts.recoveryEmailChange") }}
+                  </button>
+                  <button class="btn btn-ghost btn-inline" @click="recoveryEmailChangeMode = false">
+                    {{ t("common.cancel") }}
+                  </button>
+                </div>
+              </template>
+
+              <!-- Remove form -->
+              <template v-else-if="recoveryEmailRemoveMode">
+                <div class="form-group">
+                  <label class="form-label">{{ t("accounts.recoveryEmailCurrentPwd") }}</label>
+                  <input v-model="recoveryEmailPwd" type="password" class="form-input" autocomplete="current-password" />
+                </div>
+                <div v-if="recoveryEmailError" class="error-msg">{{ recoveryEmailError }}</div>
+                <div style="display: flex; gap: 8px">
+                  <button class="btn btn-danger btn-inline" :disabled="recoveryEmailBusy" @click="doRemoveRecoveryEmail">
+                    {{ recoveryEmailBusy ? t("common.saving") : t("accounts.recoveryEmailRemove") }}
+                  </button>
+                  <button class="btn btn-ghost btn-inline" @click="recoveryEmailRemoveMode = false">
+                    {{ t("common.cancel") }}
+                  </button>
+                </div>
+              </template>
+
+              <!-- Idle: action buttons -->
+              <template v-else>
+                <div v-if="recoveryEmailMsg" class="success-msg" style="margin-bottom: 8px">{{ recoveryEmailMsg }}</div>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap">
+                  <button class="btn btn-secondary btn-inline" @click="openChangeEmail">
+                    <i class="fa-solid fa-envelope"></i>
+                    {{ pwdInfo.hasRecovery ? t("accounts.recoveryEmailChange") : t("accounts.recoveryEmailSet2") }}
+                  </button>
+                  <button
+                    v-if="pwdInfo.hasRecovery"
+                    class="btn btn-ghost btn-inline"
+                    @click="openRemoveEmail"
+                  >
+                    <i class="fa-solid fa-trash"></i> {{ t("accounts.recoveryEmailRemove") }}
+                  </button>
+                </div>
+              </template>
+            </template>
+          </template>
+
+          <hr class="section-divider" />
+
+          <!-- Passkeys section -->
+          <div class="form-section-label" style="margin-bottom: 8px">
+            {{ t("accounts.passkeySection") }}
+          </div>
+
+          <div v-if="passkeysLoading" style="color: #888; font-size: 13px">
+            <i class="fa-solid fa-spinner fa-spin"></i> {{ t("common.loading") }}
+          </div>
+          <div v-else-if="passkeysError" class="error-msg">
+            {{ passkeysError }}
+          </div>
+          <template v-else>
+            <p v-if="!passkeys.length" class="form-hint">
+              {{ t("accounts.passkeyNone") }}
+            </p>
+            <div v-else class="sessions-list">
+              <div
+                v-for="pk in passkeys"
+                :key="pk.id"
+                class="session-item"
+              >
+                <div class="session-info">
+                  <div class="session-device">
+                    <i class="fa-solid fa-key" style="margin-right: 6px"></i>
+                    {{ pk.name || t("accounts.passkeyUnnamed") }}
+                  </div>
+                  <div class="session-meta">
+                    {{ t("accounts.passkeyAdded") }}:
+                    {{ fmtSessionDate(pk.date) }}
+                  </div>
+                  <div v-if="pk.lastUsageDate" class="session-meta">
+                    {{ t("accounts.passkeyLastUsed") }}:
+                    {{ fmtSessionDate(pk.lastUsageDate) }}
+                  </div>
+                </div>
+                <button
+                  class="btn btn-xs btn-danger"
+                  :disabled="deletingPasskeyId === pk.id"
+                  @click="doDeletePasskey(pk)"
+                >
+                  {{
+                    deletingPasskeyId === pk.id
+                      ? t("accounts.passkeyDeleting")
+                      : t("accounts.passkeyRemove")
+                  }}
+                </button>
+              </div>
+            </div>
+          </template>
+        </div>
+        </div>
+
         <div class="modal-footer">
           <button class="btn btn-ghost" @click="showForm = false">
             <i class="fa-solid fa-xmark"></i> {{ t("common.cancel") }}
           </button>
-          <button
-            v-if="editTarget && editTarget.authStatus !== 'unauthenticated'"
-            class="btn btn-danger"
-            :disabled="forceReauthBusy"
-            @click="doForceReauth"
-            style="margin-right: auto"
-          >
-            <i class="fa-solid fa-rotate-right"></i>
-            {{
-              forceReauthBusy ? t("common.saving") : t("accounts.forceReauth")
-            }}
-          </button>
-          <button
-            class="btn btn-primary"
-            :disabled="saving"
-            @click="saveAccount"
-          >
-            <i class="fa-solid fa-floppy-disk"></i>
-            {{ saving ? t("common.saving") : t("common.save") }}
-          </button>
+          <template v-if="editTab === 'basic'">
+            <button
+              v-if="editTarget && editTarget.authStatus !== 'unauthenticated'"
+              class="btn btn-danger"
+              :disabled="forceReauthBusy"
+              @click="doForceReauth"
+              style="margin-right: auto"
+            >
+              <i class="fa-solid fa-rotate-right"></i>
+              {{
+                forceReauthBusy ? t("common.saving") : t("accounts.forceReauth")
+              }}
+            </button>
+            <button
+              class="btn btn-primary"
+              :disabled="saving"
+              @click="saveAccount"
+            >
+              <i class="fa-solid fa-floppy-disk"></i>
+              {{ saving ? t("common.saving") : t("common.save") }}
+            </button>
+          </template>
         </div>
       </div>
     </div>
@@ -542,52 +1217,89 @@
     </div>
 
     <!-- Mobile action sheet -->
-    <div v-if="actionMenuAccount" class="action-sheet-backdrop" @click="actionMenuAccount = null">
+    <div
+      v-if="actionMenuAccount"
+      class="action-sheet-backdrop"
+      @click="actionMenuAccount = null"
+    >
       <div class="action-sheet" @click.stop>
         <div class="action-sheet-header">{{ actionMenuAccount.name }}</div>
         <button
           v-if="actionMenuAccount.authStatus !== 'authenticated'"
           class="action-sheet-btn"
-          @click="openAuth(actionMenuAccount); actionMenuAccount = null"
+          @click="
+            openAuth(actionMenuAccount);
+            actionMenuAccount = null;
+          "
         >
           <i class="fa-solid fa-key"></i> {{ t("accounts.authenticate") }}
         </button>
         <button
           v-if="actionMenuAccount.authStatus === 'authenticated'"
           class="action-sheet-btn"
-          @click="openCheckStatus(actionMenuAccount); actionMenuAccount = null"
+          @click="
+            openCheckStatus(actionMenuAccount);
+            actionMenuAccount = null;
+          "
         >
-          <i class="fa-solid fa-circle-info"></i> {{ t("accounts.checkStatus") }}
+          <i class="fa-solid fa-circle-info"></i>
+          {{ t("accounts.checkStatus") }}
         </button>
         <button
           v-if="actionMenuAccount.authStatus === 'authenticated'"
           class="action-sheet-btn"
           :disabled="metaLoading.has(actionMenuAccount.id)"
-          @click="fetchMeta(actionMenuAccount.id); actionMenuAccount = null"
+          @click="
+            fetchMeta(actionMenuAccount.id);
+            actionMenuAccount = null;
+          "
         >
-          <i class="fa-solid fa-arrows-rotate"></i> {{ t("accounts.colTgName") }}
+          <i class="fa-solid fa-arrows-rotate"></i>
+          {{ t("accounts.colTgName") }}
         </button>
         <button
           class="action-sheet-btn"
-          @click="toggleDisabled(actionMenuAccount); actionMenuAccount = null"
+          @click="
+            toggleDisabled(actionMenuAccount);
+            actionMenuAccount = null;
+          "
         >
-          <i :class="actionMenuAccount.disabled ? 'fa-solid fa-circle-play' : 'fa-solid fa-ban'"></i>
-          {{ actionMenuAccount.disabled ? t("accounts.enableAccount") : t("accounts.disableAccount") }}
+          <i
+            :class="
+              actionMenuAccount.disabled
+                ? 'fa-solid fa-circle-play'
+                : 'fa-solid fa-ban'
+            "
+          ></i>
+          {{
+            actionMenuAccount.disabled
+              ? t("accounts.enableAccount")
+              : t("accounts.disableAccount")
+          }}
         </button>
         <button
           class="action-sheet-btn"
-          @click="openEdit(actionMenuAccount); actionMenuAccount = null"
+          @click="
+            openEdit(actionMenuAccount);
+            actionMenuAccount = null;
+          "
         >
           <i class="fa-solid fa-pen"></i> {{ t("common.edit") }}
         </button>
         <button
           class="action-sheet-btn danger"
-          @click="remove(actionMenuAccount.id); actionMenuAccount = null"
+          @click="
+            remove(actionMenuAccount.id);
+            actionMenuAccount = null;
+          "
         >
           <i class="fa-solid fa-trash"></i> {{ t("common.delete") }}
         </button>
         <div class="action-sheet-divider"></div>
-        <button class="action-sheet-btn action-sheet-cancel" @click="actionMenuAccount = null">
+        <button
+          class="action-sheet-btn action-sheet-cancel"
+          @click="actionMenuAccount = null"
+        >
           {{ t("common.cancel") }}
         </button>
       </div>
@@ -596,7 +1308,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from "vue";
+import { ref, reactive, computed, onMounted, watch } from "vue";
 import {
   accountsApi,
   settingsApi,
@@ -605,9 +1317,12 @@ import {
   type TgAppClient,
   type TgAccountStatus,
   type TgSpamStatus,
-  type AccountExportItem,
+  type SessionInfo,
+  type PasswordInfo,
+  type Passkey,
 } from "../api/client";
 import { t, locale } from "../i18n";
+import { usePersistedRef } from "../composables/usePersistedRef";
 
 const accounts = ref<Account[]>([]);
 
@@ -635,7 +1350,15 @@ const settings = ref<{
   proxies?: string;
   tg_app_clients?: string;
   tg_client_mode?: string;
+  default_tg_api_id?: string;
+  default_tg_api_hash?: string;
 } | null>(null);
+
+const hasGlobalTgCreds = computed(
+  () =>
+    !!Number(settings.value?.default_tg_api_id) &&
+    !!settings.value?.default_tg_api_hash,
+);
 
 const proxiesList = computed<Proxy[]>(() => {
   try {
@@ -662,8 +1385,54 @@ const defaultClientName = computed(() => {
   return appClientsList.value.find((c) => c.isDefault)?.name ?? "";
 });
 
+// Default lengths mirror the backend expandCommand() so masked random tokens
+// preview at the right width.
+const RANDOM_TOKEN_LENS: Record<string, number> = {
+  word: 6,
+  WORD: 6,
+  num: 6,
+  alpha: 8,
+};
+
+// Client-side preview of a deviceModel template: named tokens are filled from
+// the account being edited; random tokens are masked (their real value is
+// generated and fixed per account on the server).
+function previewDeviceName(template: string): string {
+  const acct = editTarget.value;
+  const ctx: Record<string, string> = {
+    name: form.name || "",
+    tgName: acct?.tgDisplayName || "",
+    tgUsername: acct?.tgUsername || "",
+    id: acct ? String(acct.id) : "",
+  };
+  return template.replace(
+    /\{(\w+)(?::(\d+))?\}/g,
+    (match, type: string, lenStr?: string) => {
+      if (type in ctx) return ctx[type];
+      if (type in RANDOM_TOKEN_LENS)
+        return "•".repeat(lenStr ? parseInt(lenStr, 10) : RANDOM_TOKEN_LENS[type]);
+      if (type === "uuid") return "••••••••-••••-4•••-••••-••••••••••••";
+      return match;
+    },
+  );
+}
+
+const deviceModelPreview = computed(() => {
+  // Dropdown unchanged: show the real server-resolved value for this account.
+  if (!form.appClientId && editTarget.value?.resolvedDeviceModel) {
+    return editTarget.value.resolvedDeviceModel;
+  }
+  const client = form.appClientId
+    ? appClientsList.value.find((c) => c.id === form.appClientId)
+    : appClientsList.value.find((c) => c.isDefault);
+  return client ? previewDeviceName(client.deviceModel) : "";
+});
+
 // ── Form state ────────────────────────────────────────────────────────────────
 const showForm = ref(false);
+const editTab = ref<"basic" | "profile" | "twofa" | "devices" | "recovery">(
+  "basic",
+);
 const editTarget = ref<Account | null>(null);
 const form = reactive({
   name: "",
@@ -672,9 +1441,57 @@ const form = reactive({
   apiHash: "",
   proxyId: "",
   appClientId: "",
+  notes: "",
 });
 const formError = ref("");
 const saving = ref(false);
+
+// ── 2FA state ─────────────────────────────────────────────────────────────────
+const twoFaCurrentPwd = ref("");
+const twoFaNewPwd = ref("");
+const twoFaNewPwdConfirm = ref("");
+const twoFaHint = ref("");
+const twoFaBusy = ref(false);
+const twoFaError = ref("");
+const twoFaMsg = ref("");
+
+// ── Profile state ─────────────────────────────────────────────────────────────
+const profileForm = reactive({ firstName: "", lastName: "", about: "" });
+const profileLoaded = ref(false);
+const profileLoading = ref(false);
+const profileBusy = ref(false);
+const profileError = ref("");
+const profileMsg = ref("");
+
+// ── Sessions state ────────────────────────────────────────────────────────────
+const sessions = ref<SessionInfo[]>([]);
+const sessionsLoading = ref(false);
+const sessionsError = ref("");
+const terminatingHash = ref<string | null>(null);
+const terminateBusy = ref(false);
+const terminateError = ref("");
+const terminateMsg = ref("");
+
+// ── Recovery email state ──────────────────────────────────────────────────────
+const pwdInfo = ref<PasswordInfo | null>(null);
+const pwdInfoLoading = ref(false);
+const passkeys = ref<Passkey[]>([]);
+const passkeysLoading = ref(false);
+const passkeysError = ref("");
+const passkeysLoaded = ref(false);
+const deletingPasskeyId = ref<string | null>(null);
+const recoveryEmailBusy = ref(false);
+const recoveryEmailError = ref("");
+const recoveryEmailMsg = ref("");
+const recoveryEmailRevealed = ref<string | null>(null);
+const recoveryEmailRevealMode = ref(false);
+const recoveryEmailChangeMode = ref(false);
+const recoveryEmailRemoveMode = ref(false);
+const recoveryEmailPendingConfirm = ref(false);
+const recoveryEmailNewPattern = ref("");
+const recoveryEmailPwd = ref("");
+const recoveryEmailNew = ref("");
+const recoveryEmailCode = ref("");
 
 // ── TG meta refresh (display name + username stored in DB, loaded with accounts list) ──
 const metaLoading = reactive(new Set<number>());
@@ -688,8 +1505,10 @@ async function fetchMeta(accountId: number) {
     if (idx !== -1) {
       accounts.value[idx] = { ...accounts.value[idx], ...meta };
     }
-  } catch {}
-  finally { metaLoading.delete(accountId); }
+  } catch {
+  } finally {
+    metaLoading.delete(accountId);
+  }
 }
 
 // ── Mobile action sheet ───────────────────────────────────────────────────────
@@ -731,7 +1550,10 @@ const spamBulkRunning = ref(false);
 async function checkSpamBulk() {
   if (spamBulkRunning.value) return;
   const targets = accounts.value.filter(
-    (a) => selectedIds.value.has(a.id) && a.authStatus === "authenticated" && !a.disabled,
+    (a) =>
+      selectedIds.value.has(a.id) &&
+      a.authStatus === "authenticated" &&
+      !a.disabled,
   );
   if (!targets.length) return;
   spamBulkRunning.value = true;
@@ -748,6 +1570,37 @@ const statusTarget = ref<Account | null>(null);
 const statusResult = ref<TgAccountStatus | null>(null);
 const statusError = ref("");
 const statusChecking = ref(false);
+
+// ── Notes column toggle ───────────────────────────────────────────────────────
+const showNotes = usePersistedRef<boolean>("bemby:accounts:showNotes", true);
+const notesColClass = computed(() =>
+  showNotes.value ? "col-hide-mobile" : "col-hidden",
+);
+
+// ── Bulk notes state ──────────────────────────────────────────────────────────
+const showBulkNotes = ref(false);
+const bulkNotesText = ref("");
+const bulkNotesSaving = ref(false);
+
+async function openBulkNotes() {
+  bulkNotesText.value = "";
+  showBulkNotes.value = true;
+}
+
+async function saveBulkNotes() {
+  if (!selectedIds.value.size) return;
+  bulkNotesSaving.value = true;
+  try {
+    await accountsApi.bulkUpdateNotes(
+      [...selectedIds.value],
+      bulkNotesText.value || null,
+    );
+    await load();
+    showBulkNotes.value = false;
+  } finally {
+    bulkNotesSaving.value = false;
+  }
+}
 
 // ── Selection state ───────────────────────────────────────────────────────────
 const selectedIds = ref(new Set<number>());
@@ -779,15 +1632,27 @@ function toggleSelect(id: number) {
 
 // ── Export state ──────────────────────────────────────────────────────────────
 const showExportWarn = ref(false);
+const exportSecret = ref("");
+const showExportSecret = ref(false);
 
 function openExportWarn() {
+  exportSecret.value = "";
+  showExportSecret.value = false;
   showExportWarn.value = true;
 }
 
 async function confirmExport() {
+  const secret = exportSecret.value.trim() || undefined;
+  if (!secret) {
+    const msg =
+      locale.value === "zh"
+        ? "未设置加密密钥，任何持有此文件的人均可读取凭据。确定不加密导出吗？"
+        : "No encryption secret set — anyone with this file can read your credentials. Export without encryption?";
+    if (!confirm(msg)) return;
+  }
   showExportWarn.value = false;
   const ids = selectedIds.value.size > 0 ? [...selectedIds.value] : undefined;
-  const payload = await accountsApi.export(ids);
+  const payload = await accountsApi.export(ids, secret);
   const blob = new Blob([JSON.stringify(payload, null, 2)], {
     type: "application/json",
   });
@@ -802,14 +1667,22 @@ async function confirmExport() {
 // ── Import state ──────────────────────────────────────────────────────────────
 const showImport = ref(false);
 const importFileEl = ref<HTMLInputElement | null>(null);
-const importParsed = ref<AccountExportItem[] | null>(null);
-const importReady = computed(() => importParsed.value !== null);
+const importRawData = ref<unknown>(null);
+const importFileEncrypted = ref(false);
+const importSecret = ref("");
+const showImportSecret = ref(false);
+const importForceReauth = ref(true);
+const importReady = computed(() => importRawData.value !== null);
 const importBusy = ref(false);
 const importError = ref("");
 const importResult = ref("");
 
 function openImport() {
-  importParsed.value = null;
+  importRawData.value = null;
+  importFileEncrypted.value = false;
+  importSecret.value = "";
+  showImportSecret.value = false;
+  importForceReauth.value = true;
   importError.value = "";
   importResult.value = "";
   importBusy.value = false;
@@ -819,17 +1692,18 @@ function openImport() {
 function onImportFile(e: Event) {
   importError.value = "";
   importResult.value = "";
-  importParsed.value = null;
+  importRawData.value = null;
+  importFileEncrypted.value = false;
+  importSecret.value = "";
   const file = (e.target as HTMLInputElement).files?.[0];
   if (!file) return;
   const reader = new FileReader();
   reader.onload = () => {
     try {
       const raw = JSON.parse(reader.result as string);
-      // Accept both a full export payload and a bare array
-      const items: unknown = Array.isArray(raw) ? raw : raw?.accounts;
-      if (!Array.isArray(items)) throw new Error("No accounts array found");
-      importParsed.value = items as AccountExportItem[];
+      importFileEncrypted.value = raw?.encrypted === true;
+      // Also accept bare arrays for backwards compat
+      importRawData.value = Array.isArray(raw) ? { accounts: raw } : raw;
     } catch {
       importError.value = t("accounts.importFailed") + ": invalid JSON format";
     }
@@ -838,24 +1712,34 @@ function onImportFile(e: Event) {
 }
 
 async function doImport() {
-  if (!importParsed.value) return;
+  if (!importRawData.value) return;
   importBusy.value = true;
   importError.value = "";
   importResult.value = "";
   try {
-    const { imported, skipped } = await accountsApi.import(importParsed.value);
+    const secret = importSecret.value.trim() || undefined;
+    const { imported, skipped } = await accountsApi.import(
+      importRawData.value,
+      secret,
+      importForceReauth.value,
+    );
     importResult.value =
       locale.value === "zh"
         ? `导入完成：${imported} 个成功，${skipped} 个跳过（手机号已存在）`
         : `Done: ${imported} imported, ${skipped} skipped (phone already exists)`;
-    importParsed.value = null;
+    importRawData.value = null;
     if (importFileEl.value) importFileEl.value.value = "";
     await load();
   } catch (err: any) {
-    importError.value =
-      t("accounts.importFailed") +
-      ": " +
-      (err.response?.data?.error ?? err.message);
+    const code = err.response?.data?.code;
+    if (code === "WRONG_SECRET") {
+      importError.value = t("accounts.wrongSecret");
+    } else {
+      importError.value =
+        t("accounts.importFailed") +
+        ": " +
+        (err.response?.data?.error ?? err.message);
+    }
   } finally {
     importBusy.value = false;
   }
@@ -871,6 +1755,17 @@ const authError = ref("");
 const authBusy = ref(false);
 const isCodeViaApp = ref(false);
 const resendBusy = ref(false);
+
+// Lazy-load each tab's data the first time it is opened
+watch(editTab, (tab) => {
+  if (editTarget.value?.authStatus !== "authenticated") return;
+  if (tab === "profile" && !profileLoaded.value) loadProfile();
+  if (tab === "devices" && sessions.value.length === 0) loadSessions();
+  if (tab === "recovery") {
+    if (!pwdInfo.value) loadPasswordInfo();
+    if (!passkeysLoaded.value) loadPasskeys();
+  }
+});
 
 // ── Lifecycle ──────────────────────────────────────────────────────────────────
 onMounted(async () => {
@@ -921,6 +1816,7 @@ function fmtDate(iso: string) {
 // ── Add / Edit ─────────────────────────────────────────────────────────────────
 function openAdd() {
   editTarget.value = null;
+  editTab.value = "basic";
   Object.assign(form, {
     name: "",
     phoneNumber: "",
@@ -928,6 +1824,7 @@ function openAdd() {
     apiHash: "",
     proxyId: "",
     appClientId: "",
+    notes: "",
   });
   formError.value = "";
   showForm.value = true;
@@ -942,8 +1839,48 @@ function openEdit(a: Account) {
     apiHash: "",
     proxyId: a.proxyId ?? "",
     appClientId: a.appClientId ?? "",
+    notes: a.notes ?? "",
   });
   formError.value = "";
+  editTab.value = "basic";
+  twoFaCurrentPwd.value = "";
+  twoFaNewPwd.value = "";
+  twoFaNewPwdConfirm.value = "";
+  twoFaHint.value = "";
+  twoFaBusy.value = false;
+  twoFaError.value = "";
+  twoFaMsg.value = "";
+  Object.assign(profileForm, { firstName: "", lastName: "", about: "" });
+  profileLoaded.value = false;
+  profileLoading.value = false;
+  profileBusy.value = false;
+  profileError.value = "";
+  profileMsg.value = "";
+  sessions.value = [];
+  sessionsLoading.value = false;
+  sessionsError.value = "";
+  terminatingHash.value = null;
+  terminateBusy.value = false;
+  terminateError.value = "";
+  terminateMsg.value = "";
+  pwdInfo.value = null;
+  pwdInfoLoading.value = false;
+  passkeys.value = [];
+  passkeysLoaded.value = false;
+  passkeysError.value = "";
+  deletingPasskeyId.value = null;
+  recoveryEmailBusy.value = false;
+  recoveryEmailError.value = "";
+  recoveryEmailMsg.value = "";
+  recoveryEmailRevealed.value = null;
+  recoveryEmailRevealMode.value = false;
+  recoveryEmailChangeMode.value = false;
+  recoveryEmailRemoveMode.value = false;
+  recoveryEmailPendingConfirm.value = false;
+  recoveryEmailNewPattern.value = "";
+  recoveryEmailPwd.value = "";
+  recoveryEmailNew.value = "";
+  recoveryEmailCode.value = "";
   showForm.value = true;
 }
 
@@ -959,6 +1896,7 @@ async function saveAccount() {
         ...(form.apiHash ? { apiHash: form.apiHash } : {}),
         proxyId: form.proxyId || null,
         appClientId: form.appClientId || null,
+        notes: form.notes || null,
       });
     } else {
       await accountsApi.create({
@@ -968,6 +1906,7 @@ async function saveAccount() {
         apiHash: form.apiHash,
         proxyId: form.proxyId || null,
         appClientId: form.appClientId || null,
+        notes: form.notes || null,
       });
     }
     showForm.value = false;
@@ -976,6 +1915,306 @@ async function saveAccount() {
     formError.value = err.response?.data?.error ?? t("common.saveFailed");
   } finally {
     saving.value = false;
+  }
+}
+
+// ── 2FA update ────────────────────────────────────────────────────────────────
+async function doUpdateTwoFa() {
+  if (!editTarget.value) return;
+  if (twoFaNewPwd.value && twoFaNewPwd.value !== twoFaNewPwdConfirm.value) {
+    twoFaError.value = t("accounts.twoFaPasswordMismatch");
+    return;
+  }
+  twoFaBusy.value = true;
+  twoFaError.value = "";
+  twoFaMsg.value = "";
+  try {
+    await accountsApi.updateTwoFa(editTarget.value.id, {
+      currentPassword: twoFaCurrentPwd.value || undefined,
+      newPassword: twoFaNewPwd.value || undefined,
+      hint: twoFaHint.value || undefined,
+    });
+    const removed = !twoFaNewPwd.value;
+    twoFaMsg.value = removed
+      ? t("accounts.twoFaRemoved")
+      : t("accounts.twoFaUpdated");
+    twoFaCurrentPwd.value = "";
+    twoFaNewPwd.value = "";
+    twoFaNewPwdConfirm.value = "";
+    twoFaHint.value = "";
+  } catch (err: any) {
+    const msg: string = err.response?.data?.error ?? err.message ?? "";
+    twoFaError.value = msg.includes("PASSWORD_HASH_INVALID")
+      ? t("accounts.twoFaWrongPassword")
+      : msg;
+  } finally {
+    twoFaBusy.value = false;
+  }
+}
+
+// ── Profile ───────────────────────────────────────────────────────────────────
+async function loadProfile() {
+  if (!editTarget.value) return;
+  profileLoading.value = true;
+  profileError.value = "";
+  try {
+    const p = await accountsApi.getProfile(editTarget.value.id);
+    Object.assign(profileForm, {
+      firstName: p.firstName,
+      lastName: p.lastName,
+      about: p.about,
+    });
+    profileLoaded.value = true;
+  } catch (err: any) {
+    profileError.value = err.response?.data?.error ?? err.message;
+  } finally {
+    profileLoading.value = false;
+  }
+}
+
+async function doUpdateProfile() {
+  if (!editTarget.value || !profileForm.firstName) return;
+  profileBusy.value = true;
+  profileError.value = "";
+  profileMsg.value = "";
+  try {
+    const res = await accountsApi.updateProfile(editTarget.value.id, {
+      firstName: profileForm.firstName,
+      lastName: profileForm.lastName || undefined,
+      about: profileForm.about || undefined,
+    });
+    profileMsg.value = t("accounts.profileUpdated");
+    // Reflect the refreshed display name in the accounts table
+    const target = accounts.value.find((a) => a.id === editTarget.value!.id);
+    if (target) target.tgDisplayName = res.tgDisplayName;
+  } catch (err: any) {
+    profileError.value = err.response?.data?.error ?? err.message;
+  } finally {
+    profileBusy.value = false;
+  }
+}
+
+// ── Sessions ──────────────────────────────────────────────────────────────────
+async function loadSessions() {
+  if (!editTarget.value) return;
+  sessionsLoading.value = true;
+  sessionsError.value = "";
+  terminateMsg.value = "";
+  try {
+    sessions.value = await accountsApi.getSessions(editTarget.value.id);
+  } catch (err: any) {
+    sessionsError.value = err.response?.data?.error ?? err.message;
+  } finally {
+    sessionsLoading.value = false;
+  }
+}
+
+async function doTerminateSession(hash: string) {
+  if (!editTarget.value) return;
+  terminatingHash.value = hash;
+  terminateError.value = "";
+  try {
+    await accountsApi.terminateSession(editTarget.value.id, hash);
+    sessions.value = sessions.value.filter((s) => s.hash !== hash);
+  } catch (err: any) {
+    terminateError.value = err.response?.data?.error ?? err.message;
+  } finally {
+    terminatingHash.value = null;
+  }
+}
+
+async function doTerminateAllSessions() {
+  if (!editTarget.value) return;
+  if (!confirm(t("accounts.terminateSessionsConfirm"))) return;
+  terminateBusy.value = true;
+  terminateError.value = "";
+  terminateMsg.value = "";
+  try {
+    await accountsApi.terminateOtherSessions(editTarget.value.id);
+    terminateMsg.value = t("accounts.terminateSessionsDone");
+    // Reload so the list shows only the current session
+    await loadSessions();
+  } catch (err: any) {
+    terminateError.value = err.response?.data?.error ?? err.message;
+  } finally {
+    terminateBusy.value = false;
+  }
+}
+
+function fmtSessionDate(unix: number) {
+  return new Date(unix * 1000).toLocaleString(
+    locale.value === "zh" ? "zh-CN" : "en-AU",
+    { dateStyle: "medium", timeStyle: "short" },
+  );
+}
+
+// ── Recovery email functions ──────────────────────────────────────────────────
+
+async function loadPasswordInfo() {
+  if (!editTarget.value) return;
+  pwdInfoLoading.value = true;
+  try {
+    pwdInfo.value = await accountsApi.getPasswordInfo(editTarget.value.id);
+  } catch {
+    // non-fatal: section just won't show
+  } finally {
+    pwdInfoLoading.value = false;
+  }
+}
+
+async function loadPasskeys() {
+  if (!editTarget.value) return;
+  passkeysLoading.value = true;
+  passkeysError.value = "";
+  try {
+    passkeys.value = await accountsApi.getPasskeys(editTarget.value.id);
+    passkeysLoaded.value = true;
+  } catch (err: any) {
+    passkeysError.value = err.response?.data?.error ?? err.message;
+  } finally {
+    passkeysLoading.value = false;
+  }
+}
+
+async function doDeletePasskey(pk: Passkey) {
+  if (!editTarget.value) return;
+  if (!confirm(t("accounts.passkeyRemoveConfirm").replace("{name}", pk.name || "?")))
+    return;
+  deletingPasskeyId.value = pk.id;
+  passkeysError.value = "";
+  try {
+    await accountsApi.deletePasskey(editTarget.value.id, pk.id);
+    passkeys.value = passkeys.value.filter((p) => p.id !== pk.id);
+  } catch (err: any) {
+    passkeysError.value = err.response?.data?.error ?? err.message;
+  } finally {
+    deletingPasskeyId.value = null;
+  }
+}
+
+function openRevealEmail() {
+  recoveryEmailRevealMode.value = true;
+  recoveryEmailPwd.value = "";
+  recoveryEmailError.value = "";
+}
+
+function openChangeEmail() {
+  recoveryEmailChangeMode.value = true;
+  recoveryEmailPwd.value = "";
+  recoveryEmailNew.value = "";
+  recoveryEmailError.value = "";
+}
+
+function openRemoveEmail() {
+  recoveryEmailRemoveMode.value = true;
+  recoveryEmailPwd.value = "";
+  recoveryEmailError.value = "";
+}
+
+async function doRevealEmail() {
+  if (!editTarget.value || !recoveryEmailPwd.value) return;
+  recoveryEmailBusy.value = true;
+  recoveryEmailError.value = "";
+  try {
+    const r = await accountsApi.getRecoveryEmail(editTarget.value.id, recoveryEmailPwd.value);
+    recoveryEmailRevealed.value = r.email;
+    recoveryEmailRevealMode.value = false;
+  } catch (err: any) {
+    recoveryEmailError.value = err.response?.data?.error ?? err.message;
+  } finally {
+    recoveryEmailBusy.value = false;
+  }
+}
+
+async function doUpdateRecoveryEmail() {
+  if (!editTarget.value || !recoveryEmailPwd.value || !recoveryEmailNew.value) return;
+  recoveryEmailBusy.value = true;
+  recoveryEmailError.value = "";
+  try {
+    const r = await accountsApi.updateRecoveryEmail(
+      editTarget.value.id,
+      recoveryEmailPwd.value,
+      recoveryEmailNew.value,
+    );
+    recoveryEmailChangeMode.value = false;
+    if (r.pendingConfirmation) {
+      recoveryEmailPendingConfirm.value = true;
+      recoveryEmailNewPattern.value = recoveryEmailNew.value.replace(/(.{2})[^@]+/, "$1***");
+      recoveryEmailCode.value = "";
+    } else {
+      recoveryEmailMsg.value = t("accounts.recoveryEmailDone");
+      await loadPasswordInfo();
+    }
+  } catch (err: any) {
+    recoveryEmailError.value = err.response?.data?.error ?? err.message;
+  } finally {
+    recoveryEmailBusy.value = false;
+  }
+}
+
+async function doRemoveRecoveryEmail() {
+  if (!editTarget.value || !recoveryEmailPwd.value) return;
+  recoveryEmailBusy.value = true;
+  recoveryEmailError.value = "";
+  try {
+    await accountsApi.updateRecoveryEmail(editTarget.value.id, recoveryEmailPwd.value, null);
+    recoveryEmailRemoveMode.value = false;
+    recoveryEmailMsg.value = t("accounts.recoveryEmailRemoved");
+    recoveryEmailRevealed.value = null;
+    await loadPasswordInfo();
+  } catch (err: any) {
+    recoveryEmailError.value = err.response?.data?.error ?? err.message;
+  } finally {
+    recoveryEmailBusy.value = false;
+  }
+}
+
+async function doConfirmRecoveryEmail() {
+  if (!editTarget.value || !recoveryEmailCode.value) return;
+  recoveryEmailBusy.value = true;
+  recoveryEmailError.value = "";
+  try {
+    await accountsApi.confirmRecoveryEmail(editTarget.value.id, recoveryEmailCode.value);
+    recoveryEmailPendingConfirm.value = false;
+    recoveryEmailNewPattern.value = "";
+    recoveryEmailCode.value = "";
+    recoveryEmailMsg.value = t("accounts.recoveryEmailConfirmed");
+    await loadPasswordInfo();
+  } catch (err: any) {
+    recoveryEmailError.value = err.response?.data?.error ?? err.message;
+  } finally {
+    recoveryEmailBusy.value = false;
+  }
+}
+
+async function doResendRecoveryEmail() {
+  if (!editTarget.value) return;
+  recoveryEmailBusy.value = true;
+  recoveryEmailError.value = "";
+  try {
+    await accountsApi.resendRecoveryEmail(editTarget.value.id);
+  } catch (err: any) {
+    recoveryEmailError.value = err.response?.data?.error ?? err.message;
+  } finally {
+    recoveryEmailBusy.value = false;
+  }
+}
+
+async function doCancelRecoveryEmail() {
+  if (!editTarget.value) return;
+  recoveryEmailBusy.value = true;
+  recoveryEmailError.value = "";
+  try {
+    await accountsApi.cancelRecoveryEmail(editTarget.value.id);
+    recoveryEmailPendingConfirm.value = false;
+    recoveryEmailNewPattern.value = "";
+    recoveryEmailCode.value = "";
+    recoveryEmailMsg.value = t("accounts.recoveryEmailCancelled");
+    await loadPasswordInfo();
+  } catch (err: any) {
+    recoveryEmailError.value = err.response?.data?.error ?? err.message;
+  } finally {
+    recoveryEmailBusy.value = false;
   }
 }
 
@@ -1116,6 +2355,32 @@ async function verify2fa() {
 </script>
 
 <style scoped>
+.device-model-preview {
+  margin-top: 3px;
+  font-size: 11px;
+  color: #888;
+  font-family: var(--font-mono, monospace);
+}
+
+.device-model-preview i {
+  margin-right: 4px;
+  opacity: 0.7;
+}
+
+.device-model-preview-form {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #888;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.device-model-preview-form .dmp-value {
+  font-family: var(--font-mono, monospace);
+  color: #555;
+}
+
 .tg-name-cell {
   white-space: nowrap;
   display: flex;
@@ -1172,7 +2437,9 @@ tr:hover .tg-name-refresh {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .page-header-actions {
@@ -1197,6 +2464,152 @@ tr:hover .tg-name-refresh {
   font-size: 13px;
   color: #92400e;
   line-height: 1.5;
+}
+
+.edit-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  border-bottom: 2px solid #e5e7eb;
+  margin-bottom: 16px;
+}
+
+.edit-tab {
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #6b7280;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  cursor: pointer;
+  transition:
+    color 0.15s,
+    border-color 0.15s;
+}
+
+.edit-tab:hover {
+  color: #374151;
+}
+
+.edit-tab.active {
+  color: #4f46e5;
+  border-bottom-color: #4f46e5;
+}
+
+.btn-inline {
+  width: auto;
+  display: inline-flex;
+}
+
+.sessions-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.sessions-header .form-section-label {
+  margin-bottom: 0;
+}
+
+.sessions-empty {
+  font-size: 13px;
+  color: #9ca3af;
+  padding: 12px 0;
+}
+
+.sessions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.session-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #fafafa;
+}
+
+.session-current {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.session-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.session-device {
+  font-size: 13px;
+  font-weight: 500;
+  color: #111827;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.session-meta {
+  font-size: 11px;
+  color: #6b7280;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.section-divider {
+  border: none;
+  border-top: 1px solid #e5e7eb;
+  margin: 16px 0 12px;
+}
+
+.form-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #888;
+  margin-bottom: 12px;
+}
+
+.form-hint {
+  font-size: 11px;
+  color: #9ca3af;
+  margin: 0 0 4px;
+}
+
+.input-with-toggle {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.input-with-toggle .form-input {
+  padding-right: 38px;
+  flex: 1;
+}
+
+.toggle-secret-btn {
+  position: absolute;
+  right: 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #888;
+  padding: 4px;
+  line-height: 1;
+}
+
+.toggle-secret-btn:hover {
+  color: #444;
 }
 
 .row-disabled td {

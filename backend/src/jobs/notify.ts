@@ -50,7 +50,7 @@ export async function sendTgNotify(
   message: string,
   target = "me",
 ): Promise<void> {
-  if (!account.sessionString) return;
+  if (!account.sessionString || !account.apiId || !account.apiHash) return;
 
   const client = new TelegramClient(
     new StringSession(account.sessionString),

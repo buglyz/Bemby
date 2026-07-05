@@ -29,6 +29,10 @@ body {
 	flex-direction: column;
 	gap: 4px;
 	flex-shrink: 0;
+	position: sticky;
+	top: 0;
+	height: 100vh;
+	overflow-y: auto;
 }
 
 .sidebar-title {
@@ -161,6 +165,13 @@ body {
 	padding: 28px;
 	overflow-y: auto;
 	min-width: 0; /* prevent flex child from overflowing viewport */
+}
+
+/* Full-bleed view (messenger): fill the viewport, no padding, own internal scroll */
+.main-flush {
+	padding: 0;
+	overflow: hidden;
+	height: 100vh;
 }
 
 /* ── Page header ────────────────────────────────────────────────────────────── */
@@ -412,9 +423,10 @@ tr:hover td {
 
 /* Prevent iOS Safari from auto-zooming on focus (triggers when font-size < 16px) */
 @media (hover: none) and (pointer: coarse) {
-	.form-input,
-	.form-select {
-		font-size: 16px;
+	input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]),
+	textarea,
+	select {
+		font-size: 16px !important;
 	}
 }
 
@@ -601,6 +613,10 @@ tr:hover td {
 	z-index: 299;
 }
 
+.col-hidden {
+	display: none !important;
+}
+
 /* ── Responsive ──────────────────────────────────────────────────────────────── */
 
 @media (max-width: 767px) {
@@ -638,6 +654,12 @@ tr:hover td {
 
 	.main {
 		padding: 16px;
+	}
+
+	/* let flexbox size the messenger below the mobile header instead of 100vh */
+	.main-flush {
+		height: auto;
+		padding: 0;
 	}
 
 	.page-header {

@@ -28,12 +28,13 @@
         >{{ opt.label }}</button>
         <select v-if="accounts.length > 1" v-model="filterAccountId" class="form-select" style="width:160px;height:30px;font-size:13px;padding:0 8px">
           <option value="">{{ t('jobs.allAccounts') }}</option>
-          <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.name }}</option>
+          <option v-for="a in accounts" :key="a.id" :value="a.id">{{ formatAccountLabel(a) }}</option>
         </select>
         <select v-if="botUrlTplOptions.length > 1" v-model="filterBotUrlTpl" class="form-select" style="width:180px;height:30px;font-size:13px;padding:0 8px">
           <option value="">{{ t('jobs.allBotUrlTpl') }}</option>
           <option v-for="opt in botUrlTplOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
         </select>
+        <input v-model="filterName" class="form-input" style="width:160px;height:30px;font-size:13px;padding:0 8px" :placeholder="t('jobs.filterPlaceholder')" />
         <button v-if="sortedJobs.length" class="btn btn-sm btn-secondary" style="margin-left:auto" @click="toggleAllJobs">
           {{ allJobsSelected ? t('common.deselectAll') : t('common.selectAll') }}
         </button>
@@ -41,9 +42,11 @@
       <!-- Bulk action bar -->
       <div v-if="selectedJobIds.length" class="bulk-bar">
         <span class="bulk-count">{{ t('jobs.selectedCount').replace('{n}', String(selectedJobIds.length)) }}</span>
+        <button class="btn btn-sm btn-success" @click="showBulkRunModal = true"><i class="fa-solid fa-play"></i> {{ t('jobs.bulkRun').replace('{n}', String(selectedJobIds.length)) }}</button>
         <button class="btn btn-sm btn-secondary" @click="bulkEnableJobs"><i class="fa-solid fa-circle-check"></i> {{ t('jobs.bulkEnable').replace('{n}', String(selectedJobIds.length)) }}</button>
         <button class="btn btn-sm btn-secondary" @click="confirmBulkDisableJobs = true"><i class="fa-solid fa-ban"></i> {{ t('jobs.bulkDisable').replace('{n}', String(selectedJobIds.length)) }}</button>
-        <button class="btn btn-sm btn-danger" @click="confirmBulkDeleteJobs = true"><i class="fa-solid fa-trash"></i> {{ t('jobs.bulkDelete').replace('{n}', String(selectedJobIds.length)) }}</button>
+        <button class="btn btn-sm btn-danger" @click="confirmBulkRetireJobs = true"><i class="fa-solid fa-box-archive"></i> {{ t('jobs.bulkRetire').replace('{n}', String(selectedJobIds.length)) }}</button>
+        <button class="btn btn-sm btn-secondary" @click="showBulkWindowModal = true"><i class="fa-solid fa-clock"></i> {{ t('jobs.bulkWindow').replace('{n}', String(selectedJobIds.length)) }}</button>
         <button class="btn btn-sm btn-ghost" style="margin-left:auto" @click="selectedJobIds = []"><i class="fa-solid fa-xmark"></i></button>
       </div>
       <div class="table-wrap">
@@ -70,7 +73,7 @@
               @click="toggleJobSelect(j.id)"
             >
               <td>{{ j.name }}</td>
-              <td>{{ j.accountName ?? j.accountId }}</td>
+              <td>{{ jobAccountLabel(j) }}</td>
               <td><span :class="jobTypeBadge(j.jobType)">{{ t(`logs.jobType.${j.jobType}`) }}</span></td>
               <td class="col-hide-mobile">
                 <template v-if="j.templateId">
@@ -96,7 +99,7 @@
                   </button>
                   <button class="btn btn-sm btn-ghost btn-icon" :title="t('common.edit')" @click="openEdit(j)"><i class="fa-solid fa-pen"></i></button>
                   <button class="btn btn-sm btn-ghost btn-icon" :title="t('common.duplicate')" @click="openDuplicate(j)"><i class="fa-solid fa-copy"></i></button>
-                  <button class="btn btn-sm btn-danger btn-icon" :title="t('common.delete')" @click="remove(j.id)"><i class="fa-solid fa-trash"></i></button>
+                  <button class="btn btn-sm btn-danger btn-icon" :title="t('common.retire')" @click="retire(j.id)"><i class="fa-solid fa-box-archive"></i></button>
                 </div>
                 <!-- mobile: single button opens action sheet -->
                 <button class="btn btn-sm btn-ghost btn-icon show-mobile" @click="actionMenuJob = j">
@@ -167,7 +170,7 @@
             <label class="form-label">{{ t('jobs.labelAccount') }} <span style="color:#e63946">*</span></label>
             <select v-model="form.accountId" class="form-select">
               <option :value="null" disabled>{{ t('jobs.selectAccount') }}</option>
-              <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.name }}</option>
+              <option v-for="a in accounts" :key="a.id" :value="a.id">{{ formatAccountLabel(a) }}</option>
             </select>
           </div>
         </div>
@@ -178,7 +181,7 @@
             <label class="form-label">{{ t('jobs.labelAccount') }} <span style="color:#e63946">*</span></label>
             <select v-model="form.accountId" class="form-select">
               <option :value="null" disabled>{{ t('jobs.selectAccount') }}</option>
-              <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.name }}</option>
+              <option v-for="a in accounts" :key="a.id" :value="a.id">{{ formatAccountLabel(a) }}</option>
             </select>
           </div>
           <div class="form-group">
@@ -251,6 +254,13 @@
             </label>
             <div style="font-size:11px;color:#aaa;margin-top:4px;padding-left:24px">{{ t('jobs.markWatchedHint') }}</div>
           </div>
+          <div class="form-group" style="margin-top:4px">
+            <label class="form-check">
+              <input v-model="embyCfg.verifyPlayable" type="checkbox" />
+              <span>{{ t('jobs.labelVerifyPlayable') }}</span>
+            </label>
+            <div style="font-size:11px;color:#aaa;margin-top:4px;padding-left:24px">{{ t('jobs.verifyPlayableHint') }}</div>
+          </div>
         </template>
         <!-- embywatch optional account (always shown, job-specific) -->
         <div v-if="form.jobType === 'embywatch' && accounts.length > 0" class="form-group" style="margin-top:8px">
@@ -260,7 +270,7 @@
           </label>
           <select v-model="form.accountId" class="form-select">
             <option :value="null">{{ t('jobs.noAccount') }}</option>
-            <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.name }}</option>
+            <option v-for="a in accounts" :key="a.id" :value="a.id">{{ formatAccountLabel(a) }}</option>
           </select>
         </div>
 
@@ -271,7 +281,7 @@
               <label class="form-label">{{ t('jobs.labelAccount') }} <span style="color:#e63946">*</span></label>
               <select v-model="form.accountId" class="form-select">
                 <option :value="null" disabled>{{ t('jobs.selectAccount') }}</option>
-                <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.name }}</option>
+                <option v-for="a in accounts" :key="a.id" :value="a.id">{{ formatAccountLabel(a) }}</option>
               </select>
             </div>
             <div class="form-group">
@@ -300,10 +310,14 @@
                 <span class="custom-action-num">{{ i + 1 }}</span>
                 <select v-model="action.type" class="form-select custom-action-type-select">
                   <option value="send_command">{{ t('jobs.custom.actionSendCommand') }}</option>
+                  <option value="send_contact_message">{{ t('jobs.custom.actionSendContactMessage') }}</option>
                   <option value="wait_reply">{{ t('jobs.custom.actionWaitReply') }}</option>
                   <option value="delay">{{ t('jobs.custom.actionDelay') }}</option>
                   <option value="click_button">{{ t('jobs.custom.actionClickButton') }}</option>
+                  <option value="click_message_button">{{ t('jobs.custom.actionClickMessageButton') }}</option>
                   <option value="enter_captcha" :disabled="aiKeyMissing">{{ t('jobs.custom.actionEnterCaptcha') }}{{ aiKeyMissing ? ' (' + t('jobs.noApiKey') + ')' : '' }}</option>
+                  <option value="join_group">{{ t('jobs.custom.actionJoinGroup') }}</option>
+                  <option value="subscribe_channel">{{ t('jobs.custom.actionSubscribeChannel') }}</option>
                 </select>
                 <button type="button" class="btn btn-ghost btn-sm btn-icon" :disabled="i === 0" @click="moveUp(i)"><i class="fa-solid fa-arrow-up"></i></button>
                 <button type="button" class="btn btn-ghost btn-sm btn-icon" :disabled="i === customActions.length - 1" @click="moveDown(i)"><i class="fa-solid fa-arrow-down"></i></button>
@@ -313,6 +327,37 @@
               <!-- send_command -->
               <div v-if="action.type === 'send_command'" class="custom-action-params">
                 <div class="form-row" style="margin-bottom:0">
+                  <div class="form-group">
+                    <label class="form-label">{{ t('jobs.custom.labelContent') }}</label>
+                    <select v-model="action.contentDropdown" class="form-select">
+                      <option value="/start">/start</option>
+                      <option value="/checkin">/checkin</option>
+                      <option value="{aiInput}" :disabled="aiKeyMissing">{{ t('jobs.aiInputOption') }}{{ aiKeyMissing ? ' (' + t('jobs.noApiKey') + ')' : '' }}</option>
+                      <option value="custom">{{ t('common.custom') }}...</option>
+                    </select>
+                    <input v-if="action.contentDropdown === 'custom'" v-model="action.contentCustom" class="form-input" style="margin-top:6px" placeholder="/mycommand" />
+                    <template v-if="action.contentDropdown === '{aiInput}'">
+                      <input v-model.trim="action.contentAiInputLength" class="form-input" style="margin-top:6px" type="number" min="1" max="20" :placeholder="t('jobs.aiInputLengthPlaceholder')" />
+                      <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.aiInputLengthHint') }}</div>
+                      <div v-if="aiKeyMissing" style="font-size:11px;color:#e63946;margin-top:4px">{{ t('jobs.aiKeyWarning') }}</div>
+                    </template>
+                    <div v-else style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.contentHint') }}</div>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">{{ t('jobs.custom.labelMaxRetries') }}</label>
+                    <input v-model.number="action.maxRetries" class="form-input" type="number" min="0" max="10" />
+                  </div>
+                </div>
+              </div>
+
+              <!-- send_contact_message -->
+              <div v-if="action.type === 'send_contact_message'" class="custom-action-params">
+                <div class="form-group" style="margin-bottom:0">
+                  <label class="form-label">{{ t('jobs.custom.labelContact') }}</label>
+                  <input v-model.trim="action.contact" class="form-input" :placeholder="t('jobs.custom.contactPlaceholder')" />
+                  <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.contactHint') }}</div>
+                </div>
+                <div class="form-row" style="margin-bottom:0;margin-top:8px">
                   <div class="form-group">
                     <label class="form-label">{{ t('jobs.custom.labelContent') }}</label>
                     <select v-model="action.contentDropdown" class="form-select">
@@ -406,6 +451,51 @@
                 </div>
               </div>
 
+              <!-- click_message_button -->
+              <div v-if="action.type === 'click_message_button'" class="custom-action-params">
+                <div class="form-group" style="margin-bottom:0">
+                  <label class="form-label">{{ t('jobs.custom.labelContact') }}</label>
+                  <input v-model.trim="action.contact" class="form-input" :placeholder="t('jobs.custom.contactPlaceholder')" />
+                  <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.contactHint') }}</div>
+                </div>
+                <div class="form-row" style="margin-bottom:0;margin-top:8px">
+                  <div class="form-group">
+                    <label class="form-label">{{ t('jobs.custom.labelButton') }}</label>
+                    <select v-model="action.buttonDropdown" class="form-select">
+                      <option value="签到">签到</option>
+                      <option value="{aiBtn}" :disabled="aiKeyMissing">{{ t('jobs.aiBtnOption') }}{{ aiKeyMissing ? ' (' + t('jobs.noApiKey') + ')' : '' }}</option>
+                      <option value="{anyBtn}">{{ t('jobs.anyBtnOption') }}</option>
+                      <option value="custom">{{ t('common.custom') }}...</option>
+                    </select>
+                    <input v-if="action.buttonDropdown === 'custom'" v-model="action.buttonCustom" class="form-input" style="margin-top:6px" placeholder="Custom button text" />
+                    <template v-if="action.buttonDropdown === '{aiBtn}'">
+                      <input v-model.trim="action.buttonAiHint" class="form-input" style="margin-top:6px" :placeholder="t('jobs.aiHintPlaceholder')" />
+                      <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.aiHintHint') }}</div>
+                      <div v-if="aiKeyMissing" style="font-size:11px;color:#e63946;margin-top:4px">{{ t('jobs.aiKeyWarning') }}</div>
+                    </template>
+                    <div v-else style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.buttonHint') }}</div>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">{{ t('jobs.custom.labelMaxRetries') }}</label>
+                    <input v-model.number="action.maxRetries" class="form-input" type="number" min="0" max="10" />
+                  </div>
+                </div>
+                <div class="form-group" style="margin-bottom:0">
+                  <label class="form-label">{{ t('jobs.custom.labelMaxWait') }}</label>
+                  <input v-model.number="action.maxWaitMs" class="form-input" type="number" min="1000" step="1000" />
+                </div>
+                <div class="form-group" style="margin-bottom:0">
+                  <label class="form-label">{{ t('jobs.custom.labelSuccessContains') }}</label>
+                  <input v-model.trim="action.successContains" class="form-input" :placeholder="t('jobs.custom.successContainsPlaceholder')" />
+                  <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.successContainsHint') }}</div>
+                </div>
+                <div class="form-group" style="margin-bottom:0">
+                  <label class="form-label">{{ t('jobs.custom.labelFailContains') }}</label>
+                  <input v-model.trim="action.failContains" class="form-input" :placeholder="t('jobs.custom.failContainsPlaceholder')" />
+                  <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.failContainsHint') }}</div>
+                </div>
+              </div>
+
               <!-- enter_captcha -->
               <div v-if="action.type === 'enter_captcha'" class="custom-action-params">
                 <div class="form-row" style="margin-bottom:0">
@@ -424,6 +514,47 @@
                 </div>
                 <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.aiInputLengthHint') }}</div>
                 <div v-if="aiKeyMissing" style="font-size:11px;color:#e63946;margin-top:4px">{{ t('jobs.aiKeyWarning') }}</div>
+              </div>
+
+              <!-- join_group -->
+              <div v-if="action.type === 'join_group'" class="custom-action-params">
+                <div class="form-group" style="margin-bottom:0">
+                  <label class="form-label">{{ t('jobs.custom.labelGroupId') }}</label>
+                  <input v-model.trim="action.groupId" class="form-input" :placeholder="t('jobs.custom.groupIdPlaceholder')" />
+                  <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.groupIdHint') }}</div>
+                </div>
+                <div class="form-group" style="margin-bottom:0;margin-top:8px">
+                  <label class="form-checkbox-label">
+                    <input type="checkbox" v-model="action.checkMembership" />
+                    {{ t('jobs.custom.labelCheckMembership') }}
+                  </label>
+                  <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.checkMembershipHint') }}</div>
+                </div>
+                <div class="form-group" style="margin-bottom:0;margin-top:8px">
+                  <label class="form-label">{{ t('jobs.custom.labelVerifyButton') }}</label>
+                  <input v-model.trim="action.verifyButton" class="form-input" :placeholder="t('jobs.custom.verifyButtonPlaceholder')" />
+                  <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.verifyButtonHint') }}</div>
+                </div>
+                <div v-if="action.verifyButton" class="form-group" style="margin-bottom:0;margin-top:8px">
+                  <label class="form-label">{{ t('jobs.custom.labelVerifyWaitMs') }}</label>
+                  <input v-model.number="action.verifyWaitMs" type="number" min="1000" step="1000" class="form-input" />
+                </div>
+              </div>
+
+              <!-- subscribe_channel -->
+              <div v-if="action.type === 'subscribe_channel'" class="custom-action-params">
+                <div class="form-group" style="margin-bottom:0">
+                  <label class="form-label">{{ t('jobs.custom.labelChannelId') }}</label>
+                  <input v-model.trim="action.channelId" class="form-input" :placeholder="t('jobs.custom.channelIdPlaceholder')" />
+                  <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.channelIdHint') }}</div>
+                </div>
+                <div class="form-group" style="margin-bottom:0;margin-top:8px">
+                  <label class="form-checkbox-label">
+                    <input type="checkbox" v-model="action.checkMembership" />
+                    {{ t('jobs.custom.labelCheckSubscription') }}
+                  </label>
+                  <div style="font-size:11px;color:#aaa;margin-top:3px">{{ t('jobs.custom.checkSubscriptionHint') }}</div>
+                </div>
               </div>
             </div>
 
@@ -555,6 +686,46 @@
       </div>
     </div>
 
+    <!-- Bulk run modal -->
+    <div v-if="showBulkRunModal" class="modal-backdrop">
+      <div class="modal" style="width:380px">
+        <h3 class="modal-title">{{ t('jobs.bulkRunTitle') }}</h3>
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label">{{ t('jobs.bulkRunDelayLabel') }}</label>
+            <input v-model.number="bulkRunDelay" type="number" min="0" class="form-input" style="width:120px" @keyup.enter="bulkRunJobsSequential" />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-ghost" @click="showBulkRunModal = false"><i class="fa-solid fa-xmark"></i> {{ t('common.cancel') }}</button>
+          <button class="btn btn-success" @click="bulkRunJobsSequential"><i class="fa-solid fa-play"></i> {{ t('jobs.bulkRunStart') }}</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bulk change window modal -->
+    <div v-if="showBulkWindowModal" class="modal-backdrop">
+      <div class="modal" style="width:380px">
+        <h3 class="modal-title">{{ t('jobs.bulkWindowTitle') }}</h3>
+        <div class="modal-body">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">{{ t('jobs.labelWindowStart') }}</label>
+              <input v-model.number="bulkWindowStart" type="number" class="form-input" placeholder="1400" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">{{ t('jobs.labelWindowEnd') }}</label>
+              <input v-model.number="bulkWindowEnd" type="number" class="form-input" placeholder="1600" />
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-ghost" @click="showBulkWindowModal = false"><i class="fa-solid fa-xmark"></i> {{ t('common.cancel') }}</button>
+          <button class="btn btn-primary" @click="executeBulkChangeWindow"><i class="fa-solid fa-clock"></i> {{ t('jobs.bulkWindowApply') }}</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Bulk disable confirmation -->
     <div v-if="confirmBulkDisableJobs" class="modal-backdrop">
       <div class="modal" style="width:380px">
@@ -569,16 +740,16 @@
       </div>
     </div>
 
-    <!-- Bulk delete confirmation -->
-    <div v-if="confirmBulkDeleteJobs" class="modal-backdrop">
+    <!-- Bulk retire confirmation -->
+    <div v-if="confirmBulkRetireJobs" class="modal-backdrop">
       <div class="modal" style="width:380px">
-        <h3 class="modal-title">{{ t('common.delete') }}</h3>
+        <h3 class="modal-title">{{ t('common.retire') }}</h3>
         <div class="modal-body">
-          <p>{{ t('jobs.confirmBulkDelete').replace('{n}', String(selectedJobIds.length)) }}</p>
+          <p>{{ t('jobs.confirmBulkRetire').replace('{n}', String(selectedJobIds.length)) }}</p>
         </div>
         <div class="modal-footer">
-          <button class="btn btn-ghost" @click="confirmBulkDeleteJobs = false"><i class="fa-solid fa-xmark"></i> {{ t('common.cancel') }}</button>
-          <button class="btn btn-danger" @click="executeBulkDeleteJobs"><i class="fa-solid fa-trash"></i> {{ t('common.delete') }}</button>
+          <button class="btn btn-ghost" @click="confirmBulkRetireJobs = false"><i class="fa-solid fa-xmark"></i> {{ t('common.cancel') }}</button>
+          <button class="btn btn-danger" @click="executeBulkRetireJobs"><i class="fa-solid fa-box-archive"></i> {{ t('common.retire') }}</button>
         </div>
       </div>
     </div>
@@ -600,8 +771,8 @@
           <i :class="actionMenuJob.enabled ? 'fa-solid fa-ban' : 'fa-solid fa-circle-check'"></i>
           {{ actionMenuJob.enabled ? t('common.disable') : t('common.enable') }}
         </button>
-        <button class="action-sheet-btn danger" @click="remove(actionMenuJob.id); actionMenuJob = null">
-          <i class="fa-solid fa-trash"></i> {{ t('common.delete') }}
+        <button class="action-sheet-btn danger" @click="retire(actionMenuJob.id); actionMenuJob = null">
+          <i class="fa-solid fa-box-archive"></i> {{ t('common.retire') }}
         </button>
         <div class="action-sheet-divider"></div>
         <button class="action-sheet-btn action-sheet-cancel" @click="actionMenuJob = null">
@@ -609,6 +780,8 @@
         </button>
       </div>
     </div>
+    <!-- Bulk run error toast -->
+    <div v-if="bulkRunToast" class="job-toast">{{ bulkRunToast }}</div>
   </div>
 </template>
 
@@ -617,9 +790,10 @@ import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
 import { jobsApi, accountsApi, statusApi, settingsApi, logsApi, templatesApi, type Job, type JobTemplate, type Account, type ScheduleStatus, type Settings, type UAPreset, type EmbywatchConfig, type CustomConfig } from '../api/client';
 import { t, locale } from '../i18n';
 import { usePersistedRef } from '../composables/usePersistedRef';
+import { formatAccountLabel, loadAccountDisplaySetting } from '../composables/accountDisplay';
 
 type CustomActionForm = {
-  type: 'send_command' | 'wait_reply' | 'delay' | 'click_button' | 'enter_captcha';
+  type: 'send_command' | 'send_contact_message' | 'wait_reply' | 'delay' | 'click_button' | 'click_message_button' | 'enter_captcha' | 'join_group' | 'subscribe_channel';
   content: string;
   contentDropdown: string;
   contentCustom: string;
@@ -634,6 +808,12 @@ type CustomActionForm = {
   captchaLength: string;
   successContains: string;
   failContains: string;
+  contact: string;
+  groupId: string;
+  checkMembership: boolean;
+  verifyButton: string;
+  verifyWaitMs: number;
+  channelId: string;
 };
 
 const jobs = ref<Job[]>([]);
@@ -652,6 +832,7 @@ const running = ref(new Set<number>());
 const filterType = usePersistedRef<string>('bemby:jobs:filterType', '');
 const filterAccountId = usePersistedRef<number | ''>('bemby:jobs:filterAccountId', '');
 const filterBotUrlTpl = usePersistedRef<string>('bemby:jobs:filterBotUrlTpl', '');
+const filterName = usePersistedRef<string>('bemby:jobs:filterName', '');
 const filterOptions = computed(() => [
   { value: '', label: t('common.all') },
   { value: 'checkin', label: t('logs.jobType.checkin') },
@@ -671,7 +852,12 @@ const confirmDisableJob = ref<Job | null>(null);
 const selectedJobIds = ref<number[]>([]);
 const allJobsSelected = computed(() => sortedJobs.value.length > 0 && sortedJobs.value.every(j => selectedJobIds.value.includes(j.id)));
 const confirmBulkDisableJobs = ref(false);
-const confirmBulkDeleteJobs = ref(false);
+const confirmBulkRetireJobs = ref(false);
+const showBulkRunModal = ref(false);
+const bulkRunDelay = ref(70);
+const showBulkWindowModal = ref(false);
+const bulkWindowStart = ref(1400);
+const bulkWindowEnd = ref(1600);
 
 function setSort(key: string) {
   if (sortKey.value === key) {
@@ -688,7 +874,9 @@ function sortIcon(key: string): string {
 }
 
 const sortedJobs = computed(() => {
+  const nameQ = filterName.value.trim().toLowerCase();
   const filtered = jobs.value.filter(j => {
+    if (nameQ && !j.name.toLowerCase().includes(nameQ)) return false;
     if (filterType.value && j.jobType !== filterType.value) return false;
     if (filterAccountId.value !== '' && j.accountId !== filterAccountId.value) return false;
     if (filterBotUrlTpl.value) {
@@ -754,12 +942,13 @@ const extractSource = ref<Job | null>(null);
 const extractName = ref('');
 const extractError = ref('');
 const extractSaving = ref(false);
-const embyCfg = reactive<{ username: string; password: string; playDuration: number | string; userAgent: string; markWatched: boolean }>({
+const embyCfg = reactive<{ username: string; password: string; playDuration: number | string; userAgent: string; markWatched: boolean; verifyPlayable: boolean }>({
   username: '',
   password: '',
   playDuration: '',
   userAgent: '',
   markWatched: true,
+  verifyPlayable: true,
 });
 const embyUaDropdown = ref('');
 const embyServer = reactive<{ protocol: 'https' | 'http'; host: string; port: number | '' }>({
@@ -812,7 +1001,7 @@ function onUaDropdownChange() {
 }
 
 function onJobTypeChange() {
-  Object.assign(embyCfg, { username: '', password: '', playDuration: '', userAgent: '', markWatched: true });
+  Object.assign(embyCfg, { username: '', password: '', playDuration: '', userAgent: '', markWatched: true, verifyPlayable: true });
   Object.assign(embyServer, { protocol: 'https', host: '', port: 443 });
   embyUaDropdown.value = '';
   form.accountId = (form.jobType === 'checkin' || form.jobType === 'custom')
@@ -828,7 +1017,7 @@ function onJobTypeChange() {
 }
 
 function defaultAction(): CustomActionForm {
-  return { type: 'send_command', content: '/start', contentDropdown: '/start', contentCustom: '', contentAiInputLength: '', maxWaitMs: 30000, waitMs: 2000, button: '签到', buttonDropdown: '签到', buttonCustom: '', buttonAiHint: '', maxRetries: 3, captchaLength: '', successContains: '', failContains: '' };
+  return { type: 'send_command', content: '/start', contentDropdown: '/start', contentCustom: '', contentAiInputLength: '', maxWaitMs: 30000, waitMs: 2000, button: '签到', buttonDropdown: '签到', buttonCustom: '', buttonAiHint: '', maxRetries: 3, captchaLength: '', successContains: '', failContains: '', contact: '', groupId: '', checkMembership: false, verifyButton: '', verifyWaitMs: 30000, channelId: '' };
 }
 
 function addAction() {
@@ -852,8 +1041,16 @@ function moveDown(i: number) {
 }
 
 onMounted(async () => {
+  loadAccountDisplaySetting();
   await Promise.all([loadJobs(), loadAccounts(), loadStatus(), loadSettings(), loadTemplates()]);
 });
+
+// Label for a job's account, honouring the "{Bemby name} - {TG name}" display setting.
+function jobAccountLabel(j: Job): string {
+  const acc = accounts.value.find((a) => a.id === j.accountId);
+  const fallback = j.accountName ?? (j.accountId != null ? String(j.accountId) : "");
+  return formatAccountLabel(acc, fallback);
+}
 
 async function loadSettings() {
   try { settings.value = await settingsApi.get(); } catch { /* ignore */ }
@@ -879,7 +1076,7 @@ function applyTemplate(tpl: JobTemplate) {
         let c = JSON.parse(tpl.config) as EmbywatchConfig | string;
         if (typeof c === 'string') c = JSON.parse(c) as EmbywatchConfig;
         // username/password are job-specific; only apply playback settings from template
-        Object.assign(embyCfg, { playDuration: c.playDuration ?? '', userAgent: c.userAgent ?? '', markWatched: c.markWatched !== false });
+        Object.assign(embyCfg, { playDuration: c.playDuration ?? '', userAgent: c.userAgent ?? '', markWatched: c.markWatched !== false, verifyPlayable: c.verifyPlayable !== false });
         setUaState(c.userAgent ?? '');
       } catch { /* ignore */ }
     }
@@ -897,9 +1094,17 @@ function applyTemplate(tpl: JobTemplate) {
             const contentDropdown = ACTION_CMD_PRESETS.has(a.content) ? a.content : 'custom';
             return { ...base, type: 'send_command' as const, content: a.content, contentDropdown, contentCustom: contentDropdown === 'custom' ? a.content : '', contentAiInputLength: '', maxRetries: a.maxRetries ?? 0 };
           }
+          if (a.type === 'send_contact_message') {
+            const aiInputMatch = a.content.match(/^\{aiInput(?::(\d+))?\}$/);
+            if (aiInputMatch) return { ...base, type: 'send_contact_message' as const, contact: a.contact, content: a.content, contentDropdown: '{aiInput}', contentCustom: '', contentAiInputLength: aiInputMatch[1] ?? '', maxRetries: a.maxRetries ?? 0 };
+            const contentDropdown = ACTION_CMD_PRESETS.has(a.content) ? a.content : 'custom';
+            return { ...base, type: 'send_contact_message' as const, contact: a.contact, content: a.content, contentDropdown, contentCustom: contentDropdown === 'custom' ? a.content : '', contentAiInputLength: '', maxRetries: a.maxRetries ?? 0 };
+          }
           if (a.type === 'wait_reply') return { ...base, type: 'wait_reply' as const, maxWaitMs: a.maxWaitMs, successContains: a.successContains ?? '', failContains: a.failContains ?? '', maxRetries: a.maxRetries ?? 0 };
           if (a.type === 'delay') return { ...base, type: 'delay' as const, waitMs: a.waitMs };
           if (a.type === 'enter_captcha') return { ...base, type: 'enter_captcha' as const, maxWaitMs: a.maxWaitMs, captchaLength: String(a.captchaLength ?? ''), maxRetries: a.maxRetries ?? 0 };
+          if (a.type === 'join_group') return { ...base, type: 'join_group' as const, groupId: a.groupId, checkMembership: a.checkMembership ?? false, verifyButton: a.verifyButton ?? '', verifyWaitMs: a.verifyWaitMs ?? 30000 };
+          if (a.type === 'subscribe_channel') return { ...base, type: 'subscribe_channel' as const, channelId: a.channelId, checkMembership: a.checkMembership ?? false };
           if (a.type === 'click_button') {
             const aiMatch = a.button.match(/^\{aiBtn(?::(.+))?\}$/);
             let buttonDropdown: string, buttonCustom = '', buttonAiHint = '';
@@ -908,13 +1113,21 @@ function applyTemplate(tpl: JobTemplate) {
             else { buttonDropdown = 'custom'; buttonCustom = a.button; }
             return { ...base, type: 'click_button' as const, button: a.button, buttonDropdown, buttonCustom, buttonAiHint, maxRetries: a.maxRetries, maxWaitMs: a.maxWaitMs, successContains: a.successContains ?? '', failContains: a.failContains ?? '' };
           }
+          if (a.type === 'click_message_button') {
+            const aiMatch = a.button.match(/^\{aiBtn(?::(.+))?\}$/);
+            let buttonDropdown: string, buttonCustom = '', buttonAiHint = '';
+            if (aiMatch) { buttonDropdown = '{aiBtn}'; buttonAiHint = aiMatch[1]?.trim() ?? ''; }
+            else if (ACTION_BTN_PRESETS.has(a.button)) { buttonDropdown = a.button; }
+            else { buttonDropdown = 'custom'; buttonCustom = a.button; }
+            return { ...base, type: 'click_message_button' as const, contact: a.contact, button: a.button, buttonDropdown, buttonCustom, buttonAiHint, maxRetries: a.maxRetries, maxWaitMs: a.maxWaitMs, successContains: a.successContains ?? '', failContains: a.failContains ?? '' };
+          }
           return base;
         });
       } catch { customActions.value = []; customJobMaxRetries.value = 1; }
     }
   } else {
     Object.assign(embyServer, { protocol: 'https', host: '', port: 443 });
-    Object.assign(embyCfg, { username: '', password: '', playDuration: '', userAgent: '', markWatched: true });
+    Object.assign(embyCfg, { username: '', password: '', playDuration: '', userAgent: '', markWatched: true, verifyPlayable: true });
     customActions.value = [];
   }
 }
@@ -961,7 +1174,7 @@ function openAdd() {
     templateId: null,
     runEveryDays: 1,
   });
-  Object.assign(embyCfg, { username: '', password: '', playDuration: '', userAgent: '', markWatched: true });
+  Object.assign(embyCfg, { username: '', password: '', playDuration: '', userAgent: '', markWatched: true, verifyPlayable: true });
   Object.assign(embyServer, { protocol: 'https', host: '', port: 443 });
   embyUaDropdown.value = '';
   customActions.value = [];
@@ -1013,18 +1226,19 @@ function openEdit(j: Job) {
           playDuration: c.playDuration ?? '',
           userAgent: c.userAgent ?? '',
           markWatched: c.markWatched !== false,
+          verifyPlayable: c.verifyPlayable !== false,
         });
         setUaState(c.userAgent ?? '');
       } catch {
-        Object.assign(embyCfg, { username: '', password: '', playDuration: '', userAgent: '', markWatched: true });
+        Object.assign(embyCfg, { username: '', password: '', playDuration: '', userAgent: '', markWatched: true, verifyPlayable: true });
         embyUaDropdown.value = '';
       }
     } else {
-      Object.assign(embyCfg, { username: '', password: '', playDuration: '', userAgent: '', markWatched: true });
+      Object.assign(embyCfg, { username: '', password: '', playDuration: '', userAgent: '', markWatched: true, verifyPlayable: true });
       embyUaDropdown.value = '';
     }
   } else if (j.jobType === 'custom') {
-    Object.assign(embyCfg, { username: '', password: '', playDuration: '', userAgent: '', markWatched: true });
+    Object.assign(embyCfg, { username: '', password: '', playDuration: '', userAgent: '', markWatched: true, verifyPlayable: true });
     Object.assign(embyServer, { protocol: 'https', host: '', port: 443 });
     if (j.config) {
       try {
@@ -1040,9 +1254,19 @@ function openEdit(j: Job) {
             const contentDropdown = ACTION_CMD_PRESETS.has(a.content) ? a.content : 'custom';
             return { ...base, type: 'send_command', content: a.content, contentDropdown, contentCustom: contentDropdown === 'custom' ? a.content : '', contentAiInputLength: '', maxRetries: a.maxRetries ?? 0 };
           }
+          if (a.type === 'send_contact_message') {
+            const aiInputMatch = a.content.match(/^\{aiInput(?::(\d+))?\}$/);
+            if (aiInputMatch) {
+              return { ...base, type: 'send_contact_message', contact: a.contact, content: a.content, contentDropdown: '{aiInput}', contentCustom: '', contentAiInputLength: aiInputMatch[1] ?? '', maxRetries: a.maxRetries ?? 0 };
+            }
+            const contentDropdown = ACTION_CMD_PRESETS.has(a.content) ? a.content : 'custom';
+            return { ...base, type: 'send_contact_message', contact: a.contact, content: a.content, contentDropdown, contentCustom: contentDropdown === 'custom' ? a.content : '', contentAiInputLength: '', maxRetries: a.maxRetries ?? 0 };
+          }
           if (a.type === 'wait_reply') return { ...base, type: 'wait_reply', maxWaitMs: a.maxWaitMs, successContains: a.successContains ?? '', failContains: a.failContains ?? '', maxRetries: a.maxRetries ?? 0 };
           if (a.type === 'delay') return { ...base, type: 'delay', waitMs: a.waitMs };
           if (a.type === 'enter_captcha') return { ...base, type: 'enter_captcha', maxWaitMs: a.maxWaitMs, captchaLength: String(a.captchaLength ?? ''), maxRetries: a.maxRetries ?? 0 };
+          if (a.type === 'join_group') return { ...base, type: 'join_group', groupId: a.groupId, checkMembership: a.checkMembership ?? false, verifyButton: a.verifyButton ?? '', verifyWaitMs: a.verifyWaitMs ?? 30000 };
+          if (a.type === 'subscribe_channel') return { ...base, type: 'subscribe_channel', channelId: a.channelId, checkMembership: a.checkMembership ?? false };
           if (a.type === 'click_button') {
             const aiMatch = a.button.match(/^\{aiBtn(?::(.+))?\}$/);
             let buttonDropdown: string, buttonCustom = '', buttonAiHint = '';
@@ -1055,6 +1279,18 @@ function openEdit(j: Job) {
             }
             return { ...base, type: 'click_button', button: a.button, buttonDropdown, buttonCustom, buttonAiHint, maxRetries: a.maxRetries, maxWaitMs: a.maxWaitMs, successContains: a.successContains ?? '', failContains: a.failContains ?? '' };
           }
+          if (a.type === 'click_message_button') {
+            const aiMatch = a.button.match(/^\{aiBtn(?::(.+))?\}$/);
+            let buttonDropdown: string, buttonCustom = '', buttonAiHint = '';
+            if (aiMatch) {
+              buttonDropdown = '{aiBtn}'; buttonAiHint = aiMatch[1]?.trim() ?? '';
+            } else if (ACTION_BTN_PRESETS.has(a.button)) {
+              buttonDropdown = a.button;
+            } else {
+              buttonDropdown = 'custom'; buttonCustom = a.button;
+            }
+            return { ...base, type: 'click_message_button', contact: a.contact, button: a.button, buttonDropdown, buttonCustom, buttonAiHint, maxRetries: a.maxRetries, maxWaitMs: a.maxWaitMs, successContains: a.successContains ?? '', failContains: a.failContains ?? '' };
+          }
           return base;
         });
       } catch { customActions.value = []; customJobMaxRetries.value = 1; }
@@ -1063,7 +1299,7 @@ function openEdit(j: Job) {
       customJobMaxRetries.value = 1;
     }
   } else {
-    Object.assign(embyCfg, { username: '', password: '', playDuration: '', userAgent: '', markWatched: true });
+    Object.assign(embyCfg, { username: '', password: '', playDuration: '', userAgent: '', markWatched: true, verifyPlayable: true });
     Object.assign(embyServer, { protocol: 'https', host: '', port: 443 });
     customActions.value = [];
   }
@@ -1102,6 +1338,7 @@ function buildConfig(): EmbywatchConfig | CustomConfig | Record<string, string> 
     if (embyCfg.playDuration !== '') cfg.playDuration = Number(embyCfg.playDuration as string | number);
     if (embyCfg.userAgent) cfg.userAgent = embyCfg.userAgent;
     cfg.markWatched = embyCfg.markWatched;
+    cfg.verifyPlayable = embyCfg.verifyPlayable;
     return cfg;
   }
   if (form.jobType === 'custom') {
@@ -1115,6 +1352,15 @@ function buildConfig(): EmbywatchConfig | CustomConfig | Record<string, string> 
             content = a.contentDropdown === 'custom' ? a.contentCustom : a.contentDropdown;
           }
           return { type: 'send_command' as const, content, ...(a.maxRetries > 0 ? { maxRetries: a.maxRetries } : {}) };
+        }
+        if (a.type === 'send_contact_message') {
+          let content: string;
+          if (a.contentDropdown === '{aiInput}') {
+            content = a.contentAiInputLength ? `{aiInput:${a.contentAiInputLength}}` : '{aiInput}';
+          } else {
+            content = a.contentDropdown === 'custom' ? a.contentCustom : a.contentDropdown;
+          }
+          return { type: 'send_contact_message' as const, contact: a.contact, content, ...(a.maxRetries > 0 ? { maxRetries: a.maxRetries } : {}) };
         }
         if (a.type === 'wait_reply') {
           return {
@@ -1130,10 +1376,26 @@ function buildConfig(): EmbywatchConfig | CustomConfig | Record<string, string> 
           const captchaLength = a.captchaLength ? parseInt(a.captchaLength) || undefined : undefined;
           return { type: 'enter_captcha' as const, maxWaitMs: a.maxWaitMs, captchaLength, ...(a.maxRetries > 0 ? { maxRetries: a.maxRetries } : {}) };
         }
+        if (a.type === 'join_group') return {
+          type: 'join_group' as const,
+          groupId: a.groupId,
+          ...(a.checkMembership ? { checkMembership: true } : {}),
+          ...(a.verifyButton.trim() ? { verifyButton: a.verifyButton.trim(), verifyWaitMs: a.verifyWaitMs } : {}),
+        };
+        if (a.type === 'subscribe_channel') return { type: 'subscribe_channel' as const, channelId: a.channelId, ...(a.checkMembership ? { checkMembership: true } : {}) };
         let button: string;
         if (a.buttonDropdown === 'custom') button = a.buttonCustom;
         else if (a.buttonDropdown === '{aiBtn}') button = a.buttonAiHint.trim() ? `{aiBtn:${a.buttonAiHint.trim()}}` : '{aiBtn}';
         else button = a.buttonDropdown || '签到';
+        if (a.type === 'click_message_button') return {
+          type: 'click_message_button' as const,
+          contact: a.contact,
+          button,
+          maxRetries: a.maxRetries,
+          maxWaitMs: a.maxWaitMs,
+          ...(a.successContains.trim() ? { successContains: a.successContains.trim() } : {}),
+          ...(a.failContains.trim() ? { failContains: a.failContains.trim() } : {}),
+        };
         return {
           type: 'click_button' as const,
           button,
@@ -1256,8 +1518,8 @@ async function executeDisable() {
   confirmDisableJob.value = null;
 }
 
-async function remove(id: number) {
-  if (!confirm(t('jobs.confirmDelete'))) return;
+async function retire(id: number) {
+  if (!confirm(t('jobs.confirmRetire'))) return;
   await jobsApi.delete(id);
   selectedJobIds.value = selectedJobIds.value.filter(i => i !== id);
   await loadJobs();
@@ -1286,10 +1548,20 @@ async function executeBulkDisableJobs() {
   selectedJobIds.value = [];
 }
 
-async function executeBulkDeleteJobs() {
+async function executeBulkRetireJobs() {
   await Promise.all(selectedJobIds.value.map(id => jobsApi.delete(id)));
   await loadJobs();
-  confirmBulkDeleteJobs.value = false;
+  confirmBulkRetireJobs.value = false;
+  selectedJobIds.value = [];
+}
+
+async function executeBulkChangeWindow() {
+  await Promise.all(selectedJobIds.value.map(id => jobsApi.update(id, {
+    scheduleWindowStart: bulkWindowStart.value,
+    scheduleWindowEnd: bulkWindowEnd.value,
+  })));
+  await Promise.all([loadJobs(), loadStatus()]);
+  showBulkWindowModal.value = false;
   selectedJobIds.value = [];
 }
 
@@ -1314,6 +1586,59 @@ function schedulePoll(jobId: number, logId: number) {
     }
   }, 3000);
   pollTimers.set(jobId, timer);
+}
+
+function waitForJobCompletion(id: number, logId: number): Promise<void> {
+  return new Promise((resolve) => {
+    const check = async () => {
+      try {
+        const log = await logsApi.getOne(logId);
+        if (log.status === 'running') {
+          setTimeout(check, 3000);
+        } else {
+          stopRunning(id);
+          resolve();
+        }
+      } catch {
+        stopRunning(id);
+        resolve();
+      }
+    };
+    setTimeout(check, 3000);
+  });
+}
+
+const bulkRunToast = ref('');
+let bulkRunToastTimer: ReturnType<typeof setTimeout> | null = null;
+
+function showBulkRunToast(msg: string) {
+  if (bulkRunToastTimer) clearTimeout(bulkRunToastTimer);
+  bulkRunToast.value = msg;
+  bulkRunToastTimer = setTimeout(() => { bulkRunToast.value = ''; }, 3000);
+}
+
+async function bulkRunJobsSequential() {
+  const ids = [...selectedJobIds.value];
+  showBulkRunModal.value = false;
+  selectedJobIds.value = [];
+
+  for (let i = 0; i < ids.length; i++) {
+    const id = ids[i];
+    running.value.add(id);
+    running.value = new Set(running.value);
+    try {
+      const { logId } = await jobsApi.run(id);
+      await waitForJobCompletion(id, logId);
+    } catch (err: any) {
+      // Non-blocking toast so the queue always continues to the next job
+      showBulkRunToast(err.response?.data?.error ?? t('common.triggerFailed'));
+      stopRunning(id);
+    }
+    // Wait delay seconds before triggering the next job
+    if (i < ids.length - 1) {
+      await new Promise(resolve => setTimeout(resolve, bulkRunDelay.value * 1000));
+    }
+  }
 }
 
 async function runNow(id: number) {
@@ -1511,5 +1836,26 @@ tbody tr:nth-child(even):not(.row-selected) td {
   font-size: 13px;
   color: #666;
   white-space: nowrap;
+}
+
+.job-toast {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(26, 26, 46, 0.88);
+  color: #fff;
+  font-size: 13px;
+  padding: 8px 20px;
+  border-radius: 20px;
+  pointer-events: none;
+  z-index: 9999;
+  white-space: nowrap;
+  animation: job-fade-in 0.15s ease;
+}
+
+@keyframes job-fade-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(6px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 </style>

@@ -88,8 +88,7 @@ describe('checkAccountStatus — deleted account', () => {
     });
     const s = await checkAccountStatus(1, 'hash', 'sess');
     expect(s.isDeleted).toBe(true);
-    // Connection itself succeeded, so isActive is still true
-    expect(s.isActive).toBe(true);
+    expect(s.isActive).toBe(false);
   });
 });
 

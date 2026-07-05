@@ -16,19 +16,49 @@ export const ALLOWED_KEYS = [
   "default_play_duration",
   "default_device_name",
   "ai_model",
+  "ai_fallback_enabled",
   "notify_tg_username",
   "notify_tg_events",
   "ua_presets",
   "proxies",
   "tg_app_clients",
   "tg_client_mode",
+  "default_tg_api_id",
+  "default_tg_api_hash",
+  "account_display_with_tg_name",
 ];
 
-router.get("/", (_req, res) => {
+/** Settings keys that must never be sent to the client. */
+export const CLIENT_HIDDEN_KEYS = new Set([
+  "admin_password_hash",
+  "admin_username",
+  "jwt_secret",
+]);
+
+/** Returns first 4 chars + **** + last 4 chars, or **** for short values. */
+function maskApiHash(hash: string): string {
+  if (!hash) return "";
+  if (hash.length <= 8) return "****";
+  return `${hash.slice(0, 4)}****${hash.slice(-4)}`;
+}
+
+/** Returns client-safe settings: migration flags and secret keys removed, API hash masked. */
+function getClientSettings(): Record<string, string> {
   const rows = db
-    .prepare("SELECT key, value FROM settings")
+    .prepare("SELECT key, value FROM settings WHERE key NOT LIKE 'migration:%'")
     .all() as SettingRow[];
-  res.json(Object.fromEntries(rows.map((r) => [r.key, r.value])));
+  const result = Object.fromEntries(
+    rows.filter((r) => !CLIENT_HIDDEN_KEYS.has(r.key)).map((r) => [r.key, r.value]),
+  );
+  // Never expose the raw hash to the client
+  if (result.default_tg_api_hash) {
+    result.default_tg_api_hash = maskApiHash(result.default_tg_api_hash);
+  }
+  return result;
+}
+
+router.get("/", (_req, res) => {
+  res.json(getClientSettings());
 });
 
 router.put("/", (req, res) => {
@@ -39,17 +69,21 @@ router.put("/", (req, res) => {
 
   db.transaction(() => {
     for (const key of ALLOWED_KEYS) {
-      if (key in updates) stmt.run(key, String(updates[key]));
+      if (!(key in updates)) continue;
+      // Skip if the client sent back the masked hash unchanged
+      if (
+        key === "default_tg_api_hash" &&
+        String(updates[key]).includes("****")
+      )
+        continue;
+      stmt.run(key, String(updates[key]));
     }
   })();
 
   // Reschedule if daily-run check toggled
   if ("check_daily_run" in updates) refreshScheduler();
 
-  const rows = db
-    .prepare("SELECT key, value FROM settings")
-    .all() as SettingRow[];
-  res.json(Object.fromEntries(rows.map((r) => [r.key, r.value])));
+  res.json(getClientSettings());
 });
 
 // Test TCP reachability through a SOCKS proxy (target: 1.1.1.1:80)

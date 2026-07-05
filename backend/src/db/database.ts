@@ -66,6 +66,8 @@ db.exec(`
     ('ai_api_key',           ''),
     ('ai_model',             'nvidia/nemotron-nano-12b-v2-vl:free'),
     ('ai_timeout_ms',        '25000'),
+    ('ai_fallback_enabled',  'true'),
+    ('account_display_with_tg_name','false'),
     ('ua_presets',           '[{"name":"SenPlayer (Mac)","value":"SenPlayer/6.1.2 CFNetwork/1490.0.4 Darwin/23.2.0"},{"name":"Yamby (Android TV)","value":"Yamby/2.0.3.4(Android)"},{"name":"Hills (Windows)","value":"Hills/0.2.1"},{"name":"Lenna (iOS)","value":"Lenna/1.0.15 CFNetwork/1494.0.7 Darwin/23.4.0"},{"name":"VidHub (iOS)","value":"VidHub/2.2.4"}]');
 `);
 
@@ -77,6 +79,27 @@ try {
   );
 } catch {}
 
+/**
+ * Runs a data fix-up exactly once, recording completion in the settings table
+ * under a migration:<id> key. Value-matching UPDATEs must not re-run on every
+ * boot or they silently revert values the user has deliberately set.
+ */
+function runOnce(id: string, fn: () => void): void {
+  const flagKey = `migration:${id}`;
+  try {
+    const done = db
+      .prepare("SELECT 1 FROM settings WHERE key = ?")
+      .get(flagKey);
+    if (done) return;
+    fn();
+    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, '1')").run(
+      flagKey,
+    );
+  } catch (e) {
+    console.error(`[db] migration ${id} failed:`, e);
+  }
+}
+
 // Migrations for columns added after initial schema
 try {
   db.exec(
@@ -86,34 +109,34 @@ try {
 try {
   db.exec("ALTER TABLE jobs ADD COLUMN config TEXT");
 } catch {}
-try {
+runOnce("device-name-tg-runner-to-yamby", () => {
   db.exec(
     "UPDATE settings SET value = 'Yamby' WHERE key = 'default_device_name' AND value = 'tg-runner'",
   );
-} catch {}
-try {
+});
+runOnce("device-name-yamby-to-mac", () => {
   db.exec(
     "UPDATE settings SET value = 'Mac' WHERE key = 'default_device_name' AND value = 'Yamby'",
   );
-} catch {}
-try {
+});
+runOnce("ua-chrome-to-senplayer", () => {
   db.exec(
     "UPDATE settings SET value = 'SenPlayer/6.1.0 CFNetwork/1490.0.4 Darwin/23.2.0' WHERE key = 'default_ua' AND value = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'",
   );
-} catch {}
-try {
+});
+runOnce("ua-senplayer-610-to-612", () => {
   db.exec(
     "UPDATE settings SET value = 'SenPlayer/6.1.2 CFNetwork/1490.0.4 Darwin/23.2.0' WHERE key = 'default_ua' AND value = 'SenPlayer/6.1.0 CFNetwork/1490.0.4 Darwin/23.2.0'",
   );
-} catch {}
+});
 // Overwrite placeholder preset values written before correct UAs were researched
-try {
+runOnce("ua-presets-placeholder-fix", () => {
   db.prepare(
     "UPDATE settings SET value = ? WHERE key = 'ua_presets' AND (value LIKE '%ExoPlayerLib%' OR value LIKE '%VidHub/2.1.0%')",
   ).run(
     '[{"name":"SenPlayer (Mac)","value":"SenPlayer/6.1.2 CFNetwork/1490.0.4 Darwin/23.2.0"},{"name":"Yamby (Android TV)","value":"Yamby/2.0.3.4(Android)"},{"name":"Hills (Windows)","value":"Hills/0.2.1"},{"name":"Lenna (iOS)","value":"Lenna/1.0.15 CFNetwork/1494.0.7 Darwin/23.4.0"},{"name":"VidHub (iOS)","value":"VidHub/2.2.4"}]',
   );
-} catch {}
+});
 try {
   db.exec(
     "ALTER TABLE jobs ADD COLUMN start_command TEXT NOT NULL DEFAULT '/start'",
@@ -150,21 +173,30 @@ try {
   db.exec(
     "ALTER TABLE tg_accounts ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0",
   );
-} catch {}
-try {
+  // only seed sort_order on first migration; subsequent starts must not overwrite user-defined order
   db.exec("UPDATE tg_accounts SET sort_order = id WHERE sort_order = 0");
 } catch {}
 try {
-  db.exec("ALTER TABLE jobs ADD COLUMN run_every_days INTEGER NOT NULL DEFAULT 1");
+  db.exec(
+    "ALTER TABLE jobs ADD COLUMN run_every_days INTEGER NOT NULL DEFAULT 1",
+  );
 } catch {}
 try {
-  db.exec("ALTER TABLE job_templates ADD COLUMN run_every_days INTEGER NOT NULL DEFAULT 1");
+  db.exec(
+    "ALTER TABLE job_templates ADD COLUMN run_every_days INTEGER NOT NULL DEFAULT 1",
+  );
 } catch {}
 try {
   db.exec("ALTER TABLE tg_accounts ADD COLUMN tg_display_name TEXT");
 } catch {}
 try {
   db.exec("ALTER TABLE tg_accounts ADD COLUMN tg_username TEXT");
+} catch {}
+try {
+  db.exec("ALTER TABLE tg_accounts ADD COLUMN notes TEXT");
+} catch {}
+try {
+  db.exec("ALTER TABLE jobs ADD COLUMN retired TEXT");
 } catch {}
 
 // Seed default TG app client profiles (Linux is default)
@@ -274,8 +306,7 @@ try {
     const getSetting = (key: string) =>
       (
         db.prepare("SELECT value FROM settings WHERE key = ?").get(key) as
-          | { value: string }
-          | undefined
+          { value: string } | undefined
       )?.value ?? "";
     const apiKey = getSetting("ai_api_key");
     const baseUrl = getSetting("ai_base_url") || "https://openrouter.ai/api/v1";
@@ -302,32 +333,46 @@ try {
     notnull: number;
   }>;
   if (cols.find((c) => c.name === "account_id")?.notnull === 1) {
-    db.exec(`
-      DROP TABLE IF EXISTS jobs_v2;
-      CREATE TABLE jobs_v2 (
-        id                    INTEGER PRIMARY KEY AUTOINCREMENT,
-        name                  TEXT    NOT NULL,
-        account_id            INTEGER REFERENCES tg_accounts(id) ON DELETE SET NULL,
-        job_type              TEXT    NOT NULL DEFAULT 'checkin',
-        bot_username          TEXT    NOT NULL,
-        schedule_window_start INTEGER NOT NULL DEFAULT 1400,
-        schedule_window_end   INTEGER NOT NULL DEFAULT 1600,
-        timezone              TEXT    NOT NULL DEFAULT 'Australia/Sydney',
-        reply_timeout_ms      INTEGER NOT NULL DEFAULT 40000,
-        retry_max             INTEGER NOT NULL DEFAULT 5,
-        enabled               INTEGER NOT NULL DEFAULT 1,
-        created_at            DATETIME DEFAULT CURRENT_TIMESTAMP,
-        config                TEXT,
-        start_command         TEXT    NOT NULL DEFAULT '/start',
-        checkin_button        TEXT    NOT NULL DEFAULT '签到',
-        template_id           INTEGER REFERENCES job_templates(id) ON DELETE SET NULL,
-        run_every_days        INTEGER NOT NULL DEFAULT 1
-      );
-      INSERT INTO jobs_v2 SELECT * FROM jobs;
-      DROP TABLE jobs;
-      ALTER TABLE jobs_v2 RENAME TO jobs;
-    `);
-    console.log("[db] Migrated jobs.account_id to nullable");
+    // job_logs.job_id -> jobs(id) ON DELETE CASCADE: with foreign_keys on,
+    // DROP TABLE jobs below fires that cascade and wipes all job history.
+    // Turn enforcement off for the swap, per SQLite's documented table-rebuild pattern.
+    // The pragma is a no-op inside a transaction, so it must sit outside; the
+    // copy/drop/rename runs in one transaction so a crash mid-swap rolls back
+    // instead of leaving jobs dropped and the data stranded in jobs_v2.
+    db.pragma("foreign_keys = OFF");
+    try {
+      db.transaction(() => {
+        db.exec(`
+        DROP TABLE IF EXISTS jobs_v2;
+        CREATE TABLE jobs_v2 (
+          id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+          name                  TEXT    NOT NULL,
+          account_id            INTEGER REFERENCES tg_accounts(id) ON DELETE SET NULL,
+          job_type              TEXT    NOT NULL DEFAULT 'checkin',
+          bot_username          TEXT    NOT NULL,
+          schedule_window_start INTEGER NOT NULL DEFAULT 1400,
+          schedule_window_end   INTEGER NOT NULL DEFAULT 1600,
+          timezone              TEXT    NOT NULL DEFAULT 'Australia/Sydney',
+          reply_timeout_ms      INTEGER NOT NULL DEFAULT 40000,
+          retry_max             INTEGER NOT NULL DEFAULT 5,
+          enabled               INTEGER NOT NULL DEFAULT 1,
+          created_at            DATETIME DEFAULT CURRENT_TIMESTAMP,
+          config                TEXT,
+          start_command         TEXT    NOT NULL DEFAULT '/start',
+          checkin_button        TEXT    NOT NULL DEFAULT '签到',
+          template_id           INTEGER REFERENCES job_templates(id) ON DELETE SET NULL,
+          run_every_days        INTEGER NOT NULL DEFAULT 1,
+          retired               TEXT
+        );
+        INSERT INTO jobs_v2 SELECT * FROM jobs;
+        DROP TABLE jobs;
+        ALTER TABLE jobs_v2 RENAME TO jobs;
+      `);
+      })();
+      console.log("[db] Migrated jobs.account_id to nullable");
+    } finally {
+      db.pragma("foreign_keys = ON");
+    }
   }
 } catch (e) {
   console.error("[db] account_id migration failed:", e);
@@ -360,3 +405,79 @@ try {
     )
   `);
 } catch {}
+
+// Make api_id and api_hash nullable so accounts can fall back to global defaults
+try {
+  const cols = db.prepare("PRAGMA table_info(tg_accounts)").all() as Array<{
+    name: string;
+    notnull: number;
+  }>;
+  if (cols.find((c) => c.name === "api_id")?.notnull === 1) {
+    // jobs.account_id -> tg_accounts(id) ON DELETE SET NULL: with foreign_keys
+    // on, DROP TABLE tg_accounts below fires that cascade on every linked job,
+    // wiping account_id to NULL even though the account itself is preserved
+    // under the same id in tg_accounts_v2. Turn enforcement off for the swap,
+    // per SQLite's documented table-rebuild pattern. The pragma is a no-op
+    // inside a transaction, so it must sit outside; the copy/drop/rename runs
+    // in one transaction so a crash mid-swap rolls back cleanly.
+    db.pragma("foreign_keys = OFF");
+    try {
+      db.transaction(() => {
+        db.exec(`
+        CREATE TABLE tg_accounts_v2 (
+          id              INTEGER PRIMARY KEY AUTOINCREMENT,
+          name            TEXT    NOT NULL,
+          phone_number    TEXT    NOT NULL,
+          api_id          INTEGER,
+          api_hash        TEXT,
+          session_string  TEXT,
+          auth_status     TEXT    NOT NULL DEFAULT 'unauthenticated',
+          created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+          proxy_id        TEXT,
+          disabled        INTEGER NOT NULL DEFAULT 0,
+          app_client_id   TEXT,
+          sort_order      INTEGER NOT NULL DEFAULT 0,
+          tg_display_name TEXT,
+          tg_username     TEXT,
+          notes           TEXT
+        );
+        INSERT INTO tg_accounts_v2 SELECT
+          id, name, phone_number,
+          NULLIF(api_id, 0), NULLIF(api_hash, ''),
+          session_string, auth_status, created_at,
+          proxy_id, disabled, app_client_id, sort_order,
+          tg_display_name, tg_username, notes
+        FROM tg_accounts;
+        DROP TABLE tg_accounts;
+        ALTER TABLE tg_accounts_v2 RENAME TO tg_accounts;
+      `);
+      })();
+      console.log("[db] Migrated tg_accounts api_id/api_hash to nullable");
+    } finally {
+      db.pragma("foreign_keys = ON");
+    }
+  }
+} catch (e) {
+  console.error("[db] tg_accounts nullable migration failed:", e);
+}
+
+/** Returns the global fallback TG API credentials, or null if not configured. */
+export function getDefaultTgApiCredentials(): {
+  apiId: number;
+  apiHash: string;
+} | null {
+  try {
+    const idRow = db
+      .prepare("SELECT value FROM settings WHERE key = ?")
+      .get("default_tg_api_id") as { value: string } | undefined;
+    const hashRow = db
+      .prepare("SELECT value FROM settings WHERE key = ?")
+      .get("default_tg_api_hash") as { value: string } | undefined;
+    const apiId = Number(idRow?.value);
+    const apiHash = hashRow?.value ?? "";
+    if (!apiId || !apiHash) return null;
+    return { apiId, apiHash };
+  } catch {
+    return null;
+  }
+}

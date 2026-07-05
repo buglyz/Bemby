@@ -243,7 +243,7 @@ router.put('/:id/jobs/enabled', (req, res) => {
 
 router.get('/:id/available-accounts', (req, res) => {
   const rows = db.prepare(`
-    SELECT id, name, phone_number, auth_status, disabled
+    SELECT id, name, phone_number, auth_status, disabled, tg_display_name
     FROM tg_accounts
     WHERE (disabled = 0 OR disabled IS NULL)
       AND id NOT IN (
@@ -252,7 +252,7 @@ router.get('/:id/available-accounts', (req, res) => {
       )
     ORDER BY name COLLATE NOCASE
   `).all(req.params.id) as Array<{
-    id: number; name: string; phone_number: string; auth_status: string; disabled: number;
+    id: number; name: string; phone_number: string; auth_status: string; disabled: number; tg_display_name: string | null;
   }>;
 
   res.json(rows.map(r => ({
@@ -260,6 +260,7 @@ router.get('/:id/available-accounts', (req, res) => {
     name: r.name,
     phoneNumber: r.phone_number,
     authStatus: r.auth_status,
+    tgDisplayName: r.tg_display_name ?? null,
   })));
 });
 

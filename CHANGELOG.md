@@ -4,6 +4,128 @@ All notable changes to Bemby are documented here.
 
 ---
 
+## v0.9.28
+
+### 中文
+
+**安全**
+- **默认密码强制修改** -- 使用默认密码（`changeme`）登录时，全屏弹窗强制更改密码后方可访问其他页面；JWT 携带 `requirePasswordChange` 标识，未更改前所有 API 请求均返回 403
+- **TRUST_PROXY 环境变量** -- 新增 `TRUST_PROXY` 环境变量，用于配置反向代理跳数（如 `1` 表示 nginx/Caddy）；正确设置后 IP 检测与速率限制方可在代理后正常工作
+- **WebSocket 鉴权优化** -- 消息客户端 WebSocket 改为首条消息发送鉴权令牌，不再通过 URL 参数传递，避免令牌出现在访问日志中
+
+**账户**
+- **TG 账户安全管理** -- 账户编辑面板新增"高级"选项卡，包含：
+  - **2FA 密码管理** -- 设置、修改或移除 Telegram 账户的两步验证密码
+  - **会话管理** -- 查看所有活跃登录设备（含应用名称、IP、国家、最后活跃时间），可单独终止某个会话或一键终止所有其他设备
+  - **恢复邮箱管理** -- 查看（含完整邮箱地址）、设置、更改或移除 Telegram 2FA 恢复邮箱；变更操作均需输入当前 2FA 密码，设置新邮箱时提供完整的邮件确认流程（含重新发送和取消待确认）
+  - **通行密钥管理** -- 查看已注册的通行密钥（Passkeys）列表（含名称、添加与最近使用时间）并可移除
+- **账户备注** -- 可在账户编辑面板的基本信息选项卡中添加自由文本备注；表格中的备注列可通过"显示/隐藏备注"按钮切换显示（移动端始终隐藏）；支持在勾选多个账户后批量设置备注
+- **账户备份加密** -- 导出会话文件时可设置自定义密码加密；导入时自动检测加密状态并提示输入密码；"强制重新认证"选项（推荐）可在导入时清除会话令牌，避免同一令牌被多设备共用导致 Telegram 撤销
+- **更新 Telegram 个人资料** -- 在账户编辑面板的"个人资料"选项卡中直接修改该 Telegram 账户的名字、姓氏和简介
+- **按名称引用账户** -- 设置中新增开关，开启后消息、任务、模板等引用账户处将以「Bemby 账户名 - TG 账号名」形式显示；账户列表新增 TG 账号列，显示 Telegram 显示名称与用户名（存储于数据库，首次访问自动获取，可手动刷新）
+- **设备名称变量** -- TG 应用客户端的设备型号支持 `{name}`、`{tgName}`、`{tgUsername}`、`{id}` 以及随机 `{word:4}`、`{num:4}`、`{alpha:8}`、`{uuid}` 变量，随机值按账户固定，仅在修改模板时重新生成，使每个账户拥有唯一的设备名称
+
+**消息客户端**
+- **消息独立视图** -- 消息客户端由弹窗改为独立页面视图，空间更充裕，体验更流畅
+- **发送文件与图片** -- 可在聊天中附加并发送图片和任意文件，图片支持"以文件方式发送"选项
+- **静音 / 取消静音** -- 右键菜单支持静音 8 小时、1 周、永久静音和取消静音；已静音对话在列表中显示静音徽标
+- **加入文件夹** -- 右键菜单可将对话添加至 Telegram 文件夹
+- **编辑联系人** -- 在个人资料面板中直接修改联系人姓名（支持名和姓）
+- **表情包显示** -- 贴纸消息以图片形式正确显示，不再识别为文件
+- **小程序显示模式切换** -- 工具栏新增拼图图标按钮，可在"应用内打开"和"浏览器打开" Telegram 小程序之间切换
+- **打开网址对话框** -- 工具栏新增地球图标按钮，支持粘贴任意 URL 或 t.me 链接，直接在消息客户端或浏览器中打开
+- **简介链接化** -- 个人资料面板中的简介文本，URL 和 @用户名可点击跳转
+- **修复 IME 输入误发** -- 使用中文/日文/韩文输入法时，合成中按下回车不再意外发送消息
+- **修复已读状态显示** -- 已读消息正确显示双勾，未读消息显示单勾
+- **机器人命令直接发送** -- 从命令菜单选择命令后立即发送，无需再次按回车
+- **修复特殊字符发送** -- 含 Markdown 特殊字符（如 `__`）的消息现以纯文本发送，不再被误解析为格式标记
+
+**任务**
+- **批量运行任务** -- 在任务列表中勾选多个任务后，点击"运行 (N)"按钮可按顺序依次执行，支持自定义任务间延迟时间（默认 70 秒）
+- **批量修改时间窗口** -- 勾选多个任务后可一键将其时间窗口批量修改为相同的开始/结束时间
+- **按名称搜索任务** -- 任务列表新增名称搜索框，可快速筛选任务
+- **归档任务** -- 任务改为"归档"而非直接删除，保留其历史日志；支持单个及批量归档
+- **从日志重跑失败任务** -- 日志视图中可对失败的执行记录一键重新运行
+- **新增自定义动作**
+  - **加入群组 / 订阅频道** -- 支持公开用户名或私有邀请链接；订阅频道可先校验订阅状态、发送后再次验证；加入群组可选配"入群后点击验证按钮"
+  - **向指定联系人发送消息 / 点击按钮** -- 可对流程中指定的机器人、群组或用户发送消息/命令，或点击其最近消息上的按钮
+- **上报前校验可播放（Emby）** -- Emby 观看任务上报前先确认媒体文件可读取（磁盘在线），避免文件离线时上报虚假观看
+
+**模板**
+- **批量永久静音机器人** -- 在模板列表中勾选多个模板，点击"永久静音机器人"，将为所有关联 Telegram 账户一次性静音该机器人通知（内置速率限制保护，每次间隔 4 秒）
+
+**设置**
+- **默认 TG API 凭据** -- 在设置页面统一配置 API ID 和 API Hash，无独立凭据的账户自动使用全局默认值；API Hash 在界面中始终脱敏显示
+- **AI 服务商自动切换** -- 新增开关，默认模型返回限速或其他 API 错误时，自动尝试其他已配置的服务商
+
+**可靠性与 Bug 修复**
+- **系统升级更稳健** -- 数据库迁移与升级流程增强，修复升级时账户被清空的问题，并新增完整的数据完整性测试
+- **日志"加载更多"按钮消失** -- 点击一次后按钮不再消失，可持续加载更早记录
+- **移动端输入框缩放** -- 修复 iOS 在点击输入框时自动放大页面的问题
+- **底部导航栏** -- 修复底部导航栏在特定场景下不显示的问题
+- **账户排序顺序** -- 修复拖拽排序偶发不正确的问题
+
+### English
+
+**Security**
+- **Forced admin password change** -- logging in with the default password (`changeme`) now shows a full-screen modal requiring a password change before any other page is accessible; the JWT carries a `requirePasswordChange` claim that blocks all API calls until resolved
+- **TRUST_PROXY env var** -- new `TRUST_PROXY` environment variable to configure the number of reverse proxy hops in front of the app (e.g. `1` for nginx/Caddy); required for rate limiting and IP detection to work correctly when behind a proxy
+- **WebSocket auth handshake** -- the messenger WebSocket now authenticates via a first-message payload instead of a URL query parameter, keeping the token out of access logs
+
+**Accounts**
+- **Telegram account security management** -- account edit panel now has an Advanced tab with:
+  - **2FA password management** -- set, change, or remove the two-factor authentication password on any Telegram account
+  - **Session management** -- view all active login sessions (app name, IP, country, last active time) with per-session terminate and a one-click "terminate all others" button
+  - **Recovery email management** -- view (including full address reveal), set, change, or remove the Telegram 2FA recovery email; all changes require the current 2FA password; a full confirmation code flow (with resend and cancel pending) handles new-address verification
+  - **Passkey management** -- list registered WebAuthn passkeys (name, added and last-used times) and remove them
+- **Account notes** -- add free-text notes per account from the Basic tab of the edit panel; the Notes column in the accounts table can be shown/hidden via a toggle button (always hidden on mobile); bulk-update notes across selected accounts at once
+- **Encrypted account backup** -- account exports can be protected with a user-supplied password; imports auto-detect encryption and prompt for the key; a "Force re-auth" option (recommended) clears session tokens on import to avoid Telegram revoking a shared token
+- **Update Telegram profile** -- edit the Telegram account's first name, last name, and bio directly from the Profile tab of the account edit panel
+- **Refer to accounts by name** -- a new Settings toggle shows accounts as "{Bemby name} - {TG name}" across the messenger, jobs, and templates; a TG Name column shows each account's Telegram display name and username (stored in the database, auto-fetched on first visit, refreshable on demand)
+- **Device name variables** -- the TG app client Device Model now supports `{name}`, `{tgName}`, `{tgUsername}`, `{id}`, and random `{word:4}`, `{num:4}`, `{alpha:8}`, `{uuid}` variables; random values stay fixed per account and only regenerate when the template changes, giving each account a unique device name
+
+**Messenger**
+- **Full-page messenger view** -- the messenger moved from a popup to a dedicated page view for more room and a smoother experience
+- **Send files and images** -- attach and send images and arbitrary files in a chat; images offer a "send as file" option
+- **Mute / unmute** -- context menu offers mute for 8 hours, 1 week, forever, or unmute; muted dialogs show a mute badge in the list
+- **Add to folder** -- context menu option to add a chat to any Telegram folder
+- **Edit contact** -- edit a contact's first and last name directly in the profile panel
+- **Sticker support** -- sticker messages now display correctly as images instead of document attachments
+- **Mini app display toggle** -- new puzzle-piece button in the toolbar switches between opening Telegram mini apps in-app (embedded panel) or in the browser
+- **Open URL dialog** -- new globe button in the toolbar lets you paste any URL or t.me link and open it in the messenger or browser without leaving the app
+- **Bio linkification** -- URLs and @mentions in profile bios are now clickable
+- **Fix IME composition send** -- pressing Enter during CJK (Chinese/Japanese/Korean) IME composition no longer accidentally sends the message
+- **Fix read status display** -- sent messages correctly show double-tick when read, single-tick when delivered
+- **Bot command sends immediately** -- selecting a command from the autocomplete menu now sends it immediately; no need to press Enter again
+- **Fix special character sending** -- messages containing Markdown special characters (e.g. `__`) are now sent as plain text and no longer misinterpreted as formatting
+
+**Jobs**
+- **Bulk run jobs** -- select multiple jobs and run them sequentially; a configurable delay between runs defaults to 70 seconds
+- **Bulk change time window** -- select multiple jobs and set them all to the same start/end window in one action
+- **Search jobs by name** -- a name filter box in the jobs list quickly narrows the list
+- **Retire jobs** -- jobs are now retired (archived) instead of deleted, preserving their history logs; supports single and bulk retire
+- **Rerun failed jobs** -- re-run a failed execution directly from the log view with one click
+- **New custom actions**
+  - **Join group / Subscribe to channel** -- accepts a public username or private invite link; channel subscribe can pre-check subscription status and re-verify after sending; join group optionally clicks a verification button after joining
+  - **Send message / click button for a contact** -- send a message/command to, or click a button on the latest message from, a specific bot, group, or user named in the flow
+- **Verify playable before reporting (Emby)** -- Emby Watch jobs confirm the media file is readable (disk online) before reporting, avoiding a fake watch when the file is offline
+
+**Templates**
+- **Bulk mute bot forever** -- select templates and mute the associated bot forever across all linked Telegram accounts in one action; built-in 4-second rate-limit protection between account calls
+
+**Settings**
+- **Default TG API credentials** -- set a global API ID and Hash in Settings; accounts without their own credentials fall back to these; the Hash is always masked in the UI
+- **AI provider auto-fallback** -- new toggle that automatically tries other configured providers when the default model returns a rate-limit or other API error
+
+**Reliability & Bug Fixes**
+- **More robust system upgrade** -- hardened database migration and upgrade flow; fixed accounts being wiped on upgrade and added full data-integrity tests
+- **Log "Load More" button** -- button no longer disappears after the first click; continues to appear while more records exist
+- **Mobile input zoom** -- fixed iOS zooming in when tapping input fields
+- **Bottom navigation bar** -- fixed the bottom nav bar not appearing in certain states
+- **Account sort order** -- fixed an occasional incorrect sort order after drag-and-drop reordering
+
+---
+
 ## v0.9.27-patch-1
 
 ### 中文

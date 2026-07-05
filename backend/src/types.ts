@@ -1,6 +1,11 @@
-export type AuthStatus = 'unauthenticated' | 'pending_code' | 'pending_2fa' | 'authenticated' | 'session_expired';
-export type JobType = 'checkin' | 'embywatch' | 'custom';
-export type LogStatus = 'success' | 'failed' | 'running';
+export type AuthStatus =
+  | "unauthenticated"
+  | "pending_code"
+  | "pending_2fa"
+  | "authenticated"
+  | "session_expired";
+export type JobType = "checkin" | "embywatch" | "custom";
+export type LogStatus = "success" | "failed" | "running";
 
 export type TgAppClient = {
   id: string;
@@ -18,8 +23,9 @@ export type TgAccount = {
   id: number;
   name: string;
   phoneNumber: string;
-  apiId: number;
-  apiHash: string;
+  /** Null when the account relies on the global default from settings. */
+  apiId: number | null;
+  apiHash: string | null;
   sessionString: string | null;
   authStatus: AuthStatus;
   proxyId: string | null;
@@ -48,6 +54,7 @@ export type Job = {
   checkinButton: string;
   templateId?: number | null;
   runEveryDays: number;
+  retired?: string | null;
 };
 
 export type JobTemplate = {
@@ -68,11 +75,59 @@ export type JobTemplate = {
 };
 
 export type CustomAction =
-  | { type: 'send_command'; content: string; maxRetries?: number }
-  | { type: 'wait_reply'; maxWaitMs: number; successContains?: string; failContains?: string; maxRetries?: number }
-  | { type: 'delay'; waitMs: number }
-  | { type: 'click_button'; button: string; maxRetries: number; maxWaitMs: number; successContains?: string; failContains?: string }
-  | { type: 'enter_captcha'; maxWaitMs: number; captchaLength?: number; maxRetries?: number };
+  | { type: "send_command"; content: string; maxRetries?: number }
+  | {
+      // Send a message/command to a specific contact (bot/group/user), rather than the
+      // job's configured bot. Supports the same {aiInput} and command expansion as send_command.
+      type: "send_contact_message";
+      contact: string;
+      content: string;
+      maxRetries?: number;
+    }
+  | {
+      type: "wait_reply";
+      maxWaitMs: number;
+      successContains?: string;
+      failContains?: string;
+      maxRetries?: number;
+    }
+  | { type: "delay"; waitMs: number }
+  | {
+      type: "click_button";
+      button: string;
+      maxRetries: number;
+      maxWaitMs: number;
+      successContains?: string;
+      failContains?: string;
+    }
+  | {
+      // Click a button on the latest message from a specific contact (bot/group/user),
+      // rather than from the job's configured bot. Seeds from the contact's last received
+      // message and otherwise waits up to maxWaitMs for an incoming one with buttons.
+      type: "click_message_button";
+      contact: string;
+      button: string;
+      maxRetries: number;
+      maxWaitMs: number;
+      successContains?: string;
+      failContains?: string;
+    }
+  | {
+      type: "enter_captcha";
+      maxWaitMs: number;
+      captchaLength?: number;
+      maxRetries?: number;
+    }
+  | {
+      type: "join_group";
+      groupId: string;
+      checkMembership?: boolean;
+      // When set, after joining, wait for an in-group verification message and click the
+      // button whose text contains this string (bot-gated groups). verifyWaitMs bounds the wait.
+      verifyButton?: string;
+      verifyWaitMs?: number;
+    }
+  | { type: "subscribe_channel"; channelId: string; checkMembership?: boolean };
 
 export type CustomConfig = {
   actions: CustomAction[];
@@ -113,7 +168,7 @@ export type CustomStepLog = {
   /** For wait_reply: number of messages received during the wait */
   msgCount?: number;
   /** For click_button: 'edit' or 'new_message' — which response path fired */
-  responseSource?: 'edit' | 'new_message';
+  responseSource?: "edit" | "new_message";
   /** For click_button: how many retries were needed (0 = first attempt succeeded) */
   retryCount?: number;
   errorName?: string;
@@ -132,6 +187,11 @@ export type EmbywatchConfig = {
   markWatched?: boolean;
   /** ID of a proxy from the settings proxies list, if any. */
   proxyId?: string;
+  /**
+   * Verify the media is actually streamable (disk online) before reporting
+   * playback, so an offline file is never reported as watched. Defaults to true.
+   */
+  verifyPlayable?: boolean;
 };
 
 export type EmbywatchLog = {

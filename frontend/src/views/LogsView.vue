@@ -79,6 +79,7 @@
                 <td class="msg-cell">
                   <div style="display: flex; align-items: center; gap: 8px">
                     <span
+                      :title="l.message ?? undefined"
                       style="
                         overflow: hidden;
                         text-overflow: ellipsis;
@@ -100,6 +101,16 @@
                           ? t("common.stopping")
                           : t("common.stop")
                       }}
+                    </button>
+                    <button
+                      v-if="l.status === 'failed'"
+                      class="btn btn-sm btn-ghost btn-icon"
+                      style="flex-shrink: 0; color: #aaa"
+                      :title="t('common.run')"
+                      :disabled="rerunning.has(l.id)"
+                      @click.stop="rerunJob(l)"
+                    >
+                      <i class="fa-solid fa-rotate-right"></i>
                     </button>
                     <button
                       v-if="l.status !== 'running'"
@@ -842,7 +853,7 @@
       </div>
 
       <div
-        v-if="logs.length === 50"
+        v-if="hasMore"
         style="padding: 12px 16px; text-align: center"
       >
         <button class="btn btn-ghost btn-sm" @click="loadMore">
@@ -879,6 +890,7 @@ const filterText = usePersistedRef<string>("bemby:logs:filterText", "");
 const showDevLogs = usePersistedRef<boolean>("bemby:logs:showDevLogs", false);
 const showRetired = usePersistedRef<boolean>("bemby:logs:showRetired", false);
 const offset = ref(0);
+const hasMore = ref(false);
 
 const filteredLogs = computed(() => {
   const q = filterText.value.trim().toLowerCase();
@@ -892,6 +904,7 @@ const expandedId = ref<number | null>(null);
 const expandedDetail = ref<CheckinAttemptLog[] | EmbywatchLog[] | null>(null);
 const detailLoading = ref(false);
 const stopping = ref(new Set<number>());
+const rerunning = ref(new Set<number>());
 let pollTimer: ReturnType<typeof setTimeout> | null = null;
 let detailPollTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -1014,12 +1027,14 @@ onMounted(async () => {
 async function load() {
   offset.value = 0;
   expandedId.value = null;
-  logs.value = await logsApi.list({
+  const page = await logsApi.list({
     jobId: filterJobId.value === "" ? undefined : Number(filterJobId.value),
     limit: 50,
     offset: 0,
     showRetired: showRetired.value,
   });
+  logs.value = page;
+  hasMore.value = page.length === 50;
 }
 
 async function loadMore() {
@@ -1031,6 +1046,7 @@ async function loadMore() {
     showRetired: showRetired.value,
   });
   logs.value.push(...more);
+  hasMore.value = more.length === 50;
 }
 
 async function toggleRetire(log: Log) {
@@ -1071,6 +1087,17 @@ async function stopJob(log: Log) {
   } catch {
     stopping.value.delete(log.id);
     stopping.value = new Set(stopping.value);
+  }
+}
+
+async function rerunJob(log: Log) {
+  rerunning.value.add(log.id);
+  rerunning.value = new Set(rerunning.value);
+  try {
+    await jobsApi.run(log.jobId);
+  } finally {
+    rerunning.value.delete(log.id);
+    rerunning.value = new Set(rerunning.value);
   }
 }
 

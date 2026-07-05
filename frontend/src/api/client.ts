@@ -1,6 +1,23 @@
 import axios from "axios";
+import { ref } from "vue";
 
 export const api = axios.create({ baseURL: "/api" });
+
+function readRequirePwdChangeClaim(): boolean {
+  const token = localStorage.getItem("token");
+  if (!token) return false;
+  try {
+    const b64 = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    const payload = JSON.parse(atob(b64));
+    return payload.requirePasswordChange === true;
+  } catch {
+    return false;
+  }
+}
+
+// Reactive signal -- true when the active JWT has requirePasswordChange set.
+// Shared between LoginView (sets it on login) and App.vue (watches it to show the modal).
+export const requirePasswordChangeSignal = ref(readRequirePwdChangeClaim());
 
 // Attach stored token to every request
 api.interceptors.request.use((config) => {
@@ -9,13 +26,19 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Redirect to login on 401
+// Redirect to login on 401; surface force-password-change on 403
 api.interceptors.response.use(
   (r) => r,
   (err) => {
     if (err.response?.status === 401) {
       localStorage.removeItem("token");
       window.location.href = "/login";
+    }
+    if (
+      err.response?.status === 403 &&
+      err.response?.data?.requirePasswordChange
+    ) {
+      requirePasswordChangeSignal.value = true;
     }
     return Promise.reject(err);
   },
@@ -55,6 +78,31 @@ export type Account = {
   sortOrder: number;
   tgDisplayName: string | null;
   tgUsername: string | null;
+  notes: string | null;
+  /** Device model Telegram sees, with template variables expanded (server-computed, read-only). */
+  resolvedDeviceModel?: string | null;
+};
+
+// The account's own editable Telegram profile
+export type TgOwnProfile = {
+  firstName: string;
+  lastName: string;
+  about: string;
+};
+
+export type PasswordInfo = {
+  hasPassword: boolean;
+  hasRecovery: boolean;
+  hint: string | null;
+  emailUnconfirmedPattern: string | null;
+};
+
+export type Passkey = {
+  id: string;
+  name: string;
+  date: number;
+  softwareEmojiId: string | null;
+  lastUsageDate: number | null;
 };
 
 export type AccountExportItem = {
@@ -73,6 +121,21 @@ export type AccountExportPayload = {
   version: "1";
   exportedAt: string;
   accounts: AccountExportItem[];
+};
+
+export type SessionInfo = {
+  hash: string;
+  current: boolean;
+  deviceModel: string;
+  platform: string;
+  systemVersion: string;
+  appName: string;
+  appVersion: string;
+  dateCreated: number;
+  dateActive: number;
+  ip: string;
+  country: string;
+  region: string;
 };
 
 export type TgSpamStatus = {
@@ -97,6 +160,7 @@ export type EmbywatchConfig = {
   playDuration?: number;
   userAgent?: string;
   markWatched?: boolean;
+  verifyPlayable?: boolean;
   proxyId?: string;
 };
 
@@ -108,6 +172,12 @@ export type Proxy = {
 
 export type CustomAction =
   | { type: "send_command"; content: string; maxRetries?: number }
+  | {
+      type: "send_contact_message";
+      contact: string;
+      content: string;
+      maxRetries?: number;
+    }
   | {
       type: "wait_reply";
       maxWaitMs: number;
@@ -125,11 +195,28 @@ export type CustomAction =
       failContains?: string;
     }
   | {
+      type: "click_message_button";
+      contact: string;
+      button: string;
+      maxRetries: number;
+      maxWaitMs: number;
+      successContains?: string;
+      failContains?: string;
+    }
+  | {
       type: "enter_captcha";
       maxWaitMs: number;
       captchaLength?: number;
       maxRetries?: number;
-    };
+    }
+  | {
+      type: "join_group";
+      groupId: string;
+      checkMembership?: boolean;
+      verifyButton?: string;
+      verifyWaitMs?: number;
+    }
+  | { type: "subscribe_channel"; channelId: string; checkMembership?: boolean };
 
 export type CustomConfig = {
   actions: CustomAction[];
@@ -189,6 +276,7 @@ export type Job = {
   checkinButton: string;
   templateId?: number | null;
   runEveryDays: number;
+  retired?: string | null;
 };
 
 export type JobTemplate = {
@@ -261,10 +349,7 @@ export type Log = {
   message: string | null;
   retired: boolean;
   detail?:
-    | CheckinAttemptLog[]
-    | EmbywatchLog[]
-    | { steps: CustomStepLog[] }
-    | null;
+    CheckinAttemptLog[] | EmbywatchLog[] | { steps: CustomStepLog[] } | null;
 };
 
 export type ScheduleStatus = {
@@ -289,6 +374,7 @@ export const authApi = {
     api
       .post<{
         token: string;
+        requirePasswordChange?: boolean;
       }>("/auth/login", { username, password, captchaToken, captchaAnswer })
       .then((r) => r.data),
   changeCredentials: (
@@ -299,6 +385,7 @@ export const authApi = {
     api
       .put<{
         message: string;
+        token?: string;
       }>("/auth/credentials", { currentPassword, username, newPassword })
       .then((r) => r.data),
 };
@@ -310,7 +397,13 @@ export const accountsApi = {
   create: (
     data: Omit<
       Account,
-      "id" | "authStatus" | "createdAt" | "disabled" | "sortOrder" | "tgDisplayName" | "tgUsername"
+      | "id"
+      | "authStatus"
+      | "createdAt"
+      | "disabled"
+      | "sortOrder"
+      | "tgDisplayName"
+      | "tgUsername"
     > & {
       apiHash: string;
     },
@@ -339,17 +432,53 @@ export const accountsApi = {
       .then((r) => r.data),
   refreshTgMeta: (id: number) =>
     api
-      .post<{ tgDisplayName: string | null; tgUsername: string | null }>(`/accounts/${id}/refresh-tg-meta`)
+      .post<{ tgDisplayName: string | null; tgUsername: string | null }>(
+        `/accounts/${id}/refresh-tg-meta`,
+      )
       .then((r) => r.data),
-  export: (ids?: number[]) =>
+  getProfile: (id: number) =>
+    api.get<TgOwnProfile>(`/accounts/${id}/profile`).then((r) => r.data),
+  updateProfile: (
+    id: number,
+    data: { firstName: string; lastName?: string; about?: string },
+  ) =>
     api
-      .post<AccountExportPayload>("/accounts/export", { ids: ids ?? [] })
+      .post<TgOwnProfile & { tgDisplayName: string | null }>(
+        `/accounts/${id}/update-profile`,
+        data,
+      )
       .then((r) => r.data),
-  import: (accounts: AccountExportItem[]) =>
+  export: (ids?: number[], secret?: string) =>
+    api
+      .post<AccountExportPayload>("/accounts/export", {
+        ids: ids ?? [],
+        secret: secret || undefined,
+      })
+      .then((r) => r.data),
+  import: (data: unknown, secret?: string, forceReauth = true) =>
     api
       .post<{ imported: number; skipped: number }>("/accounts/import", {
-        accounts,
+        data,
+        secret: secret || undefined,
+        forceReauth,
       })
+      .then((r) => r.data),
+  updateTwoFa: (
+    id: number,
+    opts: { currentPassword?: string; newPassword?: string; hint?: string },
+  ) =>
+    api
+      .post<{ success: true }>(`/accounts/${id}/update-2fa`, opts)
+      .then((r) => r.data),
+  getSessions: (id: number) =>
+    api.get<SessionInfo[]>(`/accounts/${id}/sessions`).then((r) => r.data),
+  terminateSession: (id: number, hash: string) =>
+    api
+      .post<{ success: true }>(`/accounts/${id}/terminate-session`, { hash })
+      .then((r) => r.data),
+  terminateOtherSessions: (id: number) =>
+    api
+      .post<{ success: true }>(`/accounts/${id}/terminate-other-sessions`)
       .then((r) => r.data),
   checkSpam: (id: number) =>
     api.post<TgSpamStatus>(`/accounts/${id}/check-spam`).then((r) => r.data),
@@ -362,8 +491,39 @@ export const accountsApi = {
       .then((r) => r.data),
   reorder: (items: Array<{ id: number; sortOrder: number }>) =>
     api.put("/accounts/reorder", { items }).then((r) => r.data),
+  bulkUpdateNotes: (ids: number[], notes: string | null) =>
+    api.put("/accounts/bulk-notes", { ids, notes }).then((r) => r.data),
   forceReauth: (id: number) =>
     api.post<Account>(`/accounts/${id}/force-reauth`).then((r) => r.data),
+  getPasswordInfo: (id: number) =>
+    api.get<PasswordInfo>(`/accounts/${id}/password-info`).then((r) => r.data),
+  getRecoveryEmail: (id: number, currentPassword: string) =>
+    api
+      .post<{ email: string | null }>(`/accounts/${id}/recovery-email/get`, { currentPassword })
+      .then((r) => r.data),
+  updateRecoveryEmail: (id: number, currentPassword: string, newEmail: string | null) =>
+    api
+      .put<{ pendingConfirmation: boolean; codeLength?: number }>(
+        `/accounts/${id}/recovery-email`,
+        { currentPassword, newEmail },
+      )
+      .then((r) => r.data),
+  confirmRecoveryEmail: (id: number, code: string) =>
+    api.post(`/accounts/${id}/recovery-email/confirm`, { code }).then((r) => r.data),
+  cancelRecoveryEmail: (id: number) =>
+    api.post(`/accounts/${id}/recovery-email/cancel`).then((r) => r.data),
+  resendRecoveryEmail: (id: number) =>
+    api.post(`/accounts/${id}/recovery-email/resend`).then((r) => r.data),
+  getPasskeys: (id: number) =>
+    api
+      .get<{ passkeys: Passkey[] }>(`/accounts/${id}/passkeys`)
+      .then((r) => r.data.passkeys),
+  deletePasskey: (id: number, passkeyId: string) =>
+    api
+      .delete<{ ok: boolean }>(
+        `/accounts/${id}/passkeys/${encodeURIComponent(passkeyId)}`,
+      )
+      .then((r) => r.data),
 };
 
 // ── Jobs ─────────────────────────────────────────────────────────────────────
@@ -388,6 +548,7 @@ export type AvailableAccount = {
   name: string;
   phoneNumber: string;
   authStatus: AuthStatus;
+  tgDisplayName: string | null;
 };
 
 export const templatesApi = {
@@ -435,9 +596,9 @@ export const logsApi = {
     showRetired?: boolean;
   }) =>
     api
-      .get<
-        Log[]
-      >("/logs", { params: { ...params, showRetired: params?.showRetired ? "1" : "0" } })
+      .get<Log[]>("/logs", {
+        params: { ...params, showRetired: params?.showRetired ? "1" : "0" },
+      })
       .then((r) => r.data),
   getOne: (id: number) => api.get<Log>(`/logs/${id}`).then((r) => r.data),
   cancel: (id: number) =>
@@ -474,6 +635,11 @@ export type Settings = {
   proxies: string;
   tg_app_clients: string;
   tg_client_mode: string; // 'default' | 'random'
+  default_tg_api_id?: string;
+  /** Masked value returned by the server (e.g. abcd****efgh). Never the raw hash. */
+  default_tg_api_hash?: string;
+  /** "true" to show accounts as "{Bemby name} - {TG name}" throughout the app. */
+  account_display_with_tg_name?: string;
 };
 
 export const settingsApi = {
@@ -561,7 +727,27 @@ export type ExportPayload = {
     startCommand: string;
     checkinButton: string;
   }>;
+  aiSuppliers?: Array<{
+    name: string;
+    baseUrl: string;
+    apiKey: string;
+    timeoutMs: number;
+  }>;
+  aiModels?: Array<{
+    supplierIndex: number;
+    modelId: string;
+    label: string | null;
+  }>;
   settings: Record<string, string>;
+};
+
+export type EncryptedEnvelope = {
+  encrypted: true;
+  version: "1";
+  salt: string;
+  iv: string;
+  tag: string;
+  data: string;
 };
 
 export type ImportResult = {
@@ -570,13 +756,26 @@ export type ImportResult = {
   accountsSkipped: number;
   templatesImported: number;
   jobsImported: number;
+  aiSuppliersImported: number;
+  aiModelsImported: number;
   settingsUpdated: number;
 };
 
 export const dataApi = {
-  export: () => api.get<ExportPayload>("/data/export").then((r) => r.data),
-  import: (data: ExportPayload, mode: "merge" | "replace") =>
-    api.post<ImportResult>("/data/import", { data, mode }).then((r) => r.data),
+  export: (secret?: string) =>
+    api
+      .post<ExportPayload | EncryptedEnvelope>("/data/export", { secret })
+      .then((r) => r.data),
+  import: (
+    data: ExportPayload | EncryptedEnvelope,
+    mode: "merge" | "replace",
+    secret?: string,
+    forceReauth = true,
+    confirmPassword?: string,
+  ) =>
+    api
+      .post<ImportResult>("/data/import", { data, mode, secret, forceReauth, confirmPassword })
+      .then((r) => r.data),
 };
 
 // ── TG Live Client ────────────────────────────────────────────────────────────
@@ -589,6 +788,8 @@ export type TgDialog = {
   unreadCount: number;
   lastMessage: { text: string; date: number; fromMe: boolean } | null;
   left?: boolean; // not a member; join required to send messages
+  muted?: boolean;
+  pinned?: boolean;
 };
 
 export type TgButton = {
@@ -619,10 +820,13 @@ export type TgMessage = {
   html: string | null;
   date: number;
   fromMe: boolean;
+  isRead: boolean;
   fromId: string | null;
   fromName: string | null;
   hasPhoto: boolean;
   hasDocument: boolean;
+  hasSticker: boolean;
+  fileName: string | null;
   buttons: TgButton[][] | null;
   reactions: TgReaction[] | null;
   replyToId: number | null;
@@ -647,6 +851,8 @@ export type TgProfile = {
   phone: string | null;
   bio: string | null;
   memberCount: number | null;
+  firstName: string | null;
+  lastName: string | null;
 };
 
 export type TgBotCommand = {
@@ -685,9 +891,10 @@ export const tgClientApi = {
     signal?: AbortSignal,
   ) =>
     api
-      .get<
-        TgMessage[]
-      >(`/tg-client/${accountId}/messages/${encodeURIComponent(chatId)}`, { params, signal })
+      .get<TgMessage[]>(
+        `/tg-client/${accountId}/messages/${encodeURIComponent(chatId)}`,
+        { params, signal },
+      )
       .then((r) => r.data),
 
   send: (
@@ -705,6 +912,35 @@ export const tgClientApi = {
         ...(replyToMsgId ? { replyToMsgId } : {}),
       })
       .then((r) => r.data),
+
+  sendFile: (
+    accountId: number,
+    chatId: string,
+    file: File,
+    opts?: { caption?: string; asDocument?: boolean; replyToMsgId?: number },
+  ) =>
+    file.arrayBuffer().then((buf) =>
+      api
+        .post<{
+          id: number;
+          date: number;
+          hasPhoto: boolean;
+          hasDocument: boolean;
+        }>(
+          `/tg-client/${accountId}/messages/${encodeURIComponent(chatId)}/file`,
+          buf,
+          {
+            headers: { "Content-Type": "application/octet-stream" },
+            params: {
+              filename: file.name,
+              ...(opts?.caption ? { caption: opts.caption } : {}),
+              ...(opts?.asDocument ? { asDocument: "1" } : {}),
+              ...(opts?.replyToMsgId ? { replyToMsgId: opts.replyToMsgId } : {}),
+            },
+          },
+        )
+        .then((r) => r.data),
+    ),
 
   contacts: (accountId: number) =>
     api
@@ -725,6 +961,19 @@ export const tgClientApi = {
       })
       .then((r) => r.data),
 
+  editContact: (
+    accountId: number,
+    userId: string,
+    firstName: string,
+    lastName?: string,
+  ) =>
+    api
+      .put<TgContact>(
+        `/tg-client/${accountId}/contacts/${encodeURIComponent(userId)}`,
+        { firstName, lastName },
+      )
+      .then((r) => r.data),
+
   search: (accountId: number, q: string) =>
     api
       .get<TgDialog[]>(`/tg-client/${accountId}/search`, { params: { q } })
@@ -740,6 +989,11 @@ export const tgClientApi = {
   folders: (accountId: number) =>
     api.get<TgFolder[]>(`/tg-client/${accountId}/folders`).then((r) => r.data),
 
+  addChatToFolder: (accountId: number, folderId: number, chatId: string) =>
+    api
+      .post(`/tg-client/${accountId}/folders/${folderId}/chats`, { chatId })
+      .then((r) => r.data),
+
   avatarUrl: (accountId: number, chatId: string) => {
     const token = localStorage.getItem("token") ?? "";
     return `/api/tg-client/${accountId}/avatar/${encodeURIComponent(chatId)}?token=${encodeURIComponent(token)}`;
@@ -747,9 +1001,9 @@ export const tgClientApi = {
 
   avatarsBatch: (accountId: number, chatIds: string[]) =>
     api
-      .get<
-        Record<string, string>
-      >(`/tg-client/${accountId}/avatars?ids=${chatIds.map(encodeURIComponent).join(",")}`)
+      .get<Record<string, string>>(
+        `/tg-client/${accountId}/avatars?ids=${chatIds.map(encodeURIComponent).join(",")}`,
+      )
       .then((r) => r.data),
 
   profile: (accountId: number, chatId: string) =>
@@ -796,7 +1050,9 @@ export const tgClientApi = {
 
   clearCache: (accountId: number, chatId: string) =>
     api
-      .delete(`/tg-client/${accountId}/messages/${encodeURIComponent(chatId)}/cache`)
+      .delete(
+        `/tg-client/${accountId}/messages/${encodeURIComponent(chatId)}/cache`,
+      )
       .then((r) => r.data),
 
   sendReaction: (
@@ -816,9 +1072,9 @@ export const tgClientApi = {
 
   botCommands: (accountId: number, chatId: string) =>
     api
-      .get<
-        TgBotCommand[]
-      >(`/tg-client/${accountId}/bot-commands/${encodeURIComponent(chatId)}`)
+      .get<TgBotCommand[]>(
+        `/tg-client/${accountId}/bot-commands/${encodeURIComponent(chatId)}`,
+      )
       .then((r) => r.data),
 
   threadMessages: (
@@ -828,9 +1084,10 @@ export const tgClientApi = {
     params?: { limit?: number; offsetId?: number },
   ) =>
     api
-      .get<
-        TgMessage[]
-      >(`/tg-client/${accountId}/messages/${encodeURIComponent(chatId)}/${msgId}/thread`, { params })
+      .get<TgMessage[]>(
+        `/tg-client/${accountId}/messages/${encodeURIComponent(chatId)}/${msgId}/thread`,
+        { params },
+      )
       .then((r) => r.data),
 
   markRead: (accountId: number, chatId: string, maxId: number) =>
@@ -871,6 +1128,13 @@ export const tgClientApi = {
       }>(`/tg-client/${accountId}/join/${encodeURIComponent(chatId)}`)
       .then((r) => r.data),
 
+  leave: (accountId: number, chatId: string) =>
+    api
+      .post<{ ok: boolean }>(
+        `/tg-client/${accountId}/leave/${encodeURIComponent(chatId)}`,
+      )
+      .then((r) => r.data),
+
   membership: (accountId: number, chatId: string) =>
     api
       .get<{
@@ -880,14 +1144,19 @@ export const tgClientApi = {
 
   pinnedMessage: (accountId: number, chatId: string) =>
     api
-      .get<TgMessage | null>(`/tg-client/${accountId}/chats/${encodeURIComponent(chatId)}/pinned`)
+      .get<TgMessage | null>(
+        `/tg-client/${accountId}/chats/${encodeURIComponent(chatId)}/pinned`,
+      )
       .then((r) => r.data),
 
   startBot: (accountId: number, username: string, startParam: string) =>
     api
-      .post<TgDialog>(`/tg-client/${accountId}/start-bot/${encodeURIComponent(username)}`, {
-        startParam,
-      })
+      .post<TgDialog>(
+        `/tg-client/${accountId}/start-bot/${encodeURIComponent(username)}`,
+        {
+          startParam,
+        },
+      )
       .then((r) => r.data),
 
   webviewResolve: (accountId: number, url: string, botChatId?: string | null) =>

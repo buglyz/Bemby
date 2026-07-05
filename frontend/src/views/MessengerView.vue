@@ -1,14 +1,8 @@
 <template>
-  <div
-    :class="inline ? 'tgc-inline-wrap' : 'tgc-backdrop'"
-    @click.self="inline ? undefined : $emit('close')"
-  >
+  <div class="tgc-page">
     <div
-      class="tgc-popup"
-      :class="{
-        'mobile-chat-open': showMobileChat,
-        'tgc-popup-inline': inline,
-      }"
+      class="tgc-popup tgc-popup-inline"
+      :class="{ 'mobile-chat-open': showMobileChat }"
     >
       <!-- Header -->
       <div class="tgc-header">
@@ -36,7 +30,7 @@
               :key="acc.id"
               :value="acc.id"
             >
-              {{ acc.name }}
+              {{ formatAccountLabel(acc) }}
             </option>
           </select>
         </div>
@@ -47,13 +41,6 @@
             @click="showContacts = true"
           >
             <i class="fa-solid fa-address-book"></i>
-          </button>
-          <button
-            class="tgc-icon-btn tgc-close-btn"
-            @click="$emit('close')"
-            title="Close"
-          >
-            <i class="fa-solid fa-xmark"></i>
           </button>
         </div>
       </div>
@@ -158,6 +145,7 @@
                     <span class="tgc-dialog-preview">{{
                       d.lastMessage?.text || ""
                     }}</span>
+                    <i v-if="d.pinned && !d.unreadCount" class="fa-solid fa-thumbtack tgc-pin-icon"></i>
                     <span v-if="d.unreadCount > 0" class="tgc-unread-badge">{{
                       d.unreadCount
                     }}</span>
@@ -237,6 +225,21 @@
                 title="Clear cache and reload messages"
               >
                 <i class="fa-solid fa-arrows-rotate"></i>
+              </button>
+              <button
+                class="tgc-icon-btn"
+                :class="{ 'tgc-icon-btn--active': openMiniAppInApp }"
+                @click="openMiniAppInApp = !openMiniAppInApp"
+                :title="openMiniAppInApp ? t('tgc.miniAppInApp') : t('tgc.miniAppInBrowser')"
+              >
+                <i class="fa-solid fa-puzzle-piece"></i>
+              </button>
+              <button
+                class="tgc-icon-btn"
+                @click="openGoUrlDialog"
+                title="Open URL"
+              >
+                <i class="fa-solid fa-globe"></i>
               </button>
               <button
                 class="tgc-icon-btn tgc-chat-close-btn"
@@ -398,24 +401,45 @@
                         :src="photoUrl(msg.id)"
                         class="tgc-msg-photo"
                         loading="lazy"
+                        @click="lightboxUrl = photoUrl(msg.id)"
                         @error="
                           (e: Event) =>
                             ((e.target as HTMLImageElement).style.display =
                               'none')
                         "
                       />
+                      <img
+                        v-if="msg.hasSticker"
+                        :src="photoUrl(msg.id)"
+                        class="tgc-msg-sticker"
+                        loading="lazy"
+                        @error="
+                          (e: Event) =>
+                            ((e.target as HTMLImageElement).style.display =
+                              'none')
+                        "
+                      />
+                      <a
+                        v-if="msg.hasDocument"
+                        class="tgc-msg-doc"
+                        :href="photoUrl(msg.id)"
+                        :download="msg.fileName || 'file'"
+                        target="_blank"
+                        rel="noopener"
+                      >
+                        <i
+                          class="fa-solid fa-file-arrow-down tgc-msg-doc-icon"
+                        ></i>
+                        <span class="tgc-msg-doc-name">{{
+                          msg.fileName || "File"
+                        }}</span>
+                      </a>
                       <div
                         v-if="msg.text || msg.html"
                         class="tgc-msg-text"
                         v-html="msg.html ?? escMsgText(msg.text)"
                         @click="onMsgLinkClick($event)"
                       ></div>
-                      <div
-                        v-if="!msg.text && msg.hasDocument"
-                        class="tgc-msg-text tgc-msg-doc"
-                      >
-                        <i class="fa-solid fa-file"></i> Document
-                      </div>
                       <!-- Reactions -->
                       <div v-if="msg.reactions?.length" class="tgc-reactions">
                         <button
@@ -444,7 +468,7 @@
                         }}</span>
                         <i
                           v-if="msg.fromMe"
-                          class="fa-solid fa-check tgc-msg-tick"
+                          :class="['fa-solid', msg.isRead ? 'fa-check-double' : 'fa-check', 'tgc-msg-tick']"
                         ></i>
                       </div>
                       <!-- Inline keyboard buttons -->
@@ -547,6 +571,29 @@
                   <i class="fa-solid fa-xmark"></i>
                 </button>
               </div>
+              <!-- Pending attachment preview -->
+              <div v-if="pendingFile" class="tgc-attach-strip">
+                <img
+                  v-if="pendingPreviewUrl"
+                  :src="pendingPreviewUrl"
+                  class="tgc-attach-thumb"
+                />
+                <i v-else class="fa-solid fa-file tgc-attach-icon"></i>
+                <div class="tgc-attach-info">
+                  <div class="tgc-attach-name">{{ pendingFile.name }}</div>
+                  <label class="tgc-attach-asdoc">
+                    <input type="checkbox" v-model="sendAsDocument" />
+                    Send as file
+                  </label>
+                </div>
+                <button
+                  class="tgc-icon-btn"
+                  @click="clearPendingFile"
+                  title="Remove attachment"
+                >
+                  <i class="fa-solid fa-xmark"></i>
+                </button>
+              </div>
               <div class="tgc-compose-row">
                 <!-- Commands button for bots -->
                 <button
@@ -558,18 +605,34 @@
                 >
                   /
                 </button>
+                <button
+                  class="tgc-attach-btn"
+                  title="Attach photo or file"
+                  @click="triggerFilePick"
+                >
+                  <i class="fa-solid fa-paperclip"></i>
+                </button>
+                <input
+                  ref="fileInput"
+                  type="file"
+                  style="display: none"
+                  @change="onFileSelected"
+                />
                 <textarea
                   v-model="inputText"
                   class="tgc-input"
-                  placeholder="Write a message..."
+                  :placeholder="pendingFile ? 'Add a caption...' : 'Write a message...'"
                   rows="1"
                   @keydown="onComposeKey"
+                  @paste="onPaste"
+                  @compositionstart="composing = true"
+                  @compositionend="composing = false"
                   @input="autoResize"
                   ref="inputEl"
                 ></textarea>
                 <button
                   class="tgc-send-btn"
-                  :disabled="!inputText.trim() || sending"
+                  :disabled="(!inputText.trim() && !pendingFile) || sending"
                   @click="sendMessage"
                   title="Send (Enter)"
                 >
@@ -583,9 +646,19 @@
           <div v-if="showProfile && !showThread" class="tgc-profile-panel">
             <div class="tgc-profile-header">
               <span class="tgc-profile-title">Info</span>
-              <button class="tgc-icon-btn" @click="showProfile = false">
-                <i class="fa-solid fa-xmark"></i>
-              </button>
+              <div style="display:flex;gap:4px;align-items:center">
+                <button
+                  v-if="profileDetails && (profileDetails.type === 'user' || profileDetails.type === 'bot') && !editingContact"
+                  class="tgc-icon-btn"
+                  title="Edit contact"
+                  @click="startEditContact"
+                >
+                  <i class="fa-solid fa-pen"></i>
+                </button>
+                <button class="tgc-icon-btn" @click="showProfile = false">
+                  <i class="fa-solid fa-xmark"></i>
+                </button>
+              </div>
             </div>
 
             <div v-if="profileLoading" class="tgc-spinner-wrap" style="flex: 1">
@@ -610,6 +683,39 @@
                 <div class="tgc-profile-type-badge">
                   {{ profileDetails.type }}
                 </div>
+              </div>
+
+              <!-- Inline contact edit form -->
+              <div v-if="editingContact" class="tgc-contact-edit-form">
+                <input
+                  v-model="editFirstName"
+                  class="tgc-input tgc-contact-edit-input"
+                  placeholder="First name"
+                  :disabled="savingContact"
+                  @keydown.enter.exact.prevent="saveContactEdit"
+                  @keydown.esc.prevent="editingContact = false"
+                />
+                <input
+                  v-model="editLastName"
+                  class="tgc-input tgc-contact-edit-input"
+                  placeholder="Last name"
+                  :disabled="savingContact"
+                  @keydown.enter.exact.prevent="saveContactEdit"
+                  @keydown.esc.prevent="editingContact = false"
+                />
+                <div class="tgc-contact-edit-actions">
+                  <button
+                    class="tgc-contact-save-btn"
+                    :disabled="!editFirstName.trim() || savingContact"
+                    @click="saveContactEdit"
+                  >{{ savingContact ? "Saving..." : "Save" }}</button>
+                  <button
+                    class="tgc-contact-cancel-btn"
+                    :disabled="savingContact"
+                    @click="editingContact = false"
+                  >Cancel</button>
+                </div>
+                <div v-if="saveContactError" class="error-msg">{{ saveContactError }}</div>
               </div>
 
               <div class="tgc-profile-rows">
@@ -650,9 +756,11 @@
                   <i class="fa-solid fa-circle-info tgc-profile-row-icon"></i>
                   <div class="tgc-profile-row-body">
                     <div class="tgc-profile-row-label">Bio</div>
-                    <div class="tgc-profile-row-value tgc-bio-text">
-                      {{ profileDetails.bio }}
-                    </div>
+                    <div
+                      class="tgc-profile-row-value tgc-bio-text"
+                      v-html="linkifyBio(profileDetails.bio!)"
+                      @click.capture="onMsgLinkClick"
+                    ></div>
                   </div>
                 </div>
 
@@ -730,7 +838,9 @@
                 class="tgc-input"
                 placeholder="Write a comment..."
                 rows="1"
-                @keydown.enter.exact.prevent="sendThreadMessage"
+                @keydown.enter.exact="(e) => { if (!composing) { e.preventDefault(); sendThreadMessage(); } }"
+                @compositionstart="composing = true"
+                @compositionend="composing = false"
               ></textarea>
               <button
                 class="tgc-send-btn"
@@ -778,25 +888,64 @@
       class="tgc-ctx-menu"
       :style="{ left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' }"
     >
-      <button class="tgc-ctx-item" @click="ctxMute(0)">
-        <i class="fa-solid fa-bell"></i> Unmute
-      </button>
-      <button class="tgc-ctx-item" @click="ctxMute(8 * 3600)">
-        <i class="fa-solid fa-bell-slash"></i> Mute 8 hours
-      </button>
-      <button class="tgc-ctx-item" @click="ctxMute(7 * 24 * 3600)">
-        <i class="fa-solid fa-bell-slash"></i> Mute 1 week
-      </button>
-      <button class="tgc-ctx-item" @click="ctxMute(365 * 24 * 3600)">
-        <i class="fa-solid fa-bell-slash"></i> Mute forever
-      </button>
+      <template v-if="ctxMenu?.dialog.muted">
+        <button class="tgc-ctx-item" @click="ctxMute(0)">
+          <i class="fa-solid fa-bell"></i> Unmute
+        </button>
+      </template>
+      <template v-else>
+        <button class="tgc-ctx-item" @click="ctxMute(8 * 3600)">
+          <i class="fa-solid fa-bell-slash"></i> Mute 8 hours
+        </button>
+        <button class="tgc-ctx-item" @click="ctxMute(7 * 24 * 3600)">
+          <i class="fa-solid fa-bell-slash"></i> Mute 1 week
+        </button>
+        <button class="tgc-ctx-item" @click="ctxMute(365 * 24 * 3600)">
+          <i class="fa-solid fa-bell-slash"></i> Mute forever
+        </button>
+      </template>
       <div class="tgc-ctx-divider"></div>
-      <button class="tgc-ctx-item" @click="ctxPin(true)">
+      <button v-if="!ctxMenu?.dialog.pinned" class="tgc-ctx-item" @click="ctxPin(true)">
         <i class="fa-solid fa-thumbtack"></i> Pin
       </button>
-      <button class="tgc-ctx-item" @click="ctxPin(false)">
-        <i class="fa-regular fa-thumbtack"></i> Unpin
+      <button v-else class="tgc-ctx-item" @click="ctxPin(false)">
+        <i class="fa-solid fa-thumbtack"></i> Unpin
       </button>
+      <template v-if="tgFolders.length">
+        <div class="tgc-ctx-divider"></div>
+        <button class="tgc-ctx-item" @click.stop="ctxFolderExpanded = !ctxFolderExpanded">
+          <i class="fa-solid fa-folder-plus"></i> Add to folder
+          <i
+            class="fa-solid fa-chevron-down tgc-ctx-chevron"
+            :class="{ rotated: ctxFolderExpanded }"
+          ></i>
+        </button>
+        <template v-if="ctxFolderExpanded">
+          <button
+            v-for="folder in tgFolders"
+            :key="folder.id"
+            class="tgc-ctx-item tgc-ctx-folder-item"
+            @click="ctxAddToFolder(folder)"
+          >
+            <span class="tgc-ctx-folder-emoji">{{ folder.emoticon ?? "📁" }}</span>
+            {{ folder.title }}
+          </button>
+        </template>
+      </template>
+      <template
+        v-if="ctxMenu?.dialog.type === 'group' || ctxMenu?.dialog.type === 'channel'"
+      >
+        <div class="tgc-ctx-divider"></div>
+        <button class="tgc-ctx-item tgc-ctx-danger" @click.stop="ctxLeave">
+          <i class="fa-solid fa-arrow-right-from-bracket"></i>
+          <template v-if="ctxConfirmLeave">
+            {{ ctxMenu?.dialog.type === "channel" ? "Confirm leave channel" : "Confirm leave group" }}
+          </template>
+          <template v-else>
+            {{ ctxMenu?.dialog.type === "channel" ? "Leave channel" : "Leave group" }}
+          </template>
+        </button>
+      </template>
     </div>
 
     <!-- Emoji reaction picker -->
@@ -962,7 +1111,47 @@
       </template>
     </div>
   </div>
-  <!-- end tgc-backdrop -->
+  <!-- Go to URL dialog -->
+  <div
+    v-if="showGoUrlDialog"
+    class="tgc-invite-overlay"
+    @click.self="showGoUrlDialog = false"
+  >
+    <div class="tgc-invite-card tgc-gourl-card">
+      <div class="tgc-invite-icon">
+        <i class="fa-solid fa-globe"></i>
+      </div>
+      <div class="tgc-invite-title">Open URL</div>
+      <div class="tgc-gourl-hint">Paste a Telegram link or any URL</div>
+      <input
+        ref="goUrlInputEl"
+        v-model="goUrlInput"
+        class="tgc-gourl-input"
+        type="url"
+        placeholder="https://t.me/..."
+        @keydown.enter="submitGoUrl"
+        @keydown.esc="showGoUrlDialog = false"
+      />
+      <div class="tgc-invite-actions">
+        <button class="tgc-invite-cancel" @click="showGoUrlDialog = false">Cancel</button>
+        <button
+          class="tgc-invite-join"
+          :disabled="!goUrlInput.trim()"
+          @click="submitGoUrl"
+        >
+          Go
+        </button>
+      </div>
+    </div>
+  </div>
+  <!-- Image lightbox -->
+  <div v-if="lightboxUrl" class="tgc-lightbox" @click="lightboxUrl = null">
+    <button class="tgc-lightbox-close" title="Close" @click.stop="lightboxUrl = null">
+      <i class="fa-solid fa-xmark"></i>
+    </button>
+    <img :src="lightboxUrl" class="tgc-lightbox-img" @click.stop />
+  </div>
+  <!-- end tgc-page -->
 </template>
 
 <script setup lang="ts">
@@ -989,9 +1178,11 @@ import {
   type TgInvitePreview,
 } from "../api/client";
 import { avatarCache, avatarQueue, avatarQueued, avatarFetching, avatarConcurrencyState, persistAvatarCache } from "../composables/avatarCache";
-
-const { inline = false } = defineProps<{ inline?: boolean }>();
-const emit = defineEmits<{ close: [] }>();
+import { t } from "../i18n";
+import {
+  formatAccountLabel,
+  loadAccountDisplaySetting,
+} from "../composables/accountDisplay";
 
 // ── Messenger state persistence ───────────────────────────────────────────────
 
@@ -1075,14 +1266,30 @@ const contactSearch = ref("");
 const newPhone = ref("");
 const newFirstName = ref("");
 const addingContact = ref(false);
+const editingContact = ref(false);
+const editFirstName = ref("");
+const editLastName = ref("");
+const savingContact = ref(false);
+const saveContactError = ref("");
 const addContactError = ref("");
 const addContactOk = ref(false);
 
 const messagesEl = ref<HTMLElement | null>(null);
 const inputEl = ref<HTMLTextAreaElement | null>(null);
+const composing = ref(false);
+
+// Attachment composer state
+const fileInput = ref<HTMLInputElement | null>(null);
+const pendingFile = ref<File | null>(null);
+const pendingPreviewUrl = ref<string | null>(null);
+const sendAsDocument = ref(false);
+
+// Image lightbox
+const lightboxUrl = ref<string | null>(null);
 const showMobileChat = ref(false);
 const showProfile = ref(false);
 const webViewPanel = ref<{ url: string; title: string } | null>(null);
+const openMiniAppInApp = ref(true);
 const profileDetails = ref<TgProfile | null>(null);
 const profileLoading = ref(false);
 const copyToast = ref("");
@@ -1106,6 +1313,11 @@ const invitePreview = ref<TgInvitePreview | null>(null);
 const checkingInvite = ref(false);
 const joiningInvite = ref(false);
 
+// Go-to-URL dialog
+const showGoUrlDialog = ref(false);
+const goUrlInput = ref("");
+const goUrlInputEl = ref<HTMLInputElement | null>(null);
+
 // Chat navigation history -- used so "back" returns to the previous chat
 // when the user was navigated here from within another chat (e.g. via invite link or URL button)
 const chatNavStack = ref<TgDialog[]>([]);
@@ -1121,6 +1333,8 @@ const threadEl = ref<HTMLElement | null>(null);
 
 // Context menu for dialog actions
 const ctxMenu = ref<{ dialog: TgDialog; x: number; y: number } | null>(null);
+const ctxFolderExpanded = ref(false);
+const ctxConfirmLeave = ref(false);
 // ── Priority request management ───────────────────────────────────────────────
 // bgDialogCtrl: the in-flight background 200-dialog fetch -- aborted when the
 // user initiates any action so their request gets the connection immediately.
@@ -1220,6 +1434,7 @@ const commandSuggestions = computed(() => {
 
 onMounted(async () => {
   window.addEventListener("message", handleMiniAppMessage);
+  loadAccountDisplaySetting();
   accounts.value = await accountsApi.list().catch(() => []);
   if (!authenticatedAccounts.value.length) return;
 
@@ -1280,6 +1495,8 @@ function onDialogTouchEnd() {
 
 function closeCtx() {
   ctxMenu.value = null;
+  ctxFolderExpanded.value = false;
+  ctxConfirmLeave.value = false;
 }
 
 async function ctxMute(secs: number) {
@@ -1288,6 +1505,9 @@ async function ctxMute(secs: number) {
   closeCtx();
   try {
     await tgClientApi.mute(selectedAccountId.value, dialog.chatId, secs);
+    // Update local state so the menu reflects the new mute state immediately
+    const local = dialogs.value.find((d) => d.chatId === dialog.chatId);
+    if (local) local.muted = secs > 0;
     copyToast.value = secs === 0 ? "Unmuted" : "Muted";
     if (copyToastTimer) clearTimeout(copyToastTimer);
     copyToastTimer = setTimeout(() => {
@@ -1304,10 +1524,11 @@ async function ctxPin(pinned: boolean) {
   closeCtx();
   try {
     await tgClientApi.pin(selectedAccountId.value, dialog.chatId, pinned);
-    // Move the dialog to top/remove pin marker in local list
+    // Update local state and reorder
     const idx = dialogs.value.findIndex((d) => d.chatId === dialog.chatId);
     if (idx !== -1) {
       const [d] = dialogs.value.splice(idx, 1);
+      d.pinned = pinned;
       if (pinned) dialogs.value.unshift(d);
       else dialogs.value.push(d);
     }
@@ -1316,6 +1537,58 @@ async function ctxPin(pinned: boolean) {
     copyToastTimer = setTimeout(() => {
       copyToast.value = "";
     }, 2000);
+  } catch {
+    /* silent */
+  }
+}
+
+async function ctxLeave() {
+  if (!ctxMenu.value || !selectedAccountId.value) return;
+  // First click arms the confirmation; second click performs the leave.
+  if (!ctxConfirmLeave.value) {
+    ctxConfirmLeave.value = true;
+    return;
+  }
+  const { dialog } = ctxMenu.value;
+  const isChannel = dialog.type === "channel";
+  closeCtx();
+  try {
+    await tgClientApi.leave(selectedAccountId.value, dialog.chatId);
+    // Remove from the dialog list; close the chat if it was open
+    const idx = dialogs.value.findIndex((d) => d.chatId === dialog.chatId);
+    if (idx !== -1) dialogs.value.splice(idx, 1);
+    if (activeChatId.value === dialog.chatId) {
+      if (activeChat.value) activeChat.value = { ...activeChat.value, left: true };
+    }
+    copyToast.value = isChannel ? "Left channel" : "Left group";
+    if (copyToastTimer) clearTimeout(copyToastTimer);
+    copyToastTimer = setTimeout(() => {
+      copyToast.value = "";
+    }, 2000);
+  } catch (e: any) {
+    copyToast.value =
+      e?.response?.data?.error ?? e?.message ?? "Failed to leave";
+    if (copyToastTimer) clearTimeout(copyToastTimer);
+    copyToastTimer = setTimeout(() => {
+      copyToast.value = "";
+    }, 4000);
+  }
+}
+
+async function ctxAddToFolder(folder: TgFolder) {
+  if (!ctxMenu.value || !selectedAccountId.value) return;
+  const { dialog } = ctxMenu.value;
+  closeCtx();
+  try {
+    await tgClientApi.addChatToFolder(selectedAccountId.value, folder.id, dialog.chatId);
+    // Update local folder state so the tab filter picks it up immediately
+    const local = tgFolders.value.find((f) => f.id === folder.id);
+    if (local && !local.includedChatIds.includes(dialog.chatId)) {
+      local.includedChatIds.push(dialog.chatId);
+    }
+    copyToast.value = `Added to ${folder.title}`;
+    if (copyToastTimer) clearTimeout(copyToastTimer);
+    copyToastTimer = setTimeout(() => { copyToast.value = ""; }, 2000);
   } catch {
     /* silent */
   }
@@ -1423,6 +1696,8 @@ async function openProfile() {
         phone: null,
         bio: null,
         memberCount: null,
+        firstName: null,
+        lastName: null,
       };
     }
   } finally {
@@ -1463,6 +1738,21 @@ function escMsgText(s: string): string {
     .replace(/\n/g, "<br>");
 }
 
+function linkifyBio(text: string): string {
+  const escaped = text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\n/g, "<br>");
+  return escaped.replace(
+    /(https?:\/\/[^\s<]+)|@([A-Za-z0-9_]{3,})/g,
+    (_, url, mention) =>
+      url
+        ? `<a href="${url.replace(/"/g, '&quot;')}" class="tgc-bio-link">${url}</a>`
+        : `<a href="https://t.me/${mention}" class="tgc-bio-link">@${mention}</a>`,
+  );
+}
+
 function onMsgLinkClick(e: MouseEvent) {
   const a = (e.target as HTMLElement).closest("a");
   if (!a) return;
@@ -1495,7 +1785,7 @@ function onWebViewLoad(e: Event) {
   } catch {}
 }
 
-function handleMiniAppMessage(e: MessageEvent) {
+async function handleMiniAppMessage(e: MessageEvent) {
   if (!webViewPanel.value) return;
   let eventType: string | undefined;
   try {
@@ -1529,7 +1819,12 @@ function handleMiniAppMessage(e: MessageEvent) {
     try {
       const data = typeof e.data === "string" ? JSON.parse(e.data) : e.data;
       const url = data?.eventData?.url;
-      if (url) window.open(url, "_blank", "noopener");
+      if (!url) return;
+      if (openMiniAppInApp.value && isMiniAppUrl(url)) {
+        await handleLinkClick(url);
+      } else {
+        window.open(url, "_blank", "noopener");
+      }
     } catch {}
   }
 }
@@ -1549,9 +1844,20 @@ async function openMiniApp(
       url,
       botChatId,
     );
-    window.open(webAppUrl, "_blank", "noopener");
+    if (openMiniAppInApp.value) {
+      webViewPanel.value = { url: webAppUrl, title };
+    } else {
+      window.open(webAppUrl, "_blank", "noopener");
+    }
   } catch {
-    window.open(url, "_blank", "noopener");
+    // Resolve failed — if toggle is on, still open in panel (unauthenticated fallback)
+    if (openMiniAppInApp.value) {
+      let title = url;
+      try { title = new URL(url).hostname; } catch {}
+      webViewPanel.value = { url, title };
+    } else {
+      window.open(url, "_blank", "noopener");
+    }
   }
 }
 
@@ -1658,6 +1964,53 @@ async function handleTgUrl(url: string) {
     return;
   }
   window.open(url, "_blank", "noopener");
+}
+
+function openGoUrlDialog() {
+  goUrlInput.value = "";
+  showGoUrlDialog.value = true;
+  nextTick(() => goUrlInputEl.value?.focus());
+}
+
+async function submitGoUrl() {
+  let url = goUrlInput.value.trim();
+  if (!url) return;
+  if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+  showGoUrlDialog.value = false;
+  goUrlInput.value = "";
+
+  if (!selectedAccountId.value) {
+    window.open(url, "_blank", "noopener");
+    return;
+  }
+
+  // Invite links, username links, bot /start links → navigate in messenger chat
+  const isTgChatLink =
+    /https?:\/\/t(?:elegram)?\.me\/(\+|joinchat\/)/i.test(url) ||
+    (/https?:\/\/t(?:elegram)?\.me\/[A-Za-z]\w+([?&]start=)/i.test(url) &&
+      !isMiniAppUrl(url)) ||
+    (/https?:\/\/t(?:elegram)?\.me\/[A-Za-z]\w+(?:\/\d+)?(?:[?#].*)?$/i.test(url) &&
+      !isMiniAppUrl(url));
+  if (isTgChatLink) {
+    await handleTgUrl(url);
+    return;
+  }
+
+  // Mini app URLs → resolve authenticated URL then open in messenger webview
+  if (isMiniAppUrl(url)) {
+    let webAppUrl = url;
+    try {
+      const res = await tgClientApi.webviewResolve(selectedAccountId.value, url);
+      webAppUrl = res.webAppUrl;
+    } catch {}
+    webViewPanel.value = { url: webAppUrl, title: "Mini App" };
+    return;
+  }
+
+  // Arbitrary URL → open in messenger webview directly
+  let title = url;
+  try { title = new URL(url).hostname; } catch {}
+  webViewPanel.value = { url, title };
 }
 
 async function confirmJoinInvite() {
@@ -2001,13 +2354,8 @@ function openCommandMenu() {
 }
 
 function selectCommand(cmd: TgBotCommand) {
-  inputText.value = `/${cmd.command} `;
-  autoResize();
-  nextTick(() => {
-    inputEl.value?.focus();
-    const el = inputEl.value;
-    if (el) el.setSelectionRange(el.value.length, el.value.length);
-  });
+  inputText.value = `/${cmd.command}`;
+  sendMessage();
 }
 
 function showToast(msg: string, ms = 3000) {
@@ -2145,6 +2493,8 @@ async function sendThreadMessage() {
       fromName: null,
       hasPhoto: false,
       hasDocument: false,
+      hasSticker: false,
+      fileName: null,
       buttons: null,
       reactions: null,
       replyToId: threadRootMsg.value.id,
@@ -2461,6 +2811,7 @@ async function openChat(dialog: TgDialog, addToHistory = false) {
   stopMembershipPoll();
   stopBotMsgWatch();
   pinnedMsg.value = null;
+  webViewPanel.value = null;
   await fetchMessages();
   markChatRead(dlg.chatId);
   if (dlg.type === "bot") loadBotCommands(dlg.chatId);
@@ -2727,13 +3078,125 @@ function onComposeKey(e: KeyboardEvent) {
     }
   }
 
-  if (e.key === "Enter" && !e.shiftKey) {
+  if (e.key === "Enter" && !e.shiftKey && !composing.value) {
     e.preventDefault();
     sendMessage();
   }
 }
 
+function triggerFilePick() {
+  fileInput.value?.click();
+}
+
+function onFileSelected(e: Event) {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = ""; // allow re-selecting the same file later
+  if (!file) return;
+  if (pendingPreviewUrl.value) URL.revokeObjectURL(pendingPreviewUrl.value);
+  pendingFile.value = file;
+  pendingPreviewUrl.value = file.type.startsWith("image/")
+    ? URL.createObjectURL(file)
+    : null;
+  // Non-image files default to being sent as a document.
+  sendAsDocument.value = !file.type.startsWith("image/");
+  nextTick(() => inputEl.value?.focus());
+}
+
+function clearPendingFile() {
+  if (pendingPreviewUrl.value) URL.revokeObjectURL(pendingPreviewUrl.value);
+  pendingFile.value = null;
+  pendingPreviewUrl.value = null;
+  sendAsDocument.value = false;
+}
+
+// Attach an image pasted from the clipboard (e.g. a screenshot).
+function onPaste(e: ClipboardEvent) {
+  const items = e.clipboardData?.items;
+  if (!items) return;
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    if (item.kind !== "file" || !item.type.startsWith("image/")) continue;
+    const blob = item.getAsFile();
+    if (!blob) continue;
+    e.preventDefault();
+    const ext = item.type.split("/")[1] || "png";
+    const file = new File([blob], `pasted-image.${ext}`, { type: item.type });
+    if (pendingPreviewUrl.value) URL.revokeObjectURL(pendingPreviewUrl.value);
+    pendingFile.value = file;
+    pendingPreviewUrl.value = URL.createObjectURL(file);
+    sendAsDocument.value = false;
+    return;
+  }
+}
+
+async function sendFileMessage() {
+  const file = pendingFile.value;
+  if (!file || !selectedAccountId.value || !activeChatId.value || sending.value)
+    return;
+  sending.value = true;
+  const caption = inputText.value.trim();
+  const replyMsg = replyingTo.value;
+  const asDocument = sendAsDocument.value;
+  inputText.value = "";
+  replyingTo.value = null;
+  clearPendingFile();
+  if (inputEl.value) inputEl.value.style.height = "auto";
+  try {
+    const result = await tgClientApi.sendFile(
+      selectedAccountId.value,
+      activeChatId.value,
+      file,
+      { caption: caption || undefined, asDocument, replyToMsgId: replyMsg?.id },
+    );
+    messages.value.push({
+      id: result.id,
+      text: caption,
+      html: null,
+      date: result.date,
+      fromMe: true,
+      isRead: false,
+      fromId: null,
+      fromName: null,
+      hasPhoto: result.hasPhoto,
+      hasDocument: result.hasDocument,
+      hasSticker: false,
+      fileName: result.hasDocument ? file.name : null,
+      buttons: null,
+      reactions: null,
+      replyToId: replyMsg?.id ?? null,
+      replyToText: replyMsg?.text ?? null,
+      replyToName: null,
+      replyCount: null,
+    });
+    await scrollBottom(true);
+    const idx = dialogs.value.findIndex((d) => d.chatId === activeChatId.value);
+    if (idx !== -1) {
+      dialogs.value[idx] = {
+        ...dialogs.value[idx],
+        lastMessage: {
+          text: caption || (asDocument ? "File" : "Photo"),
+          date: result.date,
+          fromMe: true,
+        },
+      };
+      const [moved] = dialogs.value.splice(idx, 1);
+      dialogs.value.unshift(moved);
+    }
+  } catch (e: any) {
+    console.error("Send file failed:", e);
+  } finally {
+    sending.value = false;
+    await nextTick();
+    inputEl.value?.focus();
+  }
+}
+
 async function sendMessage() {
+  if (pendingFile.value) {
+    await sendFileMessage();
+    return;
+  }
   const text = inputText.value.trim();
   if (!text || !selectedAccountId.value || !activeChatId.value || sending.value)
     return;
@@ -2762,6 +3225,8 @@ async function sendMessage() {
       fromName: null,
       hasPhoto: false,
       hasDocument: false,
+      hasSticker: false,
+      fileName: null,
       buttons: null,
       reactions: null,
       replyToId: replyMsg?.id ?? null,
@@ -2816,36 +3281,36 @@ function startLiveSocket() {
   const accountId = selectedAccountId.value;
   wsAccountId = accountId;
   const token = localStorage.getItem("token") ?? "";
-  // Derive ws(s):// from the current page origin
   const proto = location.protocol === "https:" ? "wss" : "ws";
+  // accountId in the URL is non-sensitive; token is sent as the first message so it never appears in access logs
   const ws = new WebSocket(
-    `${proto}://${location.host}/ws?accountId=${accountId}&token=${encodeURIComponent(token)}`,
+    `${proto}://${location.host}/ws?accountId=${accountId}`,
   );
   liveWs = ws;
 
   ws.onopen = () => {
-    wsBackoff = 1_000; // reset backoff after a successful connection
-    if (wsEverOpen) {
-      // Reconnected after a drop -- catch up on missed messages
-      catchUpActiveChatMessages();
-    }
-    wsEverOpen = true;
-    // Re-register active chat so the backend resumes periodic sync
-    if (activeChatId.value) {
-      ws.send(
-        JSON.stringify({ type: "activateChat", chatId: activeChatId.value }),
-      );
-    }
+    wsBackoff = 1_000;
+    ws.send(JSON.stringify({ type: "auth", token }));
   };
 
   ws.onmessage = (e) => {
     try {
       const data = JSON.parse(e.data as string);
-      if (data.type === "message")
+      if (data.type === "authenticated") {
+        // Auth handshake complete -- resume normal operation
+        if (wsEverOpen) {
+          catchUpActiveChatMessages();
+        }
+        wsEverOpen = true;
+        if (activeChatId.value) {
+          ws.send(JSON.stringify({ type: "activateChat", chatId: activeChatId.value }));
+        }
+      } else if (data.type === "message") {
         onIncomingMessage(data.chatId as string, data.message as TgMessage);
-      else if (data.type === "dialogs" && Array.isArray(data.dialogs)) {
-        const updated = data.dialogs as TgDialog[];
-        dialogs.value = updated;
+      } else if (data.type === "dialogs" && Array.isArray(data.dialogs)) {
+        dialogs.value = data.dialogs as TgDialog[];
+      } else if (data.type === "readOutbox") {
+        onReadOutbox(data.chatId as string, data.maxId as number);
       }
     } catch {
       /* ignore parse errors */
@@ -2916,6 +3381,16 @@ function onIncomingMessage(chatId: string, msg: TgMessage) {
   }
 }
 
+// Mark outgoing messages as read when the backend reports the recipient read them
+function onReadOutbox(chatId: string, maxId: number) {
+  if (chatId !== activeChatId.value) return;
+  for (const msg of messages.value) {
+    if (msg.fromMe && !msg.isRead && msg.id <= maxId) {
+      msg.isRead = true;
+    }
+  }
+}
+
 // ── Contacts ──────────────────────────────────────────────────────────────────
 
 async function loadContacts() {
@@ -2979,23 +3454,44 @@ async function addContactSubmit() {
     addingContact.value = false;
   }
 }
+
+function startEditContact() {
+  if (!profileDetails.value) return;
+  editFirstName.value = profileDetails.value.firstName ?? profileDetails.value.name.split(" ")[0] ?? "";
+  editLastName.value = profileDetails.value.lastName ?? profileDetails.value.name.split(" ").slice(1).join(" ") ?? "";
+  saveContactError.value = "";
+  editingContact.value = true;
+}
+
+async function saveContactEdit() {
+  if (!selectedAccountId.value || !profileDetails.value) return;
+  saveContactError.value = "";
+  savingContact.value = true;
+  try {
+    const contact = await tgClientApi.editContact(
+      selectedAccountId.value,
+      profileDetails.value.chatId,
+      editFirstName.value.trim(),
+      editLastName.value.trim(),
+    );
+    // Update local state
+    profileDetails.value.firstName = contact.firstName;
+    profileDetails.value.lastName = contact.lastName;
+    profileDetails.value.name = [contact.firstName, contact.lastName].filter(Boolean).join(" ") || profileDetails.value.name;
+    const dialog = dialogs.value.find((d) => d.chatId === profileDetails.value!.chatId);
+    if (dialog) dialog.name = profileDetails.value.name;
+    editingContact.value = false;
+  } catch (e: any) {
+    saveContactError.value = e?.response?.data?.error ?? e.message ?? "Failed to save";
+  } finally {
+    savingContact.value = false;
+  }
+}
 </script>
 
 <style scoped>
-/* ── Overlay (desktop popup mode) ───────────────────────────────────────────── */
-.tgc-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  z-index: 2000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 16px;
-}
-
-/* ── Inline mode (mobile full-page) ─────────────────────────────────────────── */
-.tgc-inline-wrap {
+/* ── Full-page layout ───────────────────────────────────────────────────────── */
+.tgc-page {
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -3092,9 +3588,9 @@ async function addContactSubmit() {
   color: #1a1a2e;
 }
 
-.tgc-close-btn:hover {
-  background: #fee2e2;
-  color: #e63946;
+.tgc-icon-btn--active {
+  color: #4361ee;
+  background: #eef0fd;
 }
 
 /* ── Body ───────────────────────────────────────────────────────────────────── */
@@ -3560,15 +4056,48 @@ async function addContactSubmit() {
 }
 
 .tgc-msg-doc {
-  color: #999;
-  font-style: italic;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 240px;
+  padding: 8px 12px;
+  margin-bottom: 4px;
+  background: rgba(67, 97, 238, 0.08);
+  border-radius: 8px;
+  color: #4361ee;
   font-size: 13px;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.tgc-msg-doc:hover {
+  background: rgba(67, 97, 238, 0.16);
+}
+
+.tgc-msg-doc-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.tgc-msg-doc-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tgc-msg-photo {
   max-width: 260px;
   max-height: 300px;
   border-radius: 8px;
+  display: block;
+  margin-bottom: 4px;
+  cursor: pointer;
+}
+
+.tgc-msg-sticker {
+  width: 120px;
+  height: 120px;
+  object-fit: contain;
   display: block;
   margin-bottom: 4px;
 }
@@ -3938,6 +4467,126 @@ async function addContactSubmit() {
 .tgc-slash-btn.active {
   background: #eef1fb;
   border-color: #4361ee;
+}
+
+/* Attach (paperclip) button */
+.tgc-attach-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #f5f6fa;
+  border: 1px solid #dde0e8;
+  color: #4361ee;
+  font-size: 15px;
+  cursor: pointer;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+
+.tgc-attach-btn:hover {
+  background: #eef1fb;
+  border-color: #4361ee;
+}
+
+/* Pending attachment strip */
+.tgc-attach-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: #f8f9fb;
+  border-bottom: 1px solid #e8e9ed;
+}
+
+.tgc-attach-thumb {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.tgc-attach-icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #eef1fb;
+  border-radius: 6px;
+  color: #4361ee;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.tgc-attach-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.tgc-attach-name {
+  font-size: 13px;
+  color: #1a1a2e;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tgc-attach-asdoc {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #6b7280;
+  cursor: pointer;
+  margin-top: 2px;
+}
+
+/* ── Image lightbox ─────────────────────────────────────────────────────────── */
+.tgc-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  cursor: zoom-out;
+}
+
+.tgc-lightbox-img {
+  max-width: 95vw;
+  max-height: 95vh;
+  object-fit: contain;
+  border-radius: 6px;
+  cursor: default;
+}
+
+.tgc-lightbox-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tgc-lightbox-close:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
 
 /* ── Reply compose strip ────────────────────────────────────────────────────── */
@@ -4489,6 +5138,59 @@ async function addContactSubmit() {
   text-transform: capitalize;
 }
 
+.tgc-contact-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e8eaed;
+}
+
+.tgc-contact-edit-input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.tgc-contact-edit-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.tgc-contact-save-btn {
+  padding: 6px 18px;
+  border-radius: 6px;
+  border: none;
+  background: #4361ee;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  &:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+  &:not(:disabled):hover {
+    opacity: 0.85;
+  }
+}
+
+.tgc-contact-cancel-btn {
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid #ddd;
+  background: none;
+  color: #555;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s;
+  &:hover {
+    background: #f0f2f5;
+  }
+}
+
 .tgc-profile-rows {
   padding: 8px 0;
 }
@@ -4541,10 +5243,18 @@ async function addContactSubmit() {
 }
 
 .tgc-bio-text {
-  white-space: pre-wrap;
   font-size: 13px;
   color: #444;
   line-height: 1.5;
+}
+
+.tgc-bio-link {
+  color: #2481cc;
+  text-decoration: none;
+  cursor: pointer;
+  &:hover {
+    text-decoration: underline;
+  }
 }
 
 .tgc-copy-icon {
@@ -4630,10 +5340,48 @@ async function addContactSubmit() {
   color: #666;
 }
 
+.tgc-ctx-danger,
+.tgc-ctx-danger i {
+  color: #e0245e;
+}
+
+.tgc-ctx-danger:hover {
+  background: #fdecef;
+}
+
 .tgc-ctx-divider {
   height: 1px;
   background: #e8e9ed;
   margin: 4px 0;
+}
+
+.tgc-pin-icon {
+  font-size: 10px;
+  color: #aaa;
+  flex-shrink: 0;
+  transform: rotate(45deg);
+}
+
+.tgc-ctx-chevron {
+  margin-left: auto;
+  font-size: 11px;
+  color: #aaa;
+  transition: transform 0.15s;
+  &.rotated {
+    transform: rotate(180deg);
+  }
+}
+
+.tgc-ctx-folder-item {
+  padding-left: 28px;
+  font-size: 13px;
+  color: #555;
+}
+
+.tgc-ctx-folder-emoji {
+  width: 18px;
+  text-align: center;
+  flex-shrink: 0;
 }
 
 /* ── Back button ──────────────────────────────────────────────────────────────
@@ -4677,11 +5425,6 @@ async function addContactSubmit() {
 
 /* ── Responsive ─────────────────────────────────────────────────────────────── */
 @media (max-width: 768px) {
-  .tgc-backdrop {
-    padding: 0;
-    align-items: flex-end;
-  }
-
   .tgc-popup {
     height: 100dvh;
     height: 100vh; /* fallback for browsers without dvh */
@@ -4938,7 +5681,7 @@ async function addContactSubmit() {
 .tgc-invite-overlay {
   position: fixed;
   inset: 0;
-  z-index: 1000;
+  z-index: 3000;
   background: rgba(0, 0, 0, 0.55);
   display: flex;
   align-items: center;
@@ -5027,5 +5770,31 @@ async function addContactSubmit() {
 .tgc-invite-join:disabled {
   opacity: 0.65;
   cursor: not-allowed;
+}
+
+.tgc-gourl-card {
+  text-align: left;
+}
+
+.tgc-gourl-hint {
+  font-size: 13px;
+  color: #666;
+  margin-bottom: 12px;
+}
+
+.tgc-gourl-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 12px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 14px;
+  margin-bottom: 16px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.tgc-gourl-input:focus {
+  border-color: #4361ee;
 }
 </style>

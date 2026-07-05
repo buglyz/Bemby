@@ -264,7 +264,9 @@ describe('resolveAppClientParams', () => {
 // ---------------------------------------------------------------------------
 
 describe('requestCode — device params', () => {
-  it('passes device params to TelegramClient when provided', async () => {
+  // Device params are intentionally stripped during requestCode auth -- desktop profiles
+  // can cause Telegram to route the code to a non-existent desktop session.
+  it('does not forward device params to TelegramClient during auth', async () => {
     const params: TgDeviceParams = {
       deviceModel: 'iPhone 13 Pro Max',
       systemVersion: 'iOS 15.4.1',
@@ -275,10 +277,9 @@ describe('requestCode — device params', () => {
     };
     await requestCode(901, 1, 'hash', '+61400000000', undefined, params);
     const opts = vi.mocked(TelegramClient).mock.calls[0][3] as Record<string, unknown>;
-    expect(opts.deviceModel).toBe('iPhone 13 Pro Max');
-    expect(opts.systemVersion).toBe('iOS 15.4.1');
-    expect(opts.appVersion).toBe('8.4.2');
-    expect(opts.langPack).toBe('ios');
+    expect(opts).not.toHaveProperty('deviceModel');
+    expect(opts).not.toHaveProperty('systemVersion');
+    expect(opts).not.toHaveProperty('langPack');
   });
 
   it('does not include device fields in TelegramClient opts when none provided', async () => {
@@ -289,12 +290,12 @@ describe('requestCode — device params', () => {
     expect(opts).not.toHaveProperty('langPack');
   });
 
-  it('retains connectionRetries alongside device params', async () => {
+  it('retains connectionRetries even when device params are provided', async () => {
     const params: TgDeviceParams = { deviceModel: 'PC 64bit' };
     await requestCode(903, 1, 'hash', '+61400000002', undefined, params);
     const opts = vi.mocked(TelegramClient).mock.calls[0][3] as Record<string, unknown>;
     expect(opts.connectionRetries).toBe(3);
-    expect(opts.deviceModel).toBe('PC 64bit');
+    expect(opts).not.toHaveProperty('deviceModel');
   });
 });
 

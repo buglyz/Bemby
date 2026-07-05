@@ -21,16 +21,36 @@ import debugRouter from "./routes/debug";
 import aiSuppliersRouter from "./routes/ai-suppliers";
 import templatesRouter from "./routes/templates";
 import tgClientRouter from "./routes/tgClient";
-import { requireAuth } from "./middleware/auth";
+import { requireAuth, getJwtSecret } from "./middleware/auth";
 import { startScheduler } from "./scheduler";
 import { attachWebSocket } from "./tg/wsHandler";
+
+// Validate critical env vars before accepting any requests
+getJwtSecret();
 
 const app = express();
 const PORT = Number(process.env.PORT ?? 3000);
 const BIND_HOST = process.env.HOST ?? "0.0.0.0";
 const DISPLAY_HOST = process.env.DISPLAY_HOST ?? BIND_HOST;
 
-app.use(cors());
+// TRUST_PROXY: set to the number of proxy hops in front of this app.
+// 0/false = direct internet (no proxy) -- clients cannot spoof X-Forwarded-For
+// 1       = one reverse proxy (nginx, Caddy, Railway, etc.)
+// 2+      = multiple proxies (e.g. Cloudflare + nginx)
+const trustProxy = process.env.TRUST_PROXY ?? '0';
+app.set('trust proxy', /^\d+$/.test(trustProxy) ? Number(trustProxy) : trustProxy);
+
+// CORS: the SPA is served same-origin in production, so no wildcard is needed.
+// CORS_ORIGIN (comma-separated) whitelists extra origins; defaults to the local
+// dev frontend. Same-origin requests don't require CORS headers regardless.
+const corsOrigins = (process.env.CORS_ORIGIN ?? "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+const allowedOrigins = corsOrigins.length
+  ? corsOrigins
+  : ["http://localhost:5173", "http://127.0.0.1:5173"];
+app.use(cors({ origin: allowedOrigins }));
 app.use(express.json());
 
 // Health check -- no auth required

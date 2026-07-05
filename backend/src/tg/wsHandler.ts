@@ -7,6 +7,7 @@ import {
   getLiveClient,
   subscribeToMessages,
   subscribeToDialogs,
+  subscribeToReadOutbox,
   syncMessagesInBackground,
 } from "./liveClient";
 
@@ -16,26 +17,53 @@ const SYNC_INTERVAL_MS = 4_000;
 export function attachWebSocket(server: Server): void {
   const wss = new WebSocketServer({ server, path: "/ws" });
 
-  wss.on("connection", async (ws: WebSocket, req: IncomingMessage) => {
+  wss.on("connection", (ws: WebSocket, req: IncomingMessage) => {
     const url = new URL(req.url ?? "/", `http://${req.headers.host}`);
-    const token = url.searchParams.get("token") ?? "";
     const accountId = Number(url.searchParams.get("accountId") ?? "0");
-    try {
-      jwt.verify(token, getJwtSecret());
-    } catch {
-      ws.close(1008, "Unauthorised");
-      return;
-    }
 
     if (!accountId) {
       ws.close(1008, "Missing accountId");
       return;
     }
 
+    // Authenticate via the first message (not the URL) so tokens never appear in access logs
+    const authTimeout = setTimeout(() => {
+      ws.close(1008, "Auth timeout");
+    }, 5_000);
+
+    ws.once("message", async (rawData: Buffer) => {
+      clearTimeout(authTimeout);
+      let msg: { type: string; token?: string };
+      try {
+        msg = JSON.parse(rawData.toString()) as { type: string; token?: string };
+      } catch {
+        ws.close(1008, "Invalid auth message");
+        return;
+      }
+
+      if (msg.type !== "auth" || !msg.token) {
+        ws.close(1008, "Expected auth message");
+        return;
+      }
+
+      try {
+        jwt.verify(msg.token, getJwtSecret());
+      } catch {
+        ws.close(1008, "Unauthorised");
+        return;
+      }
+
+      ws.send(JSON.stringify({ type: "authenticated" }));
+      await setupConnection(ws, accountId);
+    });
+  });
+}
+
+async function setupConnection(ws: WebSocket, accountId: number): Promise<void> {
     try {
       await getLiveClient(accountId);
     } catch (err: any) {
-      ws.send(JSON.stringify({ type: "error", error: err.message }));
+      ws.send(JSON.stringify({ type: "error", error: "Failed to connect to Telegram" }));
       ws.close();
       return;
     }
@@ -49,6 +77,12 @@ export function attachWebSocket(server: Server): void {
     const unsubscribeDialogs = subscribeToDialogs(accountId, (dialogs) => {
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: "dialogs", dialogs }));
+      }
+    });
+
+    const unsubscribeReadOutbox = subscribeToReadOutbox(accountId, (chatId, maxId) => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: "readOutbox", chatId, maxId }));
       }
     });
 
@@ -96,9 +130,9 @@ export function attachWebSocket(server: Server): void {
       clearInterval(syncInterval);
       unsubscribeMsgs();
       unsubscribeDialogs();
+      unsubscribeReadOutbox();
     };
 
     ws.on("close", cleanup);
     ws.on("error", cleanup);
-  });
 }

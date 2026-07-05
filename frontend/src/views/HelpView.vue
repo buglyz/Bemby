@@ -103,6 +103,48 @@
                     在编辑面板中点击"强制重新认证"，可清除现有会话并重置为未认证状态。
                   </td>
                 </tr>
+                <tr>
+                  <td>2FA 密码</td>
+                  <td>
+                    在账户编辑面板的<strong>高级</strong>选项卡中设置、修改或移除 Telegram 两步验证密码。
+                  </td>
+                </tr>
+                <tr>
+                  <td>会话管理</td>
+                  <td>
+                    在<strong>高级</strong>选项卡中查看所有活跃登录设备（含应用名称、IP、国家、最后活跃时间），可单独终止某个会话或一键终止所有其他设备。
+                  </td>
+                </tr>
+                <tr>
+                  <td>加密导出 / 导入</td>
+                  <td>
+                    导出账户备份时可设置密码加密；导入时自动识别加密状态并提示输入密码。勾选<strong>强制重新认证</strong>（推荐）可在导入时清除会话令牌，避免 Telegram 因令牌共用而撤销会话。
+                  </td>
+                </tr>
+                <tr>
+                  <td>备注</td>
+                  <td>
+                    可在账户编辑面板的<strong>基本信息</strong>选项卡中为账户添加备注。表格中的备注列可通过页面顶部的"显示备注 / 隐藏备注"按钮切换显示（移动端始终隐藏）。勾选多个账户后点击"设置备注 (N)"可批量更新备注。
+                  </td>
+                </tr>
+                <tr>
+                  <td>恢复邮箱</td>
+                  <td>
+                    在<strong>高级</strong>选项卡中查看、设置、更改或移除 Telegram 账户的 2FA 恢复邮箱。查看完整邮箱地址或变更操作均需输入当前 2FA 密码；设置新邮箱时，Telegram 会向该地址发送确认码，输入后方可生效。
+                  </td>
+                </tr>
+                <tr>
+                  <td>个人资料</td>
+                  <td>
+                    在账户编辑面板的<strong>个人资料</strong>选项卡中直接修改该 Telegram 账户的名字、姓氏和简介。
+                  </td>
+                </tr>
+                <tr>
+                  <td>通行密钥（Passkeys）</td>
+                  <td>
+                    在<strong>高级</strong>选项卡中查看已注册的通行密钥（WebAuthn，含名称、添加与最近使用时间）并可移除。新增通行密钥仍需在官方 Telegram 客户端中进行。
+                  </td>
+                </tr>
               </tbody>
             </table>
             <div class="help-badges-row">
@@ -164,6 +206,70 @@
                     The Force Re-auth button in the edit panel clears the
                     existing session and resets the account to unauthenticated
                     without deleting it.
+                  </td>
+                </tr>
+                <tr>
+                  <td>2FA password</td>
+                  <td>
+                    Set, change, or remove the two-factor authentication
+                    password on any Telegram account from the
+                    <strong>Advanced</strong> tab in the account edit panel.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Session management</td>
+                  <td>
+                    The <strong>Advanced</strong> tab lists all active login
+                    sessions (app, IP, country, last-active time). Terminate
+                    individual sessions or all other sessions at once.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Encrypted export / import</td>
+                  <td>
+                    Account exports can be password-protected; imports
+                    auto-detect encryption and prompt for the key. Enable
+                    <strong>Force re-auth</strong> (recommended) to clear
+                    session tokens on import and prevent Telegram from revoking
+                    a shared token.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Notes</td>
+                  <td>
+                    Add free-text notes per account from the
+                    <strong>Basic</strong> tab of the edit panel. The Notes
+                    column in the table can be toggled on/off via the
+                    Show/Hide Notes button (always hidden on mobile). Select
+                    multiple accounts and click <strong>Set Notes (N)</strong>
+                    to bulk-update notes at once.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Recovery email</td>
+                  <td>
+                    View, set, change, or remove the 2FA recovery email from
+                    the <strong>Advanced</strong> tab. Revealing the full
+                    address or making changes requires the current 2FA password.
+                    When setting a new email, Telegram sends a confirmation code
+                    to that address; enter the code to complete the change.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Profile</td>
+                  <td>
+                    Edit the Telegram account's first name, last name, and bio
+                    directly from the <strong>Profile</strong> tab in the account
+                    edit panel.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Passkeys</td>
+                  <td>
+                    List registered WebAuthn passkeys (name, added and last-used
+                    times) from the <strong>Advanced</strong> tab and remove
+                    them. Creating new passkeys still requires the official
+                    Telegram client.
                   </td>
                 </tr>
               </tbody>
@@ -270,6 +376,70 @@
               打开聊天窗口或收到新消息时，自动调用 Telegram API
               将消息标记为已读，并立即清除对话列表中的未读角标。
             </p>
+
+            <div
+              class="card-section-title"
+              style="margin-top: 16px; font-size: 11px"
+            >
+              静音 / 取消静音
+            </div>
+            <p class="help-para">
+              右键任意对话可选择静音 8 小时、1 周、永久静音或取消静音。
+              已静音的对话在列表中显示静音徽标。
+            </p>
+
+            <div
+              class="card-section-title"
+              style="margin-top: 16px; font-size: 11px"
+            >
+              加入文件夹
+            </div>
+            <p class="help-para">
+              右键对话可选择"加入文件夹"，将其添加至任意 Telegram 文件夹。
+            </p>
+
+            <div
+              class="card-section-title"
+              style="margin-top: 16px; font-size: 11px"
+            >
+              编辑联系人
+            </div>
+            <p class="help-para">
+              在个人资料面板中点击铅笔图标，可直接修改联系人的名和姓。
+            </p>
+
+            <div
+              class="card-section-title"
+              style="margin-top: 16px; font-size: 11px"
+            >
+              小程序显示模式
+            </div>
+            <p class="help-para">
+              工具栏中的拼图图标可切换 Telegram 小程序的打开方式：
+              高亮时在应用内嵌入式面板打开，否则在浏览器中打开。
+            </p>
+
+            <div
+              class="card-section-title"
+              style="margin-top: 16px; font-size: 11px"
+            >
+              打开网址
+            </div>
+            <p class="help-para">
+              工具栏中的地球图标可打开"输入网址"对话框，支持粘贴任意 URL 或 t.me 链接，
+              直接在消息客户端或浏览器中打开，无需离开应用。
+            </p>
+
+            <div
+              class="card-section-title"
+              style="margin-top: 16px; font-size: 11px"
+            >
+              发送图片与文件
+            </div>
+            <p class="help-para">
+              点击输入框旁的附件图标可选择图片或任意文件并发送，发送前会在输入框上方显示待发送附件预览。
+              图片可选择"以文件方式发送"以保留原始质量。
+            </p>
           </template>
           <template v-else>
             <div class="card-section-title">Messenger</div>
@@ -354,6 +524,76 @@
               Opening a chat or receiving a new message automatically calls the
               Telegram API to mark messages as read and clears the unread badge
               on the dialog immediately.
+            </p>
+
+            <div
+              class="card-section-title"
+              style="margin-top: 16px; font-size: 11px"
+            >
+              Mute / unmute
+            </div>
+            <p class="help-para">
+              Right-click any dialog to mute it for 8 hours, 1 week, forever,
+              or to unmute it. Muted dialogs show a mute badge in the list.
+            </p>
+
+            <div
+              class="card-section-title"
+              style="margin-top: 16px; font-size: 11px"
+            >
+              Add to folder
+            </div>
+            <p class="help-para">
+              Right-click a dialog and choose "Add to folder" to add it to any
+              of your Telegram folders.
+            </p>
+
+            <div
+              class="card-section-title"
+              style="margin-top: 16px; font-size: 11px"
+            >
+              Edit contact
+            </div>
+            <p class="help-para">
+              Click the pencil icon in the profile panel to edit a contact's
+              first and last name directly.
+            </p>
+
+            <div
+              class="card-section-title"
+              style="margin-top: 16px; font-size: 11px"
+            >
+              Mini app display mode
+            </div>
+            <p class="help-para">
+              The puzzle-piece button in the toolbar toggles how Telegram mini
+              apps open: when highlighted, they open in an embedded in-app
+              panel; otherwise they open in the browser.
+            </p>
+
+            <div
+              class="card-section-title"
+              style="margin-top: 16px; font-size: 11px"
+            >
+              Open URL
+            </div>
+            <p class="help-para">
+              The globe button in the toolbar opens a dialog where you can paste
+              any URL or t.me link and open it in the messenger or browser
+              without leaving the app.
+            </p>
+
+            <div
+              class="card-section-title"
+              style="margin-top: 16px; font-size: 11px"
+            >
+              Send files and images
+            </div>
+            <p class="help-para">
+              Click the attachment icon next to the compose box to pick an image
+              or any file and send it; a preview of the pending attachment
+              appears above the compose box before sending. Images offer a "send
+              as file" option to preserve the original quality.
             </p>
           </template>
         </div>
@@ -487,6 +727,12 @@
                     用于发送成功/失败通知的 Telegram 账号。留空则不发送通知。
                   </td>
                 </tr>
+                <tr>
+                  <td>上报前校验可播放</td>
+                  <td>
+                    上报播放前先确认媒体文件可读取（磁盘在线），避免在文件离线时上报虚假观看。
+                  </td>
+                </tr>
               </tbody>
             </table>
             <p class="help-note">
@@ -538,6 +784,18 @@
                     识别图中验证码，再将识别结果自动发送给机器人。可指定验证码字符数量以提高识别准确率——若
                     AI
                     返回的字符数与预期不符，则视为失败并触发重试。支持独立的<strong>最大重试次数</strong>。
+                  </td>
+                </tr>
+                <tr>
+                  <td>加入群组 / 订阅频道</td>
+                  <td>
+                    加入群组或订阅频道，支持公开用户名（<code>@name</code>）或私有邀请链接。订阅频道可先校验当前订阅状态（已订阅则直接成功），发送请求后再次验证；加入群组可选配"入群后点击验证按钮"以完成部分群组的入群验证。
+                  </td>
+                </tr>
+                <tr>
+                  <td>向联系人发送 / 点击按钮</td>
+                  <td>
+                    对流程中指定的机器人、群组或用户发送消息/命令，或点击其最近收到消息上的按钮（可等待新消息）。
                   </td>
                 </tr>
                 <tr>
@@ -601,10 +859,10 @@
               class="card-section-title"
               style="margin-top: 16px; font-size: 11px"
             >
-              任务筛选
+              任务筛选与搜索
             </div>
             <p class="help-para">
-              当系统存在多个账号或多个机器人/网址时，任务列表顶部会显示对应的筛选下拉框，可按账号或机器人/网址过滤任务。
+              当系统存在多个账号或多个机器人/网址时，任务列表顶部会显示对应的筛选下拉框，可按账号或机器人/网址过滤任务。列表顶部同时提供名称搜索框，可按任务名称快速筛选。
             </p>
 
             <div
@@ -616,6 +874,37 @@
             <p class="help-para">
               点击任意列标题可对任务列表按该列排序，再次点击切换升序/降序。点击行本身可高亮选中该行。
               筛选条件与排序方式在刷新后自动恢复。
+            </p>
+
+            <div
+              class="card-section-title"
+              style="margin-top: 16px; font-size: 11px"
+            >
+              批量运行
+            </div>
+            <p class="help-para">
+              勾选多个任务后，批量操作栏出现<strong>运行 (N)</strong> 按钮。
+              点击后可设置任务间延迟时间（默认 70 秒），确认后任务按顺序依次执行。
+            </p>
+
+            <div
+              class="card-section-title"
+              style="margin-top: 16px; font-size: 11px"
+            >
+              批量修改时间窗口
+            </div>
+            <p class="help-para">
+              勾选多个任务后点击<strong>修改时间窗口 (N)</strong>，可一键将所选任务的时间窗口批量设置为相同的开始/结束时间。
+            </p>
+
+            <div
+              class="card-section-title"
+              style="margin-top: 16px; font-size: 11px"
+            >
+              归档任务
+            </div>
+            <p class="help-para">
+              删除任务时改为<strong>归档</strong>，任务从列表中移除但其历史日志得以保留。支持单个及批量归档。
             </p>
 
             <div
@@ -766,6 +1055,14 @@
                     Leave blank to disable notifications for this job.
                   </td>
                 </tr>
+                <tr>
+                  <td>Verify playable before reporting</td>
+                  <td>
+                    Confirms the media file is readable (disk online) before
+                    reporting playback, avoiding a fake watch when the file is
+                    offline.
+                  </td>
+                </tr>
               </tbody>
             </table>
             <p class="help-note">
@@ -830,6 +1127,25 @@
                     improves accuracy -- if the AI response does not match the
                     expected length the action fails and retries. Has its own
                     <strong>Max retries</strong> setting.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Join group / Subscribe channel</td>
+                  <td>
+                    Join a group or subscribe to a channel via a public username
+                    (<code>@name</code>) or private invite link. Channel
+                    subscribe can pre-check the current subscription status
+                    (succeeds immediately if already subscribed) and re-verify
+                    after sending; join group optionally clicks a verification
+                    button after joining to clear some groups' entry checks.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Send / click button for contact</td>
+                  <td>
+                    Send a message/command to, or click a button on the latest
+                    received message from, a specific bot, group, or user named
+                    in the flow (can wait for a new message).
                   </td>
                 </tr>
                 <tr>
@@ -904,12 +1220,13 @@
               class="card-section-title"
               style="margin-top: 16px; font-size: 11px"
             >
-              Job Filters
+              Job Filters and Search
             </div>
             <p class="help-para">
               When more than one account or bot/URL exists, filter dropdowns
               appear at the top of the jobs list, letting you show only jobs for
-              a specific account or bot target.
+              a specific account or bot target. A name search box at the top of
+              the list narrows jobs by name.
             </p>
 
             <div
@@ -923,6 +1240,43 @@
               again to reverse the direction. Clicking a row highlights it.
               Filter selections and sort order are both remembered across page
               refreshes.
+            </p>
+
+            <div
+              class="card-section-title"
+              style="margin-top: 16px; font-size: 11px"
+            >
+              Bulk Run
+            </div>
+            <p class="help-para">
+              Tick checkboxes on multiple job rows and click
+              <strong>Run (N)</strong> in the bulk action bar. Set a delay
+              between jobs (default 70 s) and confirm -- jobs run sequentially,
+              each waiting for the previous one to finish before starting.
+            </p>
+
+            <div
+              class="card-section-title"
+              style="margin-top: 16px; font-size: 11px"
+            >
+              Bulk Change Window
+            </div>
+            <p class="help-para">
+              Select multiple jobs and click
+              <strong>Change Window (N)</strong> to set them all to the same
+              start/end time window in one action.
+            </p>
+
+            <div
+              class="card-section-title"
+              style="margin-top: 16px; font-size: 11px"
+            >
+              Retire Jobs
+            </div>
+            <p class="help-para">
+              Removing a job now <strong>retires</strong> it: the job leaves the
+              list but its history logs are kept. Single and bulk retire are both
+              supported.
             </p>
 
             <div
@@ -948,6 +1302,16 @@
             <div class="card-section-title">模板</div>
             <p class="help-para">
               模板存储可复用的任务配置。将任务关联至模板后，模板的变更会自动同步至所有关联任务。
+            </p>
+            <div
+              class="card-section-title"
+              style="margin-top: 16px; font-size: 11px"
+            >
+              批量永久静音机器人
+            </div>
+            <p class="help-para">
+              勾选多个模板行，点击<strong>永久静音机器人</strong>按钮，将为所有关联 Telegram 账户一次性静音对应机器人的通知。
+              操作内置速率限制保护，每次账户调用间隔 4 秒。
             </p>
             <div
               class="card-section-title"
@@ -989,6 +1353,18 @@
               Templates store reusable job configurations. Jobs linked to a
               template inherit its settings; changes to the template propagate
               to all linked jobs automatically.
+            </p>
+            <div
+              class="card-section-title"
+              style="margin-top: 16px; font-size: 11px"
+            >
+              Bulk mute bot forever
+            </div>
+            <p class="help-para">
+              Tick checkboxes on multiple template rows and click
+              <strong>Mute Bot Forever</strong> to mute the associated bot
+              across every linked Telegram account in one action. Built-in
+              4-second rate-limit protection prevents flooding the Telegram API.
             </p>
             <div
               class="card-section-title"
@@ -1081,7 +1457,8 @@
                     <code>nvidia/nemotron-nano-12b-v2-vl:free</code>
                     模型，在此处填入 API 密钥即可启用
                     <code>{aiBtn}</code>、<code>{aiInput}</code>
-                    和"输入验证码"功能。支持添加任意 OpenAI 兼容服务商。
+                    和"输入验证码"功能。支持添加任意 OpenAI
+                    兼容服务商，并可开启"报错时自动切换服务商"，在默认模型限速或出错时自动尝试其他已配置的服务商。
                   </td>
                 </tr>
                 <tr>
@@ -1101,7 +1478,16 @@
                   <td>TG 应用客户端</td>
                   <td>
                     管理 Telegram
-                    会话的设备信息预设。"账号默认客户端"可设为"使用默认"（指定某个预设为默认）或"随机选择"（无指定客户端的账号每次连接随机使用一个预设）。
+                    会话的设备信息预设。"账号默认客户端"可设为"使用默认"（指定某个预设为默认）或"随机选择"（无指定客户端的账号每次连接随机使用一个预设）。设备型号支持
+                    <code>{name}</code>、<code>{tgName}</code>、<code>{tgUsername}</code>、<code>{id}</code>
+                    及随机 <code>{word:4}</code>、<code>{num:4}</code>、<code>{alpha:8}</code>、<code>{uuid}</code>
+                    变量，随机值按账户固定，使每个账户拥有唯一的设备名称。
+                  </td>
+                </tr>
+                <tr>
+                  <td>TG 账号显示</td>
+                  <td>
+                    开启后，引用账户的位置（消息、任务、模板）将以「Bemby 账户名 - TG 账号名」形式显示。
                   </td>
                 </tr>
                 <tr>
@@ -1111,11 +1497,18 @@
                     实例，无需重新认证。
                   </td>
                 </tr>
+                <tr>
+                  <td>默认 TG API 凭据</td>
+                  <td>
+                    统一配置全局 API ID 和 Hash；无独立凭据的账号自动使用全局默认值。Hash 在界面中始终脱敏显示。
+                  </td>
+                </tr>
               </tbody>
             </table>
             <p class="help-para" style="margin-top: 14px">
               <strong>管理员凭据</strong> --
               随时更改管理员用户名或密码，确认更改时需输入当前密码。
+              使用默认密码（<code>changeme</code>）登录时，系统将强制要求更改密码后方可继续访问。
             </p>
           </template>
           <template v-else>
@@ -1176,7 +1569,9 @@
                     <code>nvidia/nemotron-nano-12b-v2-vl:free</code> model — add
                     your API key here to activate <code>{aiBtn}</code>,
                     <code>{aiInput}</code>, and Enter Captcha. Any
-                    OpenAI-compatible provider can be added.
+                    OpenAI-compatible provider can be added, and an
+                    "auto-fallback on error" toggle tries other configured
+                    providers when the default model is rate-limited or errors.
                   </td>
                 </tr>
                 <tr>
@@ -1202,7 +1597,20 @@
                     "Default client for accounts" toggle switches between a
                     fixed default and random selection -- in random mode,
                     accounts with no explicit client pick one at random from all
-                    configured presets on each connection.
+                    configured presets on each connection. The Device Model
+                    supports <code>{name}</code>, <code>{tgName}</code>,
+                    <code>{tgUsername}</code>, <code>{id}</code>, and random
+                    <code>{word:4}</code>, <code>{num:4}</code>,
+                    <code>{alpha:8}</code>, <code>{uuid}</code> variables; random
+                    values stay fixed per account, giving each account a unique
+                    device name.
+                  </td>
+                </tr>
+                <tr>
+                  <td>TG Account Display</td>
+                  <td>
+                    When enabled, places that refer to an account (messenger,
+                    jobs, templates) show it as "{Bemby name} - {TG name}".
                   </td>
                 </tr>
                 <tr>
@@ -1213,12 +1621,22 @@
                     re-authenticating.
                   </td>
                 </tr>
+                <tr>
+                  <td>Default TG API Credentials</td>
+                  <td>
+                    Set a global API ID and Hash; accounts without their own
+                    credentials fall back to these defaults. The Hash is always
+                    masked in the UI.
+                  </td>
+                </tr>
               </tbody>
             </table>
             <p class="help-para" style="margin-top: 14px">
               <strong>Admin Credentials</strong> -- change the admin username or
               password at any time. Current password is always required to
-              confirm the change.
+              confirm the change. If the default password (<code>changeme</code>)
+              is still in use, the app forces a password change on next login
+              before any other page is accessible.
             </p>
           </template>
         </div>
@@ -1232,6 +1650,7 @@
             <p class="help-para">
               每次任务执行均记录时间戳、状态和消息。
               使用顶部的任务下拉筛选器按任务缩小范围，或在文本搜索框中输入关键词，对任务名称、账号名称或消息内容进行模糊筛选。
+              日志列表每次加载最多显示 50 条记录（最新在前），点击底部的<strong>加载更多</strong>按钮可继续加载更早的记录。
             </p>
             <div class="help-badges-row">
               <span class="badge badge-green">成功</span>
@@ -1270,6 +1689,16 @@
             <p class="help-para">
               点击任意 Emby 观看日志行可展开播放摘要卡片，显示以下信息：
               内容名称（及剧集信息）、剧集总时长、播放起始与结束位置、实际观看时长、是否已标记为已看。
+            </p>
+
+            <div
+              class="card-section-title"
+              style="margin-top: 16px; font-size: 11px"
+            >
+              重跑失败任务
+            </div>
+            <p class="help-para">
+              对于状态为<strong>失败</strong>的执行记录，可在日志视图中点击重跑按钮，立即重新运行对应任务。
             </p>
 
             <div
@@ -1330,7 +1759,8 @@
               Every job execution is recorded with a timestamp, status, and
               message. Use the job dropdown to filter by a specific job, or type
               in the search box to fuzzy-match across job name, account name,
-              and message.
+              and message. The list loads the 50 most recent records; click
+              <strong>Load More</strong> at the bottom to fetch older entries.
             </p>
             <div class="help-badges-row">
               <span class="badge badge-green">Success</span>
@@ -1383,6 +1813,18 @@
               showing: content title (and series/episode info), total runtime,
               start and end positions, actual duration watched, and whether the
               item was marked as watched.
+            </p>
+
+            <div
+              class="card-section-title"
+              style="margin-top: 16px; font-size: 11px"
+            >
+              Rerun failed jobs
+            </div>
+            <p class="help-para">
+              For any execution with a <strong>Failed</strong> status, click the
+              rerun button in the log view to run the corresponding job again
+              immediately.
             </p>
 
             <div

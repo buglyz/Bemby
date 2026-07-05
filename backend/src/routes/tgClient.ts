@@ -1,11 +1,15 @@
-import { Router } from "express";
+import { Router, raw } from "express";
+import dns from "dns";
+import net from "net";
 import {
   getLiveClient,
   loadDialogs,
   getMessages,
   sendMessage,
+  sendFile,
   getContacts,
   addContact,
+  editContact,
   searchPeers,
   fetchPhoto,
   fetchAvatar,
@@ -21,6 +25,7 @@ import {
   reconnectClient,
   subscribeToMessages,
   getFolders,
+  addChatToFolder,
   checkInvite,
   joinInvite,
   isAuthError,
@@ -30,6 +35,7 @@ import {
   clearCachedMessages,
   syncMessagesInBackground,
   joinChannel,
+  leaveChat,
   getCachedDialogs,
   cacheDialogs,
   syncDialogsInBackground,
@@ -38,6 +44,7 @@ import {
   resolveWebApp,
   startBot,
   getPinnedMessage,
+  getReadOutboxMaxId,
 } from "../tg/liveClient";
 import type { Response } from "express";
 
@@ -48,6 +55,64 @@ function tgError(err: any, accountId: number, res: Response): void {
 }
 
 const router = Router();
+
+// Reject IPs in private/reserved ranges to prevent SSRF against internal services.
+function isBlockedIp(ip: string): boolean {
+  if (net.isIPv4(ip)) {
+    const [a, b] = ip.split(".").map(Number);
+    return (
+      a === 0 ||
+      a === 127 ||
+      a === 10 ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      (a === 169 && b === 254)
+    );
+  }
+  if (net.isIPv6(ip)) {
+    const lower = ip.toLowerCase();
+    return lower === "::1" || lower.startsWith("fc") || lower.startsWith("fd");
+  }
+  return true; // reject unrecognised formats
+}
+
+async function assertPublicUrl(rawUrl: string): Promise<void> {
+  const parsed = new URL(rawUrl);
+  if (!/^https?:$/i.test(parsed.protocol)) throw new Error("Only http(s) allowed");
+  const hostname = parsed.hostname;
+  if (net.isIP(hostname)) {
+    if (isBlockedIp(hostname)) throw new Error("Private IP not allowed");
+    return;
+  }
+  // Resolve to IP before fetching so literal hostname tricks don't bypass the check
+  const { address } = await dns.promises.lookup(hostname).catch(async () =>
+    dns.promises.lookup(hostname, { family: 6 }),
+  );
+  if (isBlockedIp(address)) throw new Error("Private IP not allowed");
+}
+
+// SSRF-safe fetch: validates the initial URL and every redirect target against
+// assertPublicUrl before following it, so a public host cannot 3xx-redirect the
+// request to localhost / cloud-metadata / other internal services.
+async function ssrfSafeFetch(
+  startUrl: string,
+  init: RequestInit,
+  maxHops = 5,
+): Promise<globalThis.Response> {
+  let current = startUrl;
+  for (let hop = 0; hop <= maxHops; hop++) {
+    await assertPublicUrl(current);
+    const resp = await fetch(current, { ...init, redirect: "manual" });
+    if (resp.status >= 300 && resp.status < 400) {
+      const location = resp.headers.get("location");
+      if (!location) return resp;
+      current = new URL(location, current).toString();
+      continue;
+    }
+    return resp;
+  }
+  throw new Error("Too many redirects");
+}
 
 // GET /miniapp-proxy -- proxy mini app content through the backend.
 // For HTML: rewrites <script src> and <link href> (stylesheet/modulepreload) so all
@@ -61,14 +126,19 @@ router.get("/miniapp-proxy", async (req, res) => {
     return;
   }
   try {
-    const upstream = await fetch(url, {
+    await assertPublicUrl(url);
+  } catch {
+    res.status(400).json({ error: "URL not allowed" });
+    return;
+  }
+  try {
+    const upstream = await ssrfSafeFetch(url, {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Linux; Android 11; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Mobile Safari/537.36 Telegram/10.0",
         Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9",
       },
-      redirect: "follow",
     });
 
     const contentType = upstream.headers.get("content-type") ?? "text/html";
@@ -182,6 +252,24 @@ router.get("/:accountId/folders", async (req, res) => {
   }
 });
 
+// POST /:accountId/folders/:folderId/chats -- add a chat to a folder
+router.post("/:accountId/folders/:folderId/chats", async (req, res) => {
+  const accountId = Number(req.params.accountId);
+  const folderId = Number(req.params.folderId);
+  const { chatId } = req.body as { chatId?: string };
+  if (!chatId) {
+    res.status(400).json({ error: "chatId is required" });
+    return;
+  }
+  try {
+    const entry = await getLiveClient(accountId);
+    await addChatToFolder(entry, folderId, chatId);
+    res.json({ ok: true });
+  } catch (err: any) {
+    tgError(err, accountId, res);
+  }
+});
+
 // GET /:accountId/dialogs?limit=
 router.get("/:accountId/dialogs", async (req, res) => {
   const accountId = Number(req.params.accountId);
@@ -213,11 +301,20 @@ router.get("/:accountId/messages/:chatId", async (req, res) => {
   try {
     const entry = await getLiveClient(accountId);
 
+    // Apply current readOutboxMaxId so cached blobs always reflect latest read state
+    const applyReadStatus = <T extends { fromMe: boolean; id: number; isRead: boolean }>(
+      msgs: T[],
+    ): T[] => {
+      const readMaxId = getReadOutboxMaxId(accountId, chatId);
+      if (!readMaxId) return msgs;
+      return msgs.map((m) => m.fromMe ? { ...m, isRead: m.id <= readMaxId } : m);
+    };
+
     if (offsetId === 0 && !fresh) {
       // Initial load: serve from cache instantly, sync new messages in the background
       const cached = getCachedMessages(accountId, chatId, limit);
       if (cached.length > 0) {
-        res.json(cached);
+        res.json(applyReadStatus(cached));
         syncMessagesInBackground(accountId, chatId).catch(() => {});
         return;
       }
@@ -225,7 +322,7 @@ router.get("/:accountId/messages/:chatId", async (req, res) => {
       // Pagination: serve from cache if it covers a full page
       const cached = getCachedMessages(accountId, chatId, limit, offsetId);
       if (cached.length >= limit) {
-        res.json(cached);
+        res.json(applyReadStatus(cached));
         return;
       }
     }
@@ -287,10 +384,13 @@ router.post("/:accountId/messages/:chatId", async (req, res) => {
         html: null,
         date: result.date,
         fromMe: true,
+        isRead: false,
         fromId: null,
         fromName: null,
         hasPhoto: false,
         hasDocument: false,
+        hasSticker: false,
+        fileName: null,
         buttons: null,
         reactions: null,
         replyToId: replyToMsgId ? Number(replyToMsgId) : null,
@@ -311,6 +411,69 @@ router.post("/:accountId/messages/:chatId", async (req, res) => {
     tgError(err, accountId, res);
   }
 });
+
+// POST /:accountId/messages/:chatId/file -- send a photo or document.
+// Body is the raw file bytes (application/octet-stream); metadata is passed as
+// query params so we skip base64/multipart overhead.
+router.post(
+  "/:accountId/messages/:chatId/file",
+  raw({ type: () => true, limit: "50mb" }),
+  async (req, res) => {
+    const accountId = Number(req.params.accountId);
+    const chatId = req.params.chatId;
+    const buf = req.body as Buffer;
+    if (!Buffer.isBuffer(buf) || buf.length === 0) {
+      res.status(400).json({ error: "file is required" });
+      return;
+    }
+    const filename = String(req.query.filename || "file");
+    const caption = req.query.caption ? String(req.query.caption) : undefined;
+    const forceDocument = req.query.asDocument === "1";
+    const replyToMsgId = req.query.replyToMsgId
+      ? Number(req.query.replyToMsgId)
+      : undefined;
+    try {
+      const entry = await getLiveClient(accountId);
+      const result = await sendFile(entry, chatId, {
+        buffer: buf,
+        filename,
+        caption,
+        forceDocument,
+        replyToMsgId,
+      });
+      cacheMessages(accountId, chatId, [
+        {
+          id: result.id,
+          text: caption ?? "",
+          html: null,
+          date: result.date,
+          fromMe: true,
+          isRead: false,
+          fromId: null,
+          fromName: null,
+          hasPhoto: result.hasPhoto,
+          hasDocument: result.hasDocument,
+          hasSticker: false,
+          fileName: result.hasDocument ? filename : null,
+          buttons: null,
+          reactions: null,
+          replyToId: replyToMsgId ?? null,
+          replyToText: null,
+          replyToName: null,
+          replyCount: null,
+        },
+      ]);
+      res.json(result);
+      for (const delay of [1500, 4000, 9000]) {
+        setTimeout(() => {
+          syncMessagesInBackground(accountId, chatId).catch(() => {});
+        }, delay);
+      }
+    } catch (err: any) {
+      tgError(err, accountId, res);
+    }
+  },
+);
 
 // GET /:accountId/contacts
 router.get("/:accountId/contacts", async (req, res) => {
@@ -341,6 +504,31 @@ router.post("/:accountId/contacts", async (req, res) => {
     const contact = await addContact(entry, phone, firstName, lastName ?? "");
     if (!contact) {
       res.status(404).json({ error: "Phone number not found on Telegram" });
+      return;
+    }
+    res.json(contact);
+  } catch (err: any) {
+    tgError(err, accountId, res);
+  }
+});
+
+// PUT /:accountId/contacts/:userId -- update first/last name of an existing contact
+router.put("/:accountId/contacts/:userId", async (req, res) => {
+  const accountId = Number(req.params.accountId);
+  const userId = decodeURIComponent(req.params.userId);
+  const { firstName, lastName } = req.body as {
+    firstName?: string;
+    lastName?: string;
+  };
+  if (!firstName) {
+    res.status(400).json({ error: "firstName is required" });
+    return;
+  }
+  try {
+    const entry = await getLiveClient(accountId);
+    const contact = await editContact(entry, userId, firstName, lastName ?? "");
+    if (!contact) {
+      res.status(404).json({ error: "User not found or not a contact" });
       return;
     }
     res.json(contact);
@@ -507,14 +695,14 @@ router.get("/:accountId/messages/:chatId/:msgId/photo", async (req, res) => {
   const msgId = Number(req.params.msgId);
   try {
     const entry = await getLiveClient(accountId);
-    const buf = await fetchPhoto(entry, chatId, msgId);
-    if (!buf) {
+    const result = await fetchPhoto(entry, chatId, msgId);
+    if (!result) {
       res.status(404).json({ error: "Photo not found" });
       return;
     }
-    res.set("Content-Type", "image/jpeg");
+    res.set("Content-Type", result.mimeType);
     res.set("Cache-Control", "private, max-age=3600");
-    res.send(buf);
+    res.send(result.buf);
   } catch (err: any) {
     tgError(err, accountId, res);
   }
@@ -646,6 +834,18 @@ router.post("/:accountId/join/:chatId", async (req, res) => {
     const entry = await getLiveClient(accountId);
     const result = await joinChannel(entry, chatId);
     res.json({ ok: true, ...result });
+  } catch (err: any) {
+    tgError(err, accountId, res);
+  }
+});
+
+router.post("/:accountId/leave/:chatId", async (req, res) => {
+  const accountId = Number(req.params.accountId);
+  const chatId = decodeURIComponent(req.params.chatId);
+  try {
+    const entry = await getLiveClient(accountId);
+    await leaveChat(entry, chatId);
+    res.json({ ok: true });
   } catch (err: any) {
     tgError(err, accountId, res);
   }

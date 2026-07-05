@@ -5,7 +5,7 @@
 const {
   MockUser, MockChat, MockChannel,
   MockPeerUser, MockPeerChannel, MockPeerChat,
-  MockMessageMediaPhoto, MockMessageMediaDocument, MockReplyInlineMarkup,
+  MockMessage, MockMessageMediaPhoto, MockMessageMediaDocument, MockReplyInlineMarkup,
   MockTelegramClient, mockClientInstance,
   mockAddEventHandler, mockGetDialogs, mockGetMessages, mockSendMessage, mockInvoke,
 } = vi.hoisted(() => {
@@ -15,6 +15,7 @@ const {
   class MockPeerUser { constructor(d: Record<string, any>) { Object.assign(this, d); } }
   class MockPeerChannel { constructor(d: Record<string, any>) { Object.assign(this, d); } }
   class MockPeerChat { constructor(d: Record<string, any>) { Object.assign(this, d); } }
+  class MockMessage { constructor(d: Record<string, any>) { Object.assign(this, d); } }
   class MockMessageMediaPhoto {}
   class MockMessageMediaDocument {}
   class MockReplyInlineMarkup {
@@ -44,7 +45,7 @@ const {
   return {
     MockUser, MockChat, MockChannel,
     MockPeerUser, MockPeerChannel, MockPeerChat,
-    MockMessageMediaPhoto, MockMessageMediaDocument, MockReplyInlineMarkup,
+    MockMessage, MockMessageMediaPhoto, MockMessageMediaDocument, MockReplyInlineMarkup,
     MockTelegramClient, mockClientInstance,
     mockAddEventHandler, mockGetDialogs, mockGetMessages, mockSendMessage, mockInvoke,
   };
@@ -59,6 +60,7 @@ vi.mock('telegram', () => ({
     PeerUser:            MockPeerUser,
     PeerChannel:         MockPeerChannel,
     PeerChat:            MockPeerChat,
+    Message:             MockMessage,
     MessageMediaPhoto:   MockMessageMediaPhoto,
     MessageMediaDocument: MockMessageMediaDocument,
     ReplyInlineMarkup:   MockReplyInlineMarkup,
@@ -68,6 +70,9 @@ vi.mock('telegram', () => ({
       Search:         vi.fn().mockImplementation((d: any) => d),
     },
     InputPhoneContact: vi.fn().mockImplementation((d: any) => d),
+    updates: {
+      GetState: vi.fn().mockImplementation((d: any) => d),
+    },
   },
   Logger: vi.fn().mockReturnValue({}),
 }));
@@ -82,10 +87,14 @@ vi.mock('telegram/sessions', () => ({
 
 vi.mock('telegram/events', () => ({
   NewMessage: vi.fn().mockReturnValue({}),
+  Raw:        vi.fn().mockReturnValue({}),
 }));
 
 vi.mock('../db/database', () => ({
-  db: { prepare: vi.fn() },
+  db: {
+    prepare:     vi.fn(),
+    transaction: vi.fn().mockImplementation((fn: () => void) => fn),
+  },
 }));
 
 vi.mock('../jobs/runner', () => ({
@@ -119,15 +128,21 @@ const DEFAULT_ACCOUNT = {
 function setupDb(row: Record<string, any> | null = DEFAULT_ACCOUNT) {
   vi.mocked(db.prepare).mockImplementation((sql: string) => ({
     get: vi.fn().mockReturnValue(sql.includes('tg_accounts') ? row : null),
+    run: vi.fn().mockReturnValue(undefined),
+    all: vi.fn().mockReturnValue([]),
   } as any));
 }
 
 // Helper to build a LiveEntry without going through getLiveClient
 function makeEntry(cacheEntries: [string, any][] = []) {
   return {
-    client:      mockClientInstance as any,
-    entityCache: new Map<string, any>(cacheEntries),
-    subscribers: new Set<any>(),
+    client:            mockClientInstance as any,
+    entityCache:       new Map<string, any>(cacheEntries),
+    subscribers:       new Set<any>(),
+    dialogSubscribers: new Set<any>(),
+    avatarCache:       new Map<string, any>(),
+    readOutboxCache:   new Map<string, number>(),
+    readSubscribers:   new Set<any>(),
   };
 }
 
@@ -281,7 +296,7 @@ describe('getMessages', () => {
     const entry = makeEntry([['u10', user]]);
 
     mockGetMessages.mockResolvedValueOnce([
-      { id: 1, message: 'Hello', date: 1700000000, out: false, fromId: null, media: null, replyMarkup: null },
+      new MockMessage({ id: 1, message: 'Hello', date: 1700000000, out: false, fromId: null, media: null, replyMarkup: null }),
     ]);
 
     const result = await getMessages(entry as any, 'u10', 20, 0);
@@ -295,7 +310,7 @@ describe('getMessages', () => {
     const entry = makeEntry([['u11', user]]);
 
     mockGetMessages.mockResolvedValueOnce([
-      { id: 2, message: 'Sent', date: 1700000001, out: true, fromId: null, media: null, replyMarkup: null },
+      new MockMessage({ id: 2, message: 'Sent', date: 1700000001, out: true, fromId: null, media: null, replyMarkup: null }),
     ]);
 
     const [msg] = await getMessages(entry as any, 'u11', 20, 0);
@@ -307,7 +322,7 @@ describe('getMessages', () => {
     const entry = makeEntry([['u12', user]]);
 
     mockGetMessages.mockResolvedValueOnce([
-      { id: 3, message: '', date: 1700000002, out: false, fromId: null, media: new MockMessageMediaPhoto(), replyMarkup: null },
+      new MockMessage({ id: 3, message: '', date: 1700000002, out: false, fromId: null, media: new MockMessageMediaPhoto(), replyMarkup: null }),
     ]);
 
     const [msg] = await getMessages(entry as any, 'u12', 20, 0);
@@ -323,7 +338,7 @@ describe('getMessages', () => {
       { entity: user, name: 'Test', dialog: { unreadCount: 0 }, message: undefined },
     ]);
     mockGetMessages.mockResolvedValueOnce([
-      { id: 4, message: 'Hi', date: 1700000003, out: false, fromId: null, media: null, replyMarkup: null },
+      new MockMessage({ id: 4, message: 'Hi', date: 1700000003, out: false, fromId: null, media: null, replyMarkup: null }),
     ]);
 
     await getMessages(entry as any, 'u13', 20, 0);
@@ -343,7 +358,7 @@ describe('sendMessage', () => {
 
     const result = await sendMessage(entry as any, 'u20', 'Hey there');
 
-    expect(mockSendMessage).toHaveBeenCalledWith(user, { message: 'Hey there' });
+    expect(mockSendMessage).toHaveBeenCalledWith(user, { message: 'Hey there', parseMode: false });
     expect(result).toEqual({ id: 99, date: 1700000010 });
   });
 

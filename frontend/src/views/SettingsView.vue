@@ -461,8 +461,11 @@
           <div class="card-section-title">
             {{ t("settings.appClientsSection") }}
           </div>
-          <p style="font-size: 12px; color: #888; margin: 0 0 12px">
+          <p style="font-size: 12px; color: #888; margin: 0 0 6px">
             {{ t("settings.appClientsHint") }}
+          </p>
+          <p style="font-size: 12px; color: #888; margin: 0 0 12px">
+            {{ t("settings.appClientDeviceVars") }}
           </p>
 
           <div v-if="appClientsMsg" class="success-msg">
@@ -667,6 +670,112 @@
         </div>
       </div>
 
+      <!-- General settings -->
+      <div class="card s-col-6">
+        <div class="card-body">
+          <div class="card-section-title">
+            {{ t("settings.generalSection") }}
+          </div>
+
+          <!-- Telegram API credentials -->
+          <div class="settings-subsection">
+            {{ t("settings.defaultTgApiSection") }}
+          </div>
+          <p style="font-size: 12px; color: #888; margin: 0 0 14px">
+            {{ t("settings.defaultTgApiHint") }}
+          </p>
+
+          <div v-if="defaultTgApiMsg" class="success-msg">
+            {{ defaultTgApiMsg }}
+          </div>
+          <div v-if="defaultTgApiError" class="error-msg">
+            {{ defaultTgApiError }}
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">{{
+                t("settings.labelDefaultTgApiId")
+              }}</label>
+              <input
+                v-model.number="defaultTgApiId"
+                class="form-input"
+                type="number"
+                min="1"
+                placeholder="e.g. 1234567"
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label">{{
+                t("settings.labelDefaultTgApiHash")
+              }}</label>
+              <input
+                v-model.trim="defaultTgApiHashInput"
+                class="form-input"
+                :placeholder="
+                  defaultTgApiHashMasked
+                    ? t('settings.defaultTgApiHashPlaceholder')
+                    : t('settings.defaultTgApiHashNew')
+                "
+                style="font-family: monospace"
+              />
+              <p
+                v-if="defaultTgApiHashMasked"
+                style="font-size: 11px; color: #888; margin: 4px 0 0"
+              >
+                {{ t("settings.defaultTgApiHashSet") }}
+                <code style="font-size: 11px">{{
+                  defaultTgApiHashMasked
+                }}</code>
+              </p>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 8px; flex-wrap: wrap">
+            <button
+              class="btn btn-primary"
+              :disabled="defaultTgApiSaving"
+              @click="saveDefaultTgApi"
+            >
+              <i class="fa-solid fa-floppy-disk"></i>
+              {{
+                defaultTgApiSaving ? t("common.saving") : t("settings.saveBtn")
+              }}
+            </button>
+            <button
+              v-if="defaultTgApiId || defaultTgApiHashMasked"
+              class="btn btn-ghost"
+              :disabled="defaultTgApiClearing"
+              @click="clearDefaultTgApi"
+            >
+              {{
+                defaultTgApiClearing
+                  ? t("settings.defaultTgApiClearing")
+                  : t("settings.defaultTgApiClear")
+              }}
+            </button>
+          </div>
+
+          <!-- TG account display -->
+          <div class="settings-subsection" style="margin-top: 28px">
+            {{ t("settings.accountDisplaySection") }}
+          </div>
+          <div class="form-group">
+            <label class="form-check">
+              <input
+                type="checkbox"
+                v-model="accountDisplayWithTgName"
+                @change="saveAccountDisplay"
+              />
+              <span>{{ t("settings.accountDisplayToggle") }}</span>
+            </label>
+            <p style="font-size: 12px; color: #888; margin: 4px 0 0 24px">
+              {{ t("settings.accountDisplayHint") }}
+            </p>
+          </div>
+        </div>
+      </div>
+
       <!-- Import / Export -->
       <div class="card s-col-6">
         <div class="card-body">
@@ -680,6 +789,36 @@
           <div class="form-group">
             <p style="font-size: 12px; color: #888; margin: 0 0 8px">
               {{ t("settings.importExport.exportHint") }}
+            </p>
+            <label class="form-label">{{
+              t("settings.importExport.exportSecretLabel")
+            }}</label>
+            <div class="input-with-toggle">
+              <input
+                v-model="exportSecret"
+                :type="showExportSecret ? 'text' : 'password'"
+                class="form-input"
+                :placeholder="
+                  t('settings.importExport.exportSecretPlaceholder')
+                "
+                autocomplete="new-password"
+              />
+              <button
+                type="button"
+                class="toggle-secret-btn"
+                @click="showExportSecret = !showExportSecret"
+              >
+                <i
+                  :class="
+                    showExportSecret
+                      ? 'fa-solid fa-eye-slash'
+                      : 'fa-solid fa-eye'
+                  "
+                ></i>
+              </button>
+            </div>
+            <p style="font-size: 11px; color: #888; margin: 4px 0 8px">
+              {{ t("settings.importExport.exportSecretHint") }}
             </p>
             <button class="btn btn-secondary" @click="doExport">
               <i class="fa-solid fa-file-export"></i>
@@ -700,6 +839,53 @@
               class="form-input"
               @change="onFileChange"
             />
+          </div>
+
+          <div v-if="importFileEncrypted" class="form-group">
+            <label class="form-label">{{
+              t("settings.importExport.importSecretLabel")
+            }}</label>
+            <div class="input-with-toggle">
+              <input
+                v-model="importSecret"
+                :type="showImportSecret ? 'text' : 'password'"
+                class="form-input"
+                :placeholder="
+                  t('settings.importExport.importSecretPlaceholder')
+                "
+                autocomplete="current-password"
+              />
+              <button
+                type="button"
+                class="toggle-secret-btn"
+                @click="showImportSecret = !showImportSecret"
+              >
+                <i
+                  :class="
+                    showImportSecret
+                      ? 'fa-solid fa-eye-slash'
+                      : 'fa-solid fa-eye'
+                  "
+                ></i>
+              </button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-check">
+              <input type="checkbox" v-model="importForceReauth" />
+              <span>{{ t("settings.importExport.forceReauthLabel") }}</span>
+            </label>
+            <p style="font-size: 12px; color: #888; margin: 4px 0 0 24px">
+              {{ t("settings.importExport.forceReauthHint") }}
+            </p>
+            <div
+              v-if="!importForceReauth"
+              class="supplier-no-key-warning"
+              style="margin-top: 8px"
+            >
+              {{ t("settings.importExport.forceReauthRisk") }}
+            </div>
           </div>
 
           <div class="form-group">
@@ -732,6 +918,27 @@
             </div>
           </div>
 
+          <div v-if="importMode === 'replace'" class="form-group">
+            <label class="form-label">{{
+              t("settings.importExport.confirmPasswordLabel")
+            }}</label>
+            <div class="input-with-toggle">
+              <input
+                :type="showImportConfirmPassword ? 'text' : 'password'"
+                class="form-control"
+                v-model="importConfirmPassword"
+                :placeholder="t('settings.importExport.confirmPasswordPlaceholder')"
+              />
+              <button
+                type="button"
+                class="toggle-secret-btn"
+                @click="showImportConfirmPassword = !showImportConfirmPassword"
+              >
+                <i :class="showImportConfirmPassword ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye'"></i>
+              </button>
+            </div>
+          </div>
+
           <button
             class="btn btn-primary"
             :disabled="importing"
@@ -747,13 +954,24 @@
         </div>
       </div>
 
-      <!-- AI button detection -->
+      <!-- AI settings -->
       <div class="card s-col-12">
         <div class="card-body">
           <div class="card-section-title">{{ t("settings.aiSection") }}</div>
           <p style="font-size: 12px; color: #888; margin: 0 0 16px">
             {{ t("settings.aiHint") }}
           </p>
+
+          <!-- Fallback toggle -->
+          <div class="form-group">
+            <label class="form-check">
+              <input v-model="form.ai_fallback_enabled" type="checkbox" @change="saveFallbackEnabled" />
+              <span>{{ t("settings.aiFallbackLabel") }}</span>
+            </label>
+            <p style="font-size: 12px; color: #888; margin: 4px 0 0 24px">
+              {{ t("settings.aiFallbackHint") }}
+            </p>
+          </div>
 
           <!-- Providers list -->
           <div
@@ -1040,12 +1258,14 @@ import { ref, reactive, computed, onMounted } from "vue";
 import { settingsApi, authApi, dataApi, aiSuppliersApi } from "../api/client";
 import type {
   ExportPayload,
+  EncryptedEnvelope,
   UAPreset,
   AiSupplier,
   Proxy,
   TgAppClient,
 } from "../api/client";
 import { t } from "../i18n";
+import { setAccountDisplayWithTgName } from "../composables/accountDisplay";
 
 const timezones = [
   "Australia/Sydney",
@@ -1074,6 +1294,7 @@ const form = reactive({
   default_play_duration: 300,
   default_device_name: "Mac",
   ai_model: "",
+  ai_fallback_enabled: true,
 });
 const saving = ref(false);
 const saveMsg = ref("");
@@ -1300,6 +1521,64 @@ async function saveAppClients() {
   }
 }
 
+// ── Default TG API Credentials ─────────────────────────────────────────────────
+
+const defaultTgApiId = ref<number | "">(0);
+const defaultTgApiHashInput = ref("");
+const defaultTgApiHashMasked = ref("");
+const defaultTgApiSaving = ref(false);
+const defaultTgApiClearing = ref(false);
+const defaultTgApiMsg = ref("");
+const defaultTgApiError = ref("");
+
+// ── TG account display ─────────────────────────────────────────────────────────
+const accountDisplayWithTgName = ref(false);
+
+async function saveDefaultTgApi() {
+  defaultTgApiMsg.value = "";
+  defaultTgApiError.value = "";
+  defaultTgApiSaving.value = true;
+  try {
+    const payload: Record<string, string> = {
+      default_tg_api_id: String(defaultTgApiId.value || ""),
+    };
+    // Only include hash if user typed a new one
+    if (defaultTgApiHashInput.value) {
+      payload.default_tg_api_hash = defaultTgApiHashInput.value;
+    }
+    const updated = await settingsApi.update(payload);
+    defaultTgApiHashMasked.value = updated.default_tg_api_hash ?? "";
+    defaultTgApiHashInput.value = "";
+    defaultTgApiMsg.value = t("settings.defaultTgApiSaved");
+  } catch (err: any) {
+    defaultTgApiError.value =
+      err.response?.data?.error ?? t("settings.saveFailed");
+  } finally {
+    defaultTgApiSaving.value = false;
+  }
+}
+
+async function clearDefaultTgApi() {
+  defaultTgApiMsg.value = "";
+  defaultTgApiError.value = "";
+  defaultTgApiClearing.value = true;
+  try {
+    await settingsApi.update({
+      default_tg_api_id: "",
+      default_tg_api_hash: "",
+    });
+    defaultTgApiId.value = 0;
+    defaultTgApiHashInput.value = "";
+    defaultTgApiHashMasked.value = "";
+    defaultTgApiMsg.value = t("settings.defaultTgApiCleared");
+  } catch (err: any) {
+    defaultTgApiError.value =
+      err.response?.data?.error ?? t("settings.saveFailed");
+  } finally {
+    defaultTgApiClearing.value = false;
+  }
+}
+
 const notifyEventOptions = computed(() => [
   { value: "failed", label: t("settings.notifyEventFailed") },
   { value: "success", label: t("settings.notifyEventSuccess") },
@@ -1339,9 +1618,13 @@ onMounted(async () => {
       appClients.value = [];
     }
     tgClientMode.value = s.tg_client_mode === "random" ? "random" : "default";
+    defaultTgApiId.value = Number(s.default_tg_api_id) || 0;
+    defaultTgApiHashMasked.value = s.default_tg_api_hash ?? "";
+    accountDisplayWithTgName.value = s.account_display_with_tg_name === "true";
     form.default_play_duration = Number(s.default_play_duration ?? 300);
     form.default_device_name = s.default_device_name ?? "Mac";
     form.ai_model = s.ai_model ?? "";
+    form.ai_fallback_enabled = s.ai_fallback_enabled !== "false";
     notifyForm.username = s.notify_tg_username ?? "";
     try {
       if (s.notify_tg_events)
@@ -1521,12 +1804,34 @@ async function saveAi() {
   aiError.value = "";
   aiSaving.value = true;
   try {
-    await settingsApi.update({ ai_model: form.ai_model });
+    await settingsApi.update({ ai_model: form.ai_model, ai_fallback_enabled: String(form.ai_fallback_enabled) });
     aiMsg.value = t("settings.saved");
   } catch (err: any) {
     aiError.value = err.response?.data?.error ?? t("settings.saveFailed");
   } finally {
     aiSaving.value = false;
+  }
+}
+
+async function saveFallbackEnabled() {
+  try {
+    await settingsApi.update({ ai_fallback_enabled: String(form.ai_fallback_enabled) });
+  } catch {
+    // revert on failure
+    form.ai_fallback_enabled = !form.ai_fallback_enabled;
+  }
+}
+
+async function saveAccountDisplay() {
+  try {
+    await settingsApi.update({
+      account_display_with_tg_name: String(accountDisplayWithTgName.value),
+    });
+    // Reflect the change immediately across all views
+    setAccountDisplayWithTgName(accountDisplayWithTgName.value);
+  } catch {
+    // revert on failure
+    accountDisplayWithTgName.value = !accountDisplayWithTgName.value;
   }
 }
 
@@ -1629,19 +1934,40 @@ async function saveNotify() {
 const fileInput = ref<HTMLInputElement | null>(null);
 const importFile = ref<File | null>(null);
 const importMode = ref<"merge" | "replace">("merge");
+const importForceReauth = ref(true);
 const importing = ref(false);
 const importMsg = ref("");
 const importError = ref("");
+const exportSecret = ref("");
+const showExportSecret = ref(false);
+const importSecret = ref("");
+const showImportSecret = ref(false);
+const importConfirmPassword = ref("");
+const showImportConfirmPassword = ref(false);
+// Set when a loaded file is detected as encrypted
+const importFileEncrypted = ref(false);
 
 function onFileChange(e: Event) {
-  importFile.value = (e.target as HTMLInputElement).files?.[0] ?? null;
+  const file = (e.target as HTMLInputElement).files?.[0] ?? null;
+  importFile.value = file;
+  importFileEncrypted.value = false;
+  importSecret.value = "";
+  if (!file) return;
+  // Peek at the file to detect encryption without a server round-trip
+  file.text().then((text) => {
+    try {
+      const parsed = JSON.parse(text);
+      importFileEncrypted.value = parsed?.encrypted === true;
+    } catch {
+      // Invalid JSON -- will be caught on actual import
+    }
+  });
 }
 
 async function doExport() {
-  const ok = confirm(t("settings.importExport.exportWarning"));
-  if (!ok) return;
+  const secret = exportSecret.value.trim() || undefined;
   try {
-    const data = await dataApi.export();
+    const data = await dataApi.export(secret);
     const blob = new Blob([JSON.stringify(data, null, 2)], {
       type: "application/json",
     });
@@ -1653,8 +1979,10 @@ async function doExport() {
     a.click();
     URL.revokeObjectURL(url);
   } catch (err: any) {
-    importError.value =
-      err.response?.data?.error ?? t("settings.importExport.importFailed");
+    const code = err.response?.data?.code;
+    importError.value = code === "SECRET_REQUIRED"
+      ? t("settings.importExport.exportSecretRequired")
+      : (err.response?.data?.error ?? t("settings.importExport.importFailed"));
   }
 }
 
@@ -1665,31 +1993,50 @@ async function doImport() {
     importError.value = t("settings.importExport.noFileSelected");
     return;
   }
-  if (importMode.value === "replace") {
-    const ok = confirm(t("settings.importExport.replaceWarning"));
-    if (!ok) return;
-  }
   importing.value = true;
   try {
     const text = await importFile.value.text();
-    let parsed: ExportPayload;
+    let parsed: ExportPayload | EncryptedEnvelope;
     try {
       parsed = JSON.parse(text);
     } catch {
       importError.value = t("settings.importExport.invalidFile");
       return;
     }
-    const result = await dataApi.import(parsed, importMode.value);
+    const secret = importSecret.value.trim() || undefined;
+    const confirmPassword = importMode.value === "replace"
+      ? importConfirmPassword.value.trim() || undefined
+      : undefined;
+    const result = await dataApi.import(
+      parsed,
+      importMode.value,
+      secret,
+      importForceReauth.value,
+      confirmPassword,
+    );
     importMsg.value = t("settings.importExport.importSuccess")
       .replace("{a}", String(result.accountsImported))
       .replace("{t}", String(result.templatesImported))
       .replace("{j}", String(result.jobsImported))
+      .replace("{sup}", String(result.aiSuppliersImported))
+      .replace("{mod}", String(result.aiModelsImported))
       .replace("{s}", String(result.settingsUpdated));
     if (fileInput.value) fileInput.value.value = "";
     importFile.value = null;
+    importFileEncrypted.value = false;
+    importSecret.value = "";
+    importConfirmPassword.value = "";
   } catch (err: any) {
+    const code = err.response?.data?.code;
     importError.value =
-      err.response?.data?.error ?? t("settings.importExport.importFailed");
+      code === "WRONG_SECRET"
+        ? t("settings.importExport.wrongSecret")
+        : code === "CONFIRM_REQUIRED"
+          ? t("settings.importExport.confirmPasswordRequired")
+          : code === "WRONG_PASSWORD"
+            ? t("settings.importExport.wrongConfirmPassword")
+            : (err.response?.data?.error ??
+              t("settings.importExport.importFailed"));
   } finally {
     importing.value = false;
   }
@@ -1804,6 +2151,42 @@ async function saveCredentials() {
 .import-mode-label {
   font-size: 13px;
   font-weight: 500;
+}
+
+.settings-subsection {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #888;
+  margin-bottom: 10px;
+}
+
+.input-with-toggle {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.input-with-toggle .form-input {
+  padding-right: 36px;
+  flex: 1;
+}
+
+.toggle-secret-btn {
+  position: absolute;
+  right: 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #888;
+  padding: 0;
+  display: flex;
+  align-items: center;
+}
+
+.toggle-secret-btn:hover {
+  color: #444;
 }
 
 .import-mode-hint {

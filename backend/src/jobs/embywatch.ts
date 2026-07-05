@@ -73,6 +73,53 @@ async function embyRequest<T = any>(
   return text ? JSON.parse(text) : (null as T);
 }
 
+// Number of random items to try before giving up when verifying playability.
+const MAX_PICK_ATTEMPTS = 5;
+// Byte range fetched to confirm the media file is actually readable.
+const PROBE_RANGE_BYTES = 65_535;
+
+/**
+ * Confirm the media file is actually streamable, mimicking what a real player
+ * does: fetch the first bytes of the stream. If the disk/mount is down, Emby
+ * can't read the file and returns a non-2xx (or an empty body), so we treat the
+ * item as unavailable and avoid reporting a fake watch.
+ */
+async function isMediaAvailable(
+  baseUrl: string,
+  itemId: string,
+  mediaSourceId: string,
+  opts: { token: string; ua: string; proxyUrl?: string }
+): Promise<boolean> {
+  const params = new URLSearchParams({
+    static: 'true',
+    mediaSourceId,
+    api_key: opts.token,
+  });
+  const url = `${baseUrl.replace(/\/$/, '')}/Videos/${itemId}/stream?${params.toString()}`;
+
+  try {
+    const res = (await undiciFetch(url, {
+      method: 'GET',
+      headers: {
+        'User-Agent': opts.ua,
+        Range: `bytes=0-${PROBE_RANGE_BYTES}`,
+      },
+      dispatcher: opts.proxyUrl ? new ProxyAgent(opts.proxyUrl) : ipv4Agent,
+    } as Parameters<typeof undiciFetch>[1])) as unknown as Response;
+
+    // A readable file yields 206 (partial) or 200 with body bytes.
+    if (res.status !== 200 && res.status !== 206) {
+      await res.body?.cancel?.();
+      return false;
+    }
+    const buf = await res.arrayBuffer();
+    return buf.byteLength > 0;
+  } catch {
+    // Network-level failure reaching the stream — treat as unavailable.
+    return false;
+  }
+}
+
 export async function runEmbywatch(serverUrl: string, config: EmbywatchConfig): Promise<EmbywatchLog> {
   const ua = config.userAgent ?? getSetting('default_ua') ?? DEFAULT_UA;
   const playDuration = config.playDuration ?? Number(getSetting('default_play_duration') ?? 300);
@@ -103,18 +150,42 @@ export async function runEmbywatch(serverUrl: string, config: EmbywatchConfig): 
   const userId: string = auth.User.Id;
   console.log(`[embywatch] Authenticated as "${auth.User.Name}" on ${serverUrl}`);
 
-  // 2. Pick a random video (include RunTimeTicks in fields)
-  const items = await embyRequest<any>(
-    serverUrl,
-    `/Users/${userId}/Items?SortBy=Random&Limit=1&IncludeItemTypes=Episode,Movie&Recursive=true&Fields=MediaSources,RunTimeTicks`,
-    { ua, token, deviceName, proxyUrl }
-  );
+  // 2. Pick a random video, verifying it's actually streamable before use.
+  // When the disk is down the metadata item still exists, so without this
+  // check we'd report a watch for a file no real client could play.
+  const verifyPlayable = config.verifyPlayable !== false;
+  const attempts = verifyPlayable ? MAX_PICK_ATTEMPTS : 1;
 
-  if (!items.Items?.length) throw new Error('No playable items found on Emby server');
+  let item: any;
+  let itemId = '';
+  let mediaSourceId = '';
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    const items = await embyRequest<any>(
+      serverUrl,
+      `/Users/${userId}/Items?SortBy=Random&Limit=1&IncludeItemTypes=Episode,Movie&Recursive=true&Fields=MediaSources,RunTimeTicks`,
+      { ua, token, deviceName, proxyUrl }
+    );
 
-  const item = items.Items[0];
-  const itemId: string = item.Id;
-  const mediaSourceId: string = item.MediaSources?.[0]?.Id ?? itemId;
+    if (!items.Items?.length) throw new Error('No playable items found on Emby server');
+
+    const candidate = items.Items[0];
+    const candidateId: string = candidate.Id;
+    const candidateSourceId: string = candidate.MediaSources?.[0]?.Id ?? candidateId;
+
+    if (!verifyPlayable || (await isMediaAvailable(serverUrl, candidateId, candidateSourceId, { token, ua, proxyUrl }))) {
+      item = candidate;
+      itemId = candidateId;
+      mediaSourceId = candidateSourceId;
+      break;
+    }
+
+    console.warn(`[embywatch] "${candidate.Name}" is not streamable (attempt ${attempt}/${attempts}) — trying another item`);
+  }
+
+  if (!item) {
+    throw new Error('No streamable items found on Emby server — media may be offline (disk down); skipped reporting');
+  }
+
   const playSessionId = `bemby-${Date.now()}`;
 
   // 3. Calculate start position: random 5-10% into the episode

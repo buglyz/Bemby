@@ -98,3 +98,72 @@ describe('embywatch fetch routing', () => {
       .rejects.toThrow('Invalid credentials');
   });
 });
+
+// Routes mock responses by request URL so we can simulate auth + item pick +
+// stream probe independently.
+function routeFetch(streamStatus: number) {
+  const jsonRes = (body: unknown) => ({
+    ok: true,
+    status: 200,
+    statusText: 'OK',
+    text: vi.fn().mockResolvedValue(JSON.stringify(body)),
+  });
+  mockUndiciFetch.mockImplementation((url: string) => {
+    if (url.includes('/Users/AuthenticateByName')) {
+      return Promise.resolve(jsonRes({ AccessToken: 'tok', User: { Id: 'u1', Name: 'Tester' } }));
+    }
+    if (url.includes('/Videos/') && url.includes('/stream')) {
+      return Promise.resolve({
+        status: streamStatus,
+        body: { cancel: vi.fn() },
+        arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(streamStatus === 206 ? 1024 : 0)),
+      });
+    }
+    if (url.includes('/Items')) {
+      return Promise.resolve(jsonRes({
+        Items: [{ Id: 'i1', Name: 'Ep', Type: 'Episode', RunTimeTicks: 6000_000_000, MediaSources: [{ Id: 's1' }] }],
+      }));
+    }
+    // Playing / Progress / Stopped / PlayedItems
+    return Promise.resolve({ ok: true, status: 204, statusText: 'No Content', text: vi.fn().mockResolvedValue('') });
+  });
+}
+
+describe('embywatch playability verification', () => {
+  it('skips reporting when the media is offline (stream probe fails)', async () => {
+    routeFetch(404);
+
+    await expect(runEmbywatch('https://emby.example.com', baseConfig))
+      .rejects.toThrow('No streamable items found');
+
+    // No playback should have been reported.
+    const reported = mockUndiciFetch.mock.calls.some(
+      c => typeof c[0] === 'string' && c[0].includes('/Sessions/Playing'),
+    );
+    expect(reported).toBe(false);
+  });
+
+  it('reports playback when the stream probe succeeds', async () => {
+    routeFetch(206);
+
+    const result = await runEmbywatch('https://emby.example.com', baseConfig);
+    expect(result.title).toBe('Ep');
+
+    const reported = mockUndiciFetch.mock.calls.some(
+      c => typeof c[0] === 'string' && c[0].endsWith('/Sessions/Playing'),
+    );
+    expect(reported).toBe(true);
+  });
+
+  it('does not probe the stream when verifyPlayable is false', async () => {
+    routeFetch(404);
+
+    const result = await runEmbywatch('https://emby.example.com', { ...baseConfig, verifyPlayable: false });
+    expect(result.title).toBe('Ep');
+
+    const probed = mockUndiciFetch.mock.calls.some(
+      c => typeof c[0] === 'string' && c[0].includes('/stream'),
+    );
+    expect(probed).toBe(false);
+  });
+});

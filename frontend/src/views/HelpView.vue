@@ -134,9 +134,15 @@
                   </td>
                 </tr>
                 <tr>
+                  <td>个人资料</td>
+                  <td>
+                    在账户编辑面板的<strong>个人资料</strong>选项卡中直接修改该 Telegram 账户的名字、姓氏和简介。
+                  </td>
+                </tr>
+                <tr>
                   <td>通行密钥（Passkeys）</td>
                   <td>
-                    Telegram 通行密钥（WebAuthn）的管理需在官方 Telegram 客户端中进行，Bemby 暂不支持。
+                    在<strong>高级</strong>选项卡中查看已注册的通行密钥（WebAuthn，含名称、添加与最近使用时间）并可移除。新增通行密钥仍需在官方 Telegram 客户端中进行。
                   </td>
                 </tr>
               </tbody>
@@ -250,10 +256,20 @@
                   </td>
                 </tr>
                 <tr>
+                  <td>Profile</td>
+                  <td>
+                    Edit the Telegram account's first name, last name, and bio
+                    directly from the <strong>Profile</strong> tab in the account
+                    edit panel.
+                  </td>
+                </tr>
+                <tr>
                   <td>Passkeys</td>
                   <td>
-                    Telegram WebAuthn passkey management requires the official
-                    Telegram client and is not available in Bemby.
+                    List registered WebAuthn passkeys (name, added and last-used
+                    times) from the <strong>Advanced</strong> tab and remove
+                    them. Creating new passkeys still requires the official
+                    Telegram client.
                   </td>
                 </tr>
               </tbody>
@@ -413,6 +429,17 @@
               工具栏中的地球图标可打开"输入网址"对话框，支持粘贴任意 URL 或 t.me 链接，
               直接在消息客户端或浏览器中打开，无需离开应用。
             </p>
+
+            <div
+              class="card-section-title"
+              style="margin-top: 16px; font-size: 11px"
+            >
+              发送图片与文件
+            </div>
+            <p class="help-para">
+              点击输入框旁的附件图标可选择图片或任意文件并发送，发送前会在输入框上方显示待发送附件预览。
+              图片可选择"以文件方式发送"以保留原始质量。
+            </p>
           </template>
           <template v-else>
             <div class="card-section-title">Messenger</div>
@@ -555,6 +582,19 @@
               any URL or t.me link and open it in the messenger or browser
               without leaving the app.
             </p>
+
+            <div
+              class="card-section-title"
+              style="margin-top: 16px; font-size: 11px"
+            >
+              Send files and images
+            </div>
+            <p class="help-para">
+              Click the attachment icon next to the compose box to pick an image
+              or any file and send it; a preview of the pending attachment
+              appears above the compose box before sending. Images offer a "send
+              as file" option to preserve the original quality.
+            </p>
           </template>
         </div>
       </div>
@@ -687,6 +727,12 @@
                     用于发送成功/失败通知的 Telegram 账号。留空则不发送通知。
                   </td>
                 </tr>
+                <tr>
+                  <td>上报前校验可播放</td>
+                  <td>
+                    上报播放前先确认媒体文件可读取（磁盘在线），避免在文件离线时上报虚假观看。
+                  </td>
+                </tr>
               </tbody>
             </table>
             <p class="help-note">
@@ -738,6 +784,18 @@
                     识别图中验证码，再将识别结果自动发送给机器人。可指定验证码字符数量以提高识别准确率——若
                     AI
                     返回的字符数与预期不符，则视为失败并触发重试。支持独立的<strong>最大重试次数</strong>。
+                  </td>
+                </tr>
+                <tr>
+                  <td>加入群组 / 订阅频道</td>
+                  <td>
+                    加入群组或订阅频道，支持公开用户名（<code>@name</code>）或私有邀请链接。订阅频道可先校验当前订阅状态（已订阅则直接成功），发送请求后再次验证；加入群组可选配"入群后点击验证按钮"以完成部分群组的入群验证。
+                  </td>
+                </tr>
+                <tr>
+                  <td>向联系人发送 / 点击按钮</td>
+                  <td>
+                    对流程中指定的机器人、群组或用户发送消息/命令，或点击其最近收到消息上的按钮（可等待新消息）。
                   </td>
                 </tr>
                 <tr>
@@ -801,10 +859,10 @@
               class="card-section-title"
               style="margin-top: 16px; font-size: 11px"
             >
-              任务筛选
+              任务筛选与搜索
             </div>
             <p class="help-para">
-              当系统存在多个账号或多个机器人/网址时，任务列表顶部会显示对应的筛选下拉框，可按账号或机器人/网址过滤任务。
+              当系统存在多个账号或多个机器人/网址时，任务列表顶部会显示对应的筛选下拉框，可按账号或机器人/网址过滤任务。列表顶部同时提供名称搜索框，可按任务名称快速筛选。
             </p>
 
             <div
@@ -827,6 +885,26 @@
             <p class="help-para">
               勾选多个任务后，批量操作栏出现<strong>运行 (N)</strong> 按钮。
               点击后可设置任务间延迟时间（默认 70 秒），确认后任务按顺序依次执行。
+            </p>
+
+            <div
+              class="card-section-title"
+              style="margin-top: 16px; font-size: 11px"
+            >
+              批量修改时间窗口
+            </div>
+            <p class="help-para">
+              勾选多个任务后点击<strong>修改时间窗口 (N)</strong>，可一键将所选任务的时间窗口批量设置为相同的开始/结束时间。
+            </p>
+
+            <div
+              class="card-section-title"
+              style="margin-top: 16px; font-size: 11px"
+            >
+              归档任务
+            </div>
+            <p class="help-para">
+              删除任务时改为<strong>归档</strong>，任务从列表中移除但其历史日志得以保留。支持单个及批量归档。
             </p>
 
             <div
@@ -977,6 +1055,14 @@
                     Leave blank to disable notifications for this job.
                   </td>
                 </tr>
+                <tr>
+                  <td>Verify playable before reporting</td>
+                  <td>
+                    Confirms the media file is readable (disk online) before
+                    reporting playback, avoiding a fake watch when the file is
+                    offline.
+                  </td>
+                </tr>
               </tbody>
             </table>
             <p class="help-note">
@@ -1041,6 +1127,25 @@
                     improves accuracy -- if the AI response does not match the
                     expected length the action fails and retries. Has its own
                     <strong>Max retries</strong> setting.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Join group / Subscribe channel</td>
+                  <td>
+                    Join a group or subscribe to a channel via a public username
+                    (<code>@name</code>) or private invite link. Channel
+                    subscribe can pre-check the current subscription status
+                    (succeeds immediately if already subscribed) and re-verify
+                    after sending; join group optionally clicks a verification
+                    button after joining to clear some groups' entry checks.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Send / click button for contact</td>
+                  <td>
+                    Send a message/command to, or click a button on the latest
+                    received message from, a specific bot, group, or user named
+                    in the flow (can wait for a new message).
                   </td>
                 </tr>
                 <tr>
@@ -1115,12 +1220,13 @@
               class="card-section-title"
               style="margin-top: 16px; font-size: 11px"
             >
-              Job Filters
+              Job Filters and Search
             </div>
             <p class="help-para">
               When more than one account or bot/URL exists, filter dropdowns
               appear at the top of the jobs list, letting you show only jobs for
-              a specific account or bot target.
+              a specific account or bot target. A name search box at the top of
+              the list narrows jobs by name.
             </p>
 
             <div
@@ -1147,6 +1253,30 @@
               <strong>Run (N)</strong> in the bulk action bar. Set a delay
               between jobs (default 70 s) and confirm -- jobs run sequentially,
               each waiting for the previous one to finish before starting.
+            </p>
+
+            <div
+              class="card-section-title"
+              style="margin-top: 16px; font-size: 11px"
+            >
+              Bulk Change Window
+            </div>
+            <p class="help-para">
+              Select multiple jobs and click
+              <strong>Change Window (N)</strong> to set them all to the same
+              start/end time window in one action.
+            </p>
+
+            <div
+              class="card-section-title"
+              style="margin-top: 16px; font-size: 11px"
+            >
+              Retire Jobs
+            </div>
+            <p class="help-para">
+              Removing a job now <strong>retires</strong> it: the job leaves the
+              list but its history logs are kept. Single and bulk retire are both
+              supported.
             </p>
 
             <div
@@ -1327,7 +1457,8 @@
                     <code>nvidia/nemotron-nano-12b-v2-vl:free</code>
                     模型，在此处填入 API 密钥即可启用
                     <code>{aiBtn}</code>、<code>{aiInput}</code>
-                    和"输入验证码"功能。支持添加任意 OpenAI 兼容服务商。
+                    和"输入验证码"功能。支持添加任意 OpenAI
+                    兼容服务商，并可开启"报错时自动切换服务商"，在默认模型限速或出错时自动尝试其他已配置的服务商。
                   </td>
                 </tr>
                 <tr>
@@ -1347,7 +1478,16 @@
                   <td>TG 应用客户端</td>
                   <td>
                     管理 Telegram
-                    会话的设备信息预设。"账号默认客户端"可设为"使用默认"（指定某个预设为默认）或"随机选择"（无指定客户端的账号每次连接随机使用一个预设）。
+                    会话的设备信息预设。"账号默认客户端"可设为"使用默认"（指定某个预设为默认）或"随机选择"（无指定客户端的账号每次连接随机使用一个预设）。设备型号支持
+                    <code>{name}</code>、<code>{tgName}</code>、<code>{tgUsername}</code>、<code>{id}</code>
+                    及随机 <code>{word:4}</code>、<code>{num:4}</code>、<code>{alpha:8}</code>、<code>{uuid}</code>
+                    变量，随机值按账户固定，使每个账户拥有唯一的设备名称。
+                  </td>
+                </tr>
+                <tr>
+                  <td>TG 账号显示</td>
+                  <td>
+                    开启后，引用账户的位置（消息、任务、模板）将以「Bemby 账户名 - TG 账号名」形式显示。
                   </td>
                 </tr>
                 <tr>
@@ -1429,7 +1569,9 @@
                     <code>nvidia/nemotron-nano-12b-v2-vl:free</code> model — add
                     your API key here to activate <code>{aiBtn}</code>,
                     <code>{aiInput}</code>, and Enter Captcha. Any
-                    OpenAI-compatible provider can be added.
+                    OpenAI-compatible provider can be added, and an
+                    "auto-fallback on error" toggle tries other configured
+                    providers when the default model is rate-limited or errors.
                   </td>
                 </tr>
                 <tr>
@@ -1455,7 +1597,20 @@
                     "Default client for accounts" toggle switches between a
                     fixed default and random selection -- in random mode,
                     accounts with no explicit client pick one at random from all
-                    configured presets on each connection.
+                    configured presets on each connection. The Device Model
+                    supports <code>{name}</code>, <code>{tgName}</code>,
+                    <code>{tgUsername}</code>, <code>{id}</code>, and random
+                    <code>{word:4}</code>, <code>{num:4}</code>,
+                    <code>{alpha:8}</code>, <code>{uuid}</code> variables; random
+                    values stay fixed per account, giving each account a unique
+                    device name.
+                  </td>
+                </tr>
+                <tr>
+                  <td>TG Account Display</td>
+                  <td>
+                    When enabled, places that refer to an account (messenger,
+                    jobs, templates) show it as "{Bemby name} - {TG name}".
                   </td>
                 </tr>
                 <tr>
@@ -1534,6 +1689,16 @@
             <p class="help-para">
               点击任意 Emby 观看日志行可展开播放摘要卡片，显示以下信息：
               内容名称（及剧集信息）、剧集总时长、播放起始与结束位置、实际观看时长、是否已标记为已看。
+            </p>
+
+            <div
+              class="card-section-title"
+              style="margin-top: 16px; font-size: 11px"
+            >
+              重跑失败任务
+            </div>
+            <p class="help-para">
+              对于状态为<strong>失败</strong>的执行记录，可在日志视图中点击重跑按钮，立即重新运行对应任务。
             </p>
 
             <div
@@ -1648,6 +1813,18 @@
               showing: content title (and series/episode info), total runtime,
               start and end positions, actual duration watched, and whether the
               item was marked as watched.
+            </p>
+
+            <div
+              class="card-section-title"
+              style="margin-top: 16px; font-size: 11px"
+            >
+              Rerun failed jobs
+            </div>
+            <p class="help-para">
+              For any execution with a <strong>Failed</strong> status, click the
+              rerun button in the log view to run the corresponding job again
+              immediately.
             </p>
 
             <div

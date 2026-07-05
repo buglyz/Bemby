@@ -406,6 +406,23 @@ try {
   `);
 } catch {}
 
+try {
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_jobs_retired_enabled_name
+      ON jobs(retired, enabled, name COLLATE NOCASE);
+    CREATE INDEX IF NOT EXISTS idx_jobs_template_id
+      ON jobs(template_id);
+    CREATE INDEX IF NOT EXISTS idx_jobs_account_id
+      ON jobs(account_id);
+    CREATE INDEX IF NOT EXISTS idx_job_logs_ran_at
+      ON job_logs(ran_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_job_logs_job_ran_at
+      ON job_logs(job_id, ran_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_job_logs_retired_ran_at
+      ON job_logs(retired, ran_at DESC);
+  `);
+} catch {}
+
 // Make api_id and api_hash nullable so accounts can fall back to global defaults
 try {
   const cols = db.prepare("PRAGMA table_info(tg_accounts)").all() as Array<{

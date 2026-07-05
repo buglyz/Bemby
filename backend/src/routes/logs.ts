@@ -4,6 +4,18 @@ import { cancelJob, isJobRunning, getLiveDetail } from '../jobs/cancellation';
 
 const router = Router();
 
+function parsePositiveInt(value: string | undefined, fallback: number, max: number): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(max, Math.max(1, Math.floor(parsed)));
+}
+
+function parseNonNegativeInt(value: string | undefined, fallback: number): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(0, Math.floor(parsed));
+}
+
 router.get('/:id', (req, res) => {
   const id = Number(req.params.id);
   const row = db.prepare(`
@@ -31,16 +43,26 @@ router.get('/:id', (req, res) => {
 });
 
 router.get('/', (req, res) => {
-  const { jobId, limit = '50', offset = '0', showRetired = '0' } = req.query as Record<string, string>;
+  const { jobId, limit, offset, showRetired = '0' } = req.query as Record<string, string>;
+  const parsedLimit = parsePositiveInt(limit, 50, 200);
+  const parsedOffset = parseNonNegativeInt(offset, 0);
 
   const conditions: string[] = [];
   const params: (string | number)[] = [];
 
-  if (jobId) { conditions.push('l.job_id = ?'); params.push(Number(jobId)); }
+  if (jobId) {
+    const parsedJobId = Number(jobId);
+    if (!Number.isInteger(parsedJobId) || parsedJobId <= 0) {
+      res.status(400).json({ error: 'Invalid jobId' });
+      return;
+    }
+    conditions.push('l.job_id = ?');
+    params.push(parsedJobId);
+  }
   if (showRetired !== '1') { conditions.push('l.retired = 0'); }
 
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-  params.push(Number(limit), Number(offset));
+  params.push(parsedLimit, parsedOffset);
 
   const rows = db.prepare(`
     SELECT l.id, l.job_id, l.ran_at, l.status, l.message, l.retired,

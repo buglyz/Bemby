@@ -200,7 +200,9 @@ function syncLinkedJobs(templateId: number, t: TemplateRow) {
   if (t.job_type === 'embywatch') {
     testDb.prepare(`
       UPDATE jobs SET
-        job_type = ?, bot_username = ?, timezone = ?,
+        job_type = ?,
+        bot_username = CASE WHEN bot_username = '' THEN ? ELSE bot_username END,
+        timezone = ?,
         reply_timeout_ms = ?, retry_max = ?,
         start_command = ?, checkin_button = ?,
         run_every_days = ?
@@ -223,7 +225,9 @@ function syncLinkedJobs(templateId: number, t: TemplateRow) {
   } else {
     testDb.prepare(`
       UPDATE jobs SET
-        job_type = ?, bot_username = ?, timezone = ?,
+        job_type = ?,
+        bot_username = CASE WHEN bot_username = '' THEN ? ELSE bot_username END,
+        timezone = ?,
         reply_timeout_ms = ?, retry_max = ?,
         config = ?, start_command = ?, checkin_button = ?,
         run_every_days = ?
@@ -276,7 +280,7 @@ function simulateJobPut(
   `).run(
     name ?? existing.name,
     accountId !== undefined ? (accountId != null ? accountId : null) : existing.account_id,
-    isLinked ? existing.bot_username : (botUsername ?? existing.bot_username),
+    botUsername ?? existing.bot_username,
     isLinked ? existing.timezone : (timezone ?? existing.timezone),
     isLinked ? existing.reply_timeout_ms : Number(replyTimeoutMs ?? existing.reply_timeout_ms),
     isLinked ? existing.retry_max : Number(retryMax ?? existing.retry_max),
@@ -375,7 +379,7 @@ describe('Template CRUD', () => {
 // ---------------------------------------------------------------------------
 
 describe('Template update -- syncLinkedJobs', () => {
-  it('propagates field changes to all linked jobs', () => {
+  it('propagates template fields but preserves job-specific bot usernames', () => {
     const t = insertTemplate({ botUsername: 'old-bot', timezone: 'UTC', retryMax: 3 });
     const job1 = insertJob({ templateId: t.id });
     const job2 = insertJob({ templateId: t.id });
@@ -386,12 +390,21 @@ describe('Template update -- syncLinkedJobs', () => {
       .run('new-bot', 'America/New_York', 9, t.id);
     syncLinkedJobs(t.id, updated);
 
-    expect(getJob(job1.id).bot_username).toBe('new-bot');
+    expect(getJob(job1.id).bot_username).toBe(job1.bot_username);
     expect(getJob(job1.id).timezone).toBe('America/New_York');
     expect(getJob(job1.id).retry_max).toBe(9);
-    expect(getJob(job2.id).bot_username).toBe('new-bot');
+    expect(getJob(job2.id).bot_username).toBe(job2.bot_username);
     // Unlinked job is untouched
     expect(getJob(unlinked.id).bot_username).toBe(unlinked.bot_username);
+  });
+
+  it('fills a missing linked-job bot username from the template', () => {
+    const t = insertTemplate({ botUsername: 'template-bot' });
+    const job = insertJob({ templateId: t.id, botUsername: '' });
+
+    syncLinkedJobs(t.id, { ...t, bot_username: 'template-bot' });
+
+    expect(getJob(job.id).bot_username).toBe('template-bot');
   });
 
   it('syncs config when template config changes', () => {
@@ -413,7 +426,7 @@ describe('Template update -- syncLinkedJobs', () => {
 
     syncLinkedJobs(t1.id, { ...t1, bot_username: 'bot-updated' });
 
-    expect(getJob(jobT1.id).bot_username).toBe('bot-updated');
+    expect(getJob(jobT1.id).bot_username).toBe('bot-a');
     expect(getJob(jobT2.id).bot_username).toBe('bot-b');
   });
 
@@ -495,7 +508,7 @@ describe('Applying a template', () => {
     expect(getJob(job.id).template_id).toBe(t.id);
   });
 
-  it('locks template-controlled fields once a job is linked', () => {
+  it('locks template-controlled fields once a job is linked but keeps bot username job-specific', () => {
     const t = insertTemplate({ botUsername: 'template-bot', timezone: 'UTC', retryMax: 3 });
     const job = insertJob({ templateId: t.id, botUsername: 'job-bot', timezone: 'Australia/Sydney', retryMax: 5 });
 
@@ -503,7 +516,7 @@ describe('Applying a template', () => {
     simulateJobPut(job.id, { botUsername: 'override-bot', timezone: 'Asia/Tokyo', retryMax: 99 });
 
     const updated = getJob(job.id);
-    expect(updated.bot_username).toBe('job-bot');
+    expect(updated.bot_username).toBe('override-bot');
     expect(updated.timezone).toBe('Australia/Sydney');
     expect(updated.retry_max).toBe(5);
   });

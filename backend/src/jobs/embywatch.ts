@@ -33,6 +33,27 @@ function buildAuthHeader(deviceName: string, token?: string): string {
   return parts.join(', ');
 }
 
+function hasPlayDurationRange(config: EmbywatchConfig): boolean {
+  const min = Number(config.playDurationMin);
+  const max = Number(config.playDurationMax);
+  return Number.isFinite(min) && Number.isFinite(max);
+}
+
+function resolvePlayDuration(config: EmbywatchConfig): number {
+  const defaultDuration = Number(getSetting('default_play_duration') ?? 300);
+  const fixedDuration = Number(config.playDuration ?? defaultDuration);
+
+  if (hasPlayDurationRange(config)) {
+    const min = Number(config.playDurationMin);
+    const max = Number(config.playDurationMax);
+    const low = Math.max(1, Math.floor(Math.min(min, max)));
+    const high = Math.max(low, Math.floor(Math.max(min, max)));
+    return low + Math.floor(Math.random() * (high - low + 1));
+  }
+
+  return Math.max(1, Math.floor(fixedDuration));
+}
+
 async function embyRequest<T = any>(
   baseUrl: string,
   path: string,
@@ -170,7 +191,7 @@ async function isMediaAvailable(
 
 export async function runEmbywatch(serverUrl: string, config: EmbywatchConfig): Promise<EmbywatchLog> {
   const ua = config.userAgent ?? getSetting('default_ua') ?? DEFAULT_UA;
-  const playDuration = config.playDuration ?? Number(getSetting('default_play_duration') ?? 300);
+  const playDuration = resolvePlayDuration(config);
   const deviceName = getSetting('default_device_name') ?? 'Yamby';
 
   // Resolve proxy URL from settings if proxyId is configured
@@ -242,8 +263,12 @@ export async function runEmbywatch(serverUrl: string, config: EmbywatchConfig): 
   const startSeconds = runtimeSeconds > 0 ? Math.floor(runtimeSeconds * startPct) : 0;
   const startTicks = startSeconds * TICKS_PER_SECOND;
 
-  // 4. Actual watch duration: playDuration + 0-10% random extra
-  const actualDuration = Math.floor(playDuration * (1 + Math.random() * 0.10));
+  // 4. Actual watch duration. Fixed durations keep the legacy 0-10% random
+  // extension; configured random ranges are already randomized and capped by
+  // the user-provided max.
+  const actualDuration = hasPlayDurationRange(config)
+    ? playDuration
+    : Math.floor(playDuration * (1 + Math.random() * 0.10));
   // Cap so we don't overshoot the end of the episode
   const maxWatchable = runtimeSeconds > 0 ? Math.max(0, Math.floor(runtimeSeconds * 0.97) - startSeconds) : Infinity;
   const watchDuration = maxWatchable < Infinity ? Math.min(actualDuration, maxWatchable) : actualDuration;

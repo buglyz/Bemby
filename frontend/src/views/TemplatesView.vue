@@ -56,7 +56,10 @@
                   {{ tpl.enabled ? t('common.yes') : t('common.no') }}
                 </span>
               </td>
-              <td class="col-hide-mobile">{{ tpl.jobType === 'embywatch' ? tpl.botUsername : '@' + tpl.botUsername }}</td>
+              <td class="col-hide-mobile">
+                <template v-if="tpl.botUsername">{{ tpl.jobType === 'embywatch' ? tpl.botUsername : '@' + tpl.botUsername }}</template>
+                <span v-else style="color:#888">{{ t('templates.botSetOnJob') }}</span>
+              </td>
               <td class="col-hide-mobile">{{ tpl.linkedJobCount ?? 0 }}</td>
               <td @click.stop>
                 <div class="actions hide-mobile">
@@ -118,7 +121,10 @@
 
           <!-- Check-in: Bot Username -->
           <div v-if="form.jobType === 'checkin'" class="form-group">
-            <label class="form-label">{{ t('jobs.labelBot') }} <span style="color:#e63946">*</span></label>
+            <label class="form-label">
+              {{ t('jobs.labelBot') }}
+              <span style="color:#aaa;font-weight:400"> — {{ t('templates.optionalInTemplate') }}</span>
+            </label>
             <input v-model.trim="form.botUsername" class="form-input" placeholder="SomeBotUsername" />
           </div>
 
@@ -141,11 +147,28 @@
           <template v-if="form.jobType === 'embywatch'">
             <div class="form-row">
               <div class="form-group">
+                <label class="form-label">{{ t('jobs.labelDurationMode') }}</label>
+                <select v-model="embyCfg.durationMode" class="form-select">
+                  <option value="fixed">{{ t('jobs.durationModeFixed') }}</option>
+                  <option value="random">{{ t('jobs.durationModeRandom') }}</option>
+                </select>
+              </div>
+              <div v-if="embyCfg.durationMode === 'fixed'" class="form-group">
                 <label class="form-label">
                   {{ t('jobs.labelPlayDuration') }}
                   <span style="color:#aaa;font-weight:400"> — {{ t('common.blankForDefault') }}</span>
                 </label>
                 <input v-model.number="embyCfg.playDuration" class="form-input" type="number" min="30" placeholder="300" />
+              </div>
+            </div>
+            <div v-if="embyCfg.durationMode === 'random'" class="form-row">
+              <div class="form-group">
+                <label class="form-label">{{ t('jobs.labelPlayDurationMin') }}</label>
+                <input v-model.number="embyCfg.playDurationMin" class="form-input" type="number" min="30" placeholder="300" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">{{ t('jobs.labelPlayDurationMax') }}</label>
+                <input v-model.number="embyCfg.playDurationMax" class="form-input" type="number" min="30" placeholder="600" />
               </div>
             </div>
             <div class="form-group">
@@ -194,7 +217,10 @@
           <!-- Custom: target bot + action chain -->
           <template v-if="form.jobType === 'custom'">
             <div class="form-group">
-              <label class="form-label">{{ t('jobs.custom.labelTarget') }} <span style="color:#e63946">*</span></label>
+              <label class="form-label">
+                {{ t('jobs.custom.labelTarget') }}
+                <span style="color:#aaa;font-weight:400"> — {{ t('templates.optionalInTemplate') }}</span>
+              </label>
               <input v-model.trim="form.botUsername" class="form-input" placeholder="BotUsername" />
             </div>
 
@@ -590,6 +616,13 @@
                     <label class="form-label" style="font-size:11px">{{ t('templates.createJobsJobName') }}</label>
                     <input v-model.trim="row.name" class="form-input" style="font-size:12px" />
                   </div>
+                  <div v-if="createJobsTpl && (createJobsTpl.jobType === 'checkin' || createJobsTpl.jobType === 'custom') && !createJobsTpl.botUsername" class="form-group" style="margin:6px 0 6px 26px">
+                    <label class="form-label" style="font-size:11px">
+                      {{ createJobsTpl.jobType === 'custom' ? t('jobs.custom.labelTarget') : t('jobs.labelBot') }}
+                      <span style="color:#e63946">*</span>
+                    </label>
+                    <input v-model.trim="row.botUsername" class="form-input" style="font-size:12px" placeholder="BotUsername" />
+                  </div>
                   <template v-if="createJobsTpl?.jobType === 'embywatch'">
                     <div class="form-row" style="margin-left:26px;margin-bottom:0">
                       <div class="form-group" style="margin-bottom:0">
@@ -789,6 +822,7 @@ type CreateJobRow = {
   account: AvailableAccount;
   selected: boolean;
   name: string;
+  botUsername: string;
   embyUsername: string;
   embyPassword: string;
 };
@@ -858,10 +892,23 @@ const form = reactive({
   runEveryDays: 1,
 });
 
-const embyCfg = reactive<{ username: string; password: string; playDuration: number | string; userAgent: string; markWatched: boolean; verifyPlayable: boolean }>({
+const embyCfg = reactive<{
+  username: string;
+  password: string;
+  durationMode: 'fixed' | 'random';
+  playDuration: number | string;
+  playDurationMin: number | string;
+  playDurationMax: number | string;
+  userAgent: string;
+  markWatched: boolean;
+  verifyPlayable: boolean;
+}>({
   username: '',
   password: '',
+  durationMode: 'fixed',
   playDuration: '',
+  playDurationMin: '',
+  playDurationMax: '',
   userAgent: '',
   markWatched: true,
   verifyPlayable: true,
@@ -915,8 +962,38 @@ function onUaDropdownChange() {
   if (preset) embyCfg.userAgent = preset.value;
 }
 
+function resetEmbyCfg() {
+  Object.assign(embyCfg, {
+    username: '',
+    password: '',
+    durationMode: 'fixed',
+    playDuration: '',
+    playDurationMin: '',
+    playDurationMax: '',
+    userAgent: '',
+    markWatched: true,
+    verifyPlayable: true,
+  });
+}
+
+function applyEmbyPlaybackConfig(c: Partial<EmbywatchConfig>) {
+  const hasRange = c.playDurationMin != null || c.playDurationMax != null;
+  Object.assign(embyCfg, {
+    username: '',
+    password: '',
+    durationMode: hasRange ? 'random' : 'fixed',
+    playDuration: c.playDuration ?? '',
+    playDurationMin: c.playDurationMin ?? '',
+    playDurationMax: c.playDurationMax ?? '',
+    userAgent: c.userAgent ?? '',
+    markWatched: c.markWatched !== false,
+    verifyPlayable: c.verifyPlayable !== false,
+  });
+  setUaState(c.userAgent ?? '');
+}
+
 function onJobTypeChange() {
-  Object.assign(embyCfg, { username: '', password: '', playDuration: '', userAgent: '', markWatched: true, verifyPlayable: true });
+  resetEmbyCfg();
   Object.assign(embyServer, { protocol: 'https', host: '', port: 443 });
   embyUaDropdown.value = '';
   tplProxyId.value = '';
@@ -977,7 +1054,12 @@ function buildConfig(): EmbywatchConfig | CustomConfig | null {
   if (form.jobType === 'embywatch') {
     // Credentials (username/password) are job-specific; template only stores playback settings
     const cfg: Partial<EmbywatchConfig> = {};
-    if (embyCfg.playDuration !== '') cfg.playDuration = Number(embyCfg.playDuration as string | number);
+    if (embyCfg.durationMode === 'random') {
+      if (embyCfg.playDurationMin !== '') cfg.playDurationMin = Number(embyCfg.playDurationMin as string | number);
+      if (embyCfg.playDurationMax !== '') cfg.playDurationMax = Number(embyCfg.playDurationMax as string | number);
+    } else if (embyCfg.playDuration !== '') {
+      cfg.playDuration = Number(embyCfg.playDuration as string | number);
+    }
     if (embyCfg.userAgent) cfg.userAgent = embyCfg.userAgent;
     cfg.markWatched = embyCfg.markWatched;
     cfg.verifyPlayable = embyCfg.verifyPlayable;
@@ -1090,7 +1172,7 @@ function openAdd() {
     replyTimeoutMs: 40000,
     retryMax: Number(settings.value?.default_max_retry ?? 5),
   });
-  Object.assign(embyCfg, { username: '', password: '', playDuration: '', userAgent: '', markWatched: true, verifyPlayable: true });
+  resetEmbyCfg();
   Object.assign(embyServer, { protocol: 'https', host: '', port: 443 });
   embyUaDropdown.value = '';
   tplProxyId.value = '';
@@ -1129,26 +1211,18 @@ function openEdit(tpl: JobTemplate) {
       try {
         let c = JSON.parse(tpl.config) as EmbywatchConfig | string;
         if (typeof c === 'string') c = JSON.parse(c) as EmbywatchConfig;
-        Object.assign(embyCfg, {
-          username: '',
-          password: '',
-          playDuration: c.playDuration ?? '',
-          userAgent: c.userAgent ?? '',
-          markWatched: c.markWatched !== false,
-          verifyPlayable: c.verifyPlayable !== false,
-        });
+        applyEmbyPlaybackConfig(c);
         tplProxyId.value = c.proxyId ?? '';
-        setUaState(c.userAgent ?? '');
       } catch {
-        Object.assign(embyCfg, { username: '', password: '', playDuration: '', userAgent: '', markWatched: true, verifyPlayable: true });
+        resetEmbyCfg();
         embyUaDropdown.value = '';
       }
     } else {
-      Object.assign(embyCfg, { username: '', password: '', playDuration: '', userAgent: '', markWatched: true, verifyPlayable: true });
+      resetEmbyCfg();
       embyUaDropdown.value = '';
     }
   } else if (tpl.jobType === 'custom') {
-    Object.assign(embyCfg, { username: '', password: '', playDuration: '', userAgent: '', markWatched: true, verifyPlayable: true });
+    resetEmbyCfg();
     Object.assign(embyServer, { protocol: 'https', host: '', port: 443 });
     if (tpl.config) {
       try {
@@ -1211,7 +1285,7 @@ function openEdit(tpl: JobTemplate) {
     }
   } else {
     // checkin
-    Object.assign(embyCfg, { username: '', password: '', playDuration: '', userAgent: '', markWatched: true, verifyPlayable: true });
+    resetEmbyCfg();
     Object.assign(embyServer, { protocol: 'https', host: '', port: 443 });
     customActions.value = [];
     tplCheckinSuccessContains.value = '';
@@ -1233,7 +1307,6 @@ async function saveTemplate() {
   formError.value = '';
   if (!form.name) { formError.value = t('jobs.errors.nameRequired'); return; }
   if (form.jobType === 'custom') {
-    if (!form.botUsername) { formError.value = t('jobs.errors.botRequired'); return; }
     if (customActions.value.length === 0) { formError.value = t('jobs.errors.customActionsRequired'); return; }
   }
   if (form.jobType === 'embywatch') {
@@ -1241,10 +1314,6 @@ async function saveTemplate() {
     const portPart = (embyServer.port as number | string) !== '' ? `:${embyServer.port}` : '';
     form.botUsername = `${embyServer.protocol}://${embyServer.host.replace(/^https?:\/\//, '')}${portPart}`;
     // Credentials are set per-job, not in the template
-  }
-  if (form.jobType === 'checkin' && !form.botUsername) {
-    formError.value = t('jobs.errors.botRequired');
-    return;
   }
   if (form.jobType === 'checkin') form.botUsername = form.botUsername.replace(/^@+/, '');
 
@@ -1293,6 +1362,7 @@ async function openCreateJobs(tpl: JobTemplate) {
       account: a,
       selected: a.authStatus === 'authenticated',
       name: `${tpl.name} - ${a.name}`,
+      botUsername: tpl.botUsername,
       embyUsername: '',
       embyPassword: '',
     }));
@@ -1327,6 +1397,14 @@ async function doCreateJobs() {
       }
     }
   }
+  if ((createJobsTpl.value.jobType === 'checkin' || createJobsTpl.value.jobType === 'custom') && !createJobsTpl.value.botUsername) {
+    for (const r of selected) {
+      if (!r.botUsername.trim()) {
+        createJobsError.value = `${r.account.name}: ${createJobsTpl.value.jobType === 'custom' ? t('jobs.custom.labelTarget') : t('jobs.labelBot')} is required`;
+        return;
+      }
+    }
+  }
 
   createJobsError.value = '';
   createJobsCreating.value = true;
@@ -1334,6 +1412,7 @@ async function doCreateJobs() {
     const jobs = selected.map(r => ({
       accountId: r.account.id,
       name: r.name.trim() || `${createJobsTpl.value!.name} - ${r.account.name}`,
+      botUsername: r.botUsername.trim() || createJobsTpl.value!.botUsername,
       ...(createJobsTpl.value!.jobType === 'embywatch'
         ? { config: { username: r.embyUsername.trim(), password: r.embyPassword.trim() } }
         : {}),

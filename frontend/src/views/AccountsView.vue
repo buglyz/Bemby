@@ -1835,7 +1835,7 @@ function openEdit(a: Account) {
   Object.assign(form, {
     name: a.name,
     phoneNumber: a.phoneNumber,
-    apiId: String(a.apiId),
+    apiId: a.apiId != null ? String(a.apiId) : "",
     apiHash: "",
     proxyId: a.proxyId ?? "",
     appClientId: a.appClientId ?? "",
@@ -1892,7 +1892,7 @@ async function saveAccount() {
       await accountsApi.update(editTarget.value.id, {
         name: form.name,
         phoneNumber: form.phoneNumber,
-        apiId: Number(form.apiId),
+        apiId: form.apiId ? Number(form.apiId) : null,
         ...(form.apiHash ? { apiHash: form.apiHash } : {}),
         proxyId: form.proxyId || null,
         appClientId: form.appClientId || null,
@@ -1902,7 +1902,7 @@ async function saveAccount() {
       await accountsApi.create({
         name: form.name,
         phoneNumber: form.phoneNumber,
-        apiId: Number(form.apiId),
+        apiId: form.apiId ? Number(form.apiId) : null,
         apiHash: form.apiHash,
         proxyId: form.proxyId || null,
         appClientId: form.appClientId || null,

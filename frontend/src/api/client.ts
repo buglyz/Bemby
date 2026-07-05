@@ -79,6 +79,8 @@ export type Account = {
   tgDisplayName: string | null;
   tgUsername: string | null;
   notes: string | null;
+  /** Device model Telegram sees, with template variables expanded (server-computed, read-only). */
+  resolvedDeviceModel?: string | null;
 };
 
 // The account's own editable Telegram profile

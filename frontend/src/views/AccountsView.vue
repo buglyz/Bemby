@@ -126,6 +126,14 @@
                     proxiesList.find((p) => p.id === a.proxyId)?.name ?? "Proxy"
                   }}</span
                 >
+                <div
+                  v-if="a.resolvedDeviceModel"
+                  class="device-model-preview"
+                  :title="t('accounts.deviceModelPreview')"
+                >
+                  <i class="fa-solid fa-mobile-screen"></i>
+                  {{ a.resolvedDeviceModel }}
+                </div>
               </td>
               <td>{{ a.phoneNumber }}</td>
               <td class="col-hide-mobile">
@@ -557,6 +565,13 @@
                 {{ c.name }}
               </option>
             </select>
+            <div v-if="deviceModelPreview" class="device-model-preview-form">
+              <i class="fa-solid fa-mobile-screen"></i>
+              <span class="dmp-label"
+                >{{ t("accounts.deviceModelPreview") }}:</span
+              >
+              <span class="dmp-value">{{ deviceModelPreview }}</span>
+            </div>
           </div>
           <div class="form-group">
             <label class="form-label">{{ t("accounts.labelNotes") }}</label>
@@ -1368,6 +1383,49 @@ const tgClientMode = computed(
 const defaultClientName = computed(() => {
   if (tgClientMode.value === "random") return t("accounts.appClientRandom");
   return appClientsList.value.find((c) => c.isDefault)?.name ?? "";
+});
+
+// Default lengths mirror the backend expandCommand() so masked random tokens
+// preview at the right width.
+const RANDOM_TOKEN_LENS: Record<string, number> = {
+  word: 6,
+  WORD: 6,
+  num: 6,
+  alpha: 8,
+};
+
+// Client-side preview of a deviceModel template: named tokens are filled from
+// the account being edited; random tokens are masked (their real value is
+// generated and fixed per account on the server).
+function previewDeviceName(template: string): string {
+  const acct = editTarget.value;
+  const ctx: Record<string, string> = {
+    name: form.name || "",
+    tgName: acct?.tgDisplayName || "",
+    tgUsername: acct?.tgUsername || "",
+    id: acct ? String(acct.id) : "",
+  };
+  return template.replace(
+    /\{(\w+)(?::(\d+))?\}/g,
+    (match, type: string, lenStr?: string) => {
+      if (type in ctx) return ctx[type];
+      if (type in RANDOM_TOKEN_LENS)
+        return "•".repeat(lenStr ? parseInt(lenStr, 10) : RANDOM_TOKEN_LENS[type]);
+      if (type === "uuid") return "••••••••-••••-4•••-••••-••••••••••••";
+      return match;
+    },
+  );
+}
+
+const deviceModelPreview = computed(() => {
+  // Dropdown unchanged: show the real server-resolved value for this account.
+  if (!form.appClientId && editTarget.value?.resolvedDeviceModel) {
+    return editTarget.value.resolvedDeviceModel;
+  }
+  const client = form.appClientId
+    ? appClientsList.value.find((c) => c.id === form.appClientId)
+    : appClientsList.value.find((c) => c.isDefault);
+  return client ? previewDeviceName(client.deviceModel) : "";
 });
 
 // ── Form state ────────────────────────────────────────────────────────────────
@@ -2297,6 +2355,32 @@ async function verify2fa() {
 </script>
 
 <style scoped>
+.device-model-preview {
+  margin-top: 3px;
+  font-size: 11px;
+  color: #888;
+  font-family: var(--font-mono, monospace);
+}
+
+.device-model-preview i {
+  margin-right: 4px;
+  opacity: 0.7;
+}
+
+.device-model-preview-form {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #888;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.device-model-preview-form .dmp-value {
+  font-family: var(--font-mono, monospace);
+  color: #555;
+}
+
 .tg-name-cell {
   white-space: nowrap;
   display: flex;

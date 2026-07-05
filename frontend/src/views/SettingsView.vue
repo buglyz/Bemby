@@ -461,8 +461,11 @@
           <div class="card-section-title">
             {{ t("settings.appClientsSection") }}
           </div>
-          <p style="font-size: 12px; color: #888; margin: 0 0 12px">
+          <p style="font-size: 12px; color: #888; margin: 0 0 6px">
             {{ t("settings.appClientsHint") }}
+          </p>
+          <p style="font-size: 12px; color: #888; margin: 0 0 12px">
+            {{ t("settings.appClientDeviceVars") }}
           </p>
 
           <div v-if="appClientsMsg" class="success-msg">

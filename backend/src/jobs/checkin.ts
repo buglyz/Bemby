@@ -70,9 +70,14 @@ function pick(chars: string, len: number): string {
  * Expands template placeholders before sending a command.
  * Syntax: {type} or {type:length}
  * Types: word (lowercase), WORD (uppercase), num (digits), alpha (mixed alnum), uuid
+ * An optional context map supplies named tokens (e.g. {name}) that take
+ * precedence over the built-in random types.
  */
-export function expandCommand(template: string): string {
+export function expandCommand(template: string, context?: Record<string, string>): string {
   return template.replace(/\{(\w+)(?::(\d+))?\}/g, (match, type: string, lenStr?: string) => {
+    if (context && Object.prototype.hasOwnProperty.call(context, type)) {
+      return context[type];
+    }
     const len = lenStr ? parseInt(lenStr, 10) : 0;
     switch (type) {
       case 'word':  return pick(LOWER, len || 6);

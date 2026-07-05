@@ -26,7 +26,7 @@ import {
 import { checkSpamStatus } from "../jobs/checkin";
 import type { AuthStatus } from "../types";
 import { parseTgProxy } from "../jobs/runner";
-import { resolveAppClientParams } from "../tg/appClient";
+import { resolveAppClientParams, previewDeviceModel } from "../tg/appClient";
 import { isAuthError, markSessionExpired } from "../tg/liveClient";
 import { refreshScheduler } from "../scheduler";
 
@@ -161,6 +161,7 @@ function toJson(row: AccountRow) {
     tgDisplayName: row.tg_display_name ?? null,
     tgUsername: row.tg_username ?? null,
     notes: row.notes ?? null,
+    resolvedDeviceModel: previewDeviceModel(row.id, row.app_client_id),
   };
 }
 

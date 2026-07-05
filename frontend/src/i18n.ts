@@ -92,6 +92,7 @@ const zh = {
     labelAppClient: "TG 客户端",
     appClientDefault: "默认",
     appClientRandom: "随机 (自动)",
+    deviceModelPreview: "设备名称预览",
     authTitle: "认证",
     authHint: "验证码将发送到",
     labelCode: "验证码",
@@ -536,6 +537,8 @@ const zh = {
     appClientsSection: "TG 应用客户端",
     appClientsHint:
       "自定义 Telegram 登录时的设备信息，不同账户可使用不同客户端环境。",
+    appClientDeviceVars:
+      "设备型号支持变量：{name} Bemby 名称、{tgName} Telegram 名称、{tgUsername} 用户名、{id} 账户 ID，以及随机 {word:4}、{num:4}、{alpha:8}、{uuid}。随机值按账户固定，仅在修改模板时重新生成。",
     appClientName: "名称",
     appClientDevice: "设备型号",
     appClientSystem: "系统版本",
@@ -747,6 +750,7 @@ const en: typeof zh = {
     labelAppClient: "TG Client",
     appClientDefault: "Default",
     appClientRandom: "Random (auto)",
+    deviceModelPreview: "Device name preview",
     authTitle: "Authenticate",
     authHint: "A verification code will be sent to",
     labelCode: "Verification Code",
@@ -1204,6 +1208,8 @@ const en: typeof zh = {
     appClientsSection: "TG App Clients",
     appClientsHint:
       "Customise the device fingerprint Telegram sees per account to reduce the risk of bans.",
+    appClientDeviceVars:
+      "Device Model supports variables: {name} Bemby name, {tgName} Telegram name, {tgUsername} username, {id} account ID, plus random {word:4}, {num:4}, {alpha:8}, {uuid}. Random values stay fixed per account and only regenerate when the template changes.",
     appClientName: "Name",
     appClientDevice: "Device Model",
     appClientSystem: "System Version",

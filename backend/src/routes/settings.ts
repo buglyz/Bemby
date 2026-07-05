@@ -15,6 +15,8 @@ export const ALLOWED_KEYS = [
   "default_ua",
   "default_play_duration",
   "default_device_name",
+  "log_retention_days",
+  "log_retention_max_rows",
   "ai_model",
   "ai_fallback_enabled",
   "notify_tg_username",

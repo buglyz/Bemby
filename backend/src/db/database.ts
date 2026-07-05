@@ -62,6 +62,8 @@ db.exec(`
     ('default_ua',           'SenPlayer/6.1.2 CFNetwork/1490.0.4 Darwin/23.2.0'),
     ('default_play_duration','300'),
     ('default_device_name',  'Mac'),
+    ('log_retention_days',   '30'),
+    ('log_retention_max_rows','1000'),
     ('ai_base_url',          'https://openrouter.ai/api/v1'),
     ('ai_api_key',           ''),
     ('ai_model',             'nvidia/nemotron-nano-12b-v2-vl:free'),

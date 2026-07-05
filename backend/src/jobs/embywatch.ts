@@ -54,6 +54,18 @@ function resolvePlayDuration(config: EmbywatchConfig): number {
   return Math.max(1, Math.floor(fixedDuration));
 }
 
+function resolveProxyUrl(config: EmbywatchConfig): string | undefined {
+  if (!config.proxyId) return undefined;
+  try {
+    const raw = getSetting('proxies');
+    if (!raw) return undefined;
+    const list = JSON.parse(raw) as Array<{ id: string; name: string; url: string }>;
+    return list.find(p => p.id === config.proxyId)?.url;
+  } catch {
+    return undefined;
+  }
+}
+
 async function embyRequest<T = any>(
   baseUrl: string,
   path: string,
@@ -95,6 +107,38 @@ async function embyRequest<T = any>(
     throw new Error(`Emby ${method} ${path} → ${res.status} ${res.statusText}: ${detail}`);
   }
   return text ? JSON.parse(text) : (null as T);
+}
+
+export async function testEmbywatchConnection(
+  serverUrl: string,
+  config: Pick<EmbywatchConfig, 'username' | 'password' | 'userAgent' | 'proxyId'>,
+): Promise<{ ok: true; serverUrl: string; userName: string; itemCount: number }> {
+  const ua = config.userAgent ?? getSetting('default_ua') ?? DEFAULT_UA;
+  const deviceName = getSetting('default_device_name') ?? 'Yamby';
+  const proxyUrl = resolveProxyUrl(config as EmbywatchConfig);
+
+  const auth = await embyRequest<any>(serverUrl, '/Users/AuthenticateByName', {
+    method: 'POST',
+    ua,
+    deviceName,
+    proxyUrl,
+    body: { Username: config.username, Pw: config.password },
+  });
+
+  const token: string = auth.AccessToken;
+  const userId: string = auth.User.Id;
+  const items = await embyRequest<any>(
+    serverUrl,
+    `/Users/${userId}/Items?SortBy=Random&Limit=1&IncludeItemTypes=Episode,Movie&Recursive=true`,
+    { ua, token, deviceName, proxyUrl },
+  );
+
+  return {
+    ok: true,
+    serverUrl,
+    userName: auth.User?.Name ?? config.username,
+    itemCount: Number(items.TotalRecordCount ?? items.Items?.length ?? 0),
+  };
 }
 
 // Number of random items to try before giving up when verifying playability.
@@ -195,16 +239,7 @@ export async function runEmbywatch(serverUrl: string, config: EmbywatchConfig): 
   const deviceName = getSetting('default_device_name') ?? 'Yamby';
 
   // Resolve proxy URL from settings if proxyId is configured
-  let proxyUrl: string | undefined;
-  if (config.proxyId) {
-    try {
-      const raw = getSetting('proxies');
-      if (raw) {
-        const list = JSON.parse(raw) as Array<{ id: string; name: string; url: string }>;
-        proxyUrl = list.find(p => p.id === config.proxyId)?.url;
-      }
-    } catch { /* ignore bad JSON */ }
-  }
+  const proxyUrl = resolveProxyUrl(config);
 
   // 1. Authenticate
   const auth = await embyRequest<any>(serverUrl, '/Users/AuthenticateByName', {

@@ -15,6 +15,7 @@ import {
   clearLiveDetail,
 } from "./jobs/cancellation";
 import { toMinutes, pickNextRun } from "./scheduler-utils";
+import { applyLogRetention } from "./logRetention";
 
 type ScheduleEntry = {
   job: Job;
@@ -206,6 +207,11 @@ export async function executeJob(
   } finally {
     unregisterJob(Number(logId));
     clearLiveDetail(Number(logId));
+    try {
+      applyLogRetention();
+    } catch (e) {
+      console.warn("[logs] retention cleanup failed:", e);
+    }
     scheduleOne(job, account, job.runEveryDays ?? 1);
   }
 }
@@ -280,6 +286,12 @@ export function refreshScheduler(): void {
 
 export function startScheduler(): void {
   console.log("[scheduler] Starting");
+  try {
+    const result = applyLogRetention();
+    if (result.deleted > 0) console.log(`[logs] retention deleted ${result.deleted} old rows`);
+  } catch (e) {
+    console.warn("[logs] retention cleanup failed:", e);
+  }
   refreshJobs();
   // Re-check every 5 minutes to pick up new/changed jobs
   setInterval(refreshJobs, 5 * 60 * 1000);

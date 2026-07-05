@@ -1,6 +1,11 @@
 import { Router } from 'express';
 import { db } from '../db/database';
 import { cancelJob, isJobRunning, getLiveDetail } from '../jobs/cancellation';
+import {
+  applyLogRetention,
+  getLogRetentionPolicy,
+  saveLogRetentionPolicy,
+} from '../logRetention';
 
 const router = Router();
 
@@ -15,6 +20,22 @@ function parseNonNegativeInt(value: string | undefined, fallback: number): numbe
   if (!Number.isFinite(parsed)) return fallback;
   return Math.max(0, Math.floor(parsed));
 }
+
+router.get('/retention', (_req, res) => {
+  res.json(getLogRetentionPolicy());
+});
+
+router.put('/retention', (req, res) => {
+  const policy = saveLogRetentionPolicy({
+    days: req.body?.days,
+    maxRows: req.body?.maxRows,
+  });
+  res.json(policy);
+});
+
+router.post('/retention/apply', (_req, res) => {
+  res.json(applyLogRetention());
+});
 
 router.get('/:id', (req, res) => {
   const id = Number(req.params.id);

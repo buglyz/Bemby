@@ -661,11 +661,19 @@
           </div>
         </div>
 
+        <div v-if="preflightMessage" :class="preflightStatus === 'success' ? 'preflight-result preflight-ok' : 'preflight-result preflight-failed'">
+          <i :class="preflightStatus === 'success' ? 'fa-solid fa-circle-check' : 'fa-solid fa-triangle-exclamation'"></i>
+          <span>{{ preflightMessage }}</span>
+        </div>
+
         </div><!-- end modal-body -->
         <div class="modal-footer">
           <button class="btn btn-ghost" @click="showForm = false"><i class="fa-solid fa-xmark"></i> {{ t('common.cancel') }}</button>
           <button v-if="editTarget && !editTarget.templateId" class="btn btn-ghost" @click="openExtract(editTarget)">
             <i class="fa-solid fa-file-export"></i> {{ t('jobs.extractToTemplate') }}
+          </button>
+          <button class="btn btn-secondary" :disabled="testingConnection || saving" @click="testConnection">
+            <i class="fa-solid fa-plug-circle-check"></i> {{ testingConnection ? t('jobs.testingConnection') : t('jobs.testConnection') }}
           </button>
           <button class="btn btn-primary" :disabled="saving" @click="saveJob">
             <i class="fa-solid fa-floppy-disk"></i> {{ saving ? t('common.saving') : t('common.save') }}
@@ -993,6 +1001,9 @@ const embyServer = reactive<{ protocol: 'https' | 'http'; host: string; port: nu
 });
 const formError = ref('');
 const saving = ref(false);
+const testingConnection = ref(false);
+const preflightStatus = ref<'success' | 'failed' | null>(null);
+const preflightMessage = ref('');
 const aiKeyMissing = computed(() => !settings.value?.ai_api_key);
 
 const CMD_PRESETS = new Set(['', '/start', '/checkin'])
@@ -1244,6 +1255,8 @@ function openAdd() {
   checkinFailContains.value = '';
   setCmdState(''); setBtnState('');
   formError.value = '';
+  preflightStatus.value = null;
+  preflightMessage.value = '';
   showForm.value = true;
 }
 
@@ -1360,6 +1373,8 @@ function openEdit(j: Job) {
     customActions.value = [];
   }
   formError.value = '';
+  preflightStatus.value = null;
+  preflightMessage.value = '';
   showForm.value = true;
 }
 
@@ -1478,8 +1493,7 @@ function buildConfig(): EmbywatchConfig | CustomConfig | Record<string, string> 
   return null;
 }
 
-async function saveJob() {
-  formError.value = '';
+function buildJobPayload() {
   if (!form.name) { formError.value = t('jobs.errors.nameRequired'); return; }
   if ((form.jobType === 'checkin' || form.jobType === 'custom') && !form.accountId) { formError.value = t('jobs.errors.accountRequired'); return; }
   if (form.jobType === 'custom') {
@@ -1498,22 +1512,47 @@ async function saveJob() {
     formError.value = t('jobs.errors.embyCredRequired');
     return;
   }
+  const rawCfg = buildConfig();
+  const startCommand = (cmdDropdown.value === 'custom' ? cmdCustom.value : cmdDropdown.value) || undefined;
+  const resolvedAiBtn = btnAiHint.value.trim() ? `{aiBtn:${btnAiHint.value.trim()}}` : '{aiBtn}';
+  const checkinButton = btnDropdown.value === '{aiBtn}'
+    ? resolvedAiBtn
+    : (btnDropdown.value === 'custom' ? btnCustom.value : btnDropdown.value) || undefined;
+  return {
+    ...form,
+    // config is serialised by the backend; pass as-is
+    config: rawCfg as unknown as string | null,
+    startCommand,
+    checkinButton,
+    templateId: form.templateId ?? null,
+  };
+}
+
+async function testConnection() {
+  formError.value = '';
+  preflightStatus.value = null;
+  preflightMessage.value = '';
+  const payload = buildJobPayload();
+  if (!payload) return;
+  testingConnection.value = true;
+  try {
+    const result = await jobsApi.preflight(payload);
+    preflightStatus.value = 'success';
+    preflightMessage.value = result.message ?? t('jobs.preflightOk');
+  } catch (err: any) {
+    preflightStatus.value = 'failed';
+    preflightMessage.value = err.response?.data?.error ?? t('jobs.preflightFailed');
+  } finally {
+    testingConnection.value = false;
+  }
+}
+
+async function saveJob() {
+  formError.value = '';
+  const payload = buildJobPayload();
+  if (!payload) return;
   saving.value = true;
   try {
-    const rawCfg = buildConfig();
-    const startCommand = (cmdDropdown.value === 'custom' ? cmdCustom.value : cmdDropdown.value) || undefined;
-    const resolvedAiBtn = btnAiHint.value.trim() ? `{aiBtn:${btnAiHint.value.trim()}}` : '{aiBtn}';
-    const checkinButton = btnDropdown.value === '{aiBtn}'
-      ? resolvedAiBtn
-      : (btnDropdown.value === 'custom' ? btnCustom.value : btnDropdown.value) || undefined;
-    const payload = {
-      ...form,
-      // config is serialised by the backend; pass as-is
-      config: rawCfg as unknown as string | null,
-      startCommand,
-      checkinButton,
-      templateId: form.templateId ?? null,
-    };
     if (editTarget.value) {
       await jobsApi.update(editTarget.value.id, payload);
     } else {
@@ -1897,6 +1936,29 @@ tbody tr:nth-child(even):not(.row-selected) td {
   font-size: 13px;
   color: #666;
   white-space: nowrap;
+}
+
+.preflight-result {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.45;
+  margin-top: 8px;
+}
+
+.preflight-ok {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #065f46;
+}
+
+.preflight-failed {
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+  color: #991b1b;
 }
 
 .job-toast {

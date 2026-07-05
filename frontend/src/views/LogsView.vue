@@ -36,6 +36,28 @@
       </div>
     </div>
 
+    <div class="card retention-card">
+      <div class="retention-title">{{ t("logs.retention.title") }}</div>
+      <div class="retention-controls">
+        <label class="retention-field">
+          <span>{{ t("logs.retention.days") }}</span>
+          <input v-model.number="retentionDays" class="form-input" type="number" min="0" max="3650" />
+        </label>
+        <label class="retention-field">
+          <span>{{ t("logs.retention.maxRows") }}</span>
+          <input v-model.number="retentionMaxRows" class="form-input" type="number" min="0" max="100000" />
+        </label>
+        <button class="btn btn-secondary" :disabled="retentionSaving" @click="saveRetention">
+          <i class="fa-solid fa-floppy-disk"></i> {{ t("common.save") }}
+        </button>
+        <button class="btn btn-ghost" :disabled="retentionSaving" @click="applyRetentionNow">
+          <i class="fa-solid fa-broom"></i> {{ t("logs.retention.apply") }}
+        </button>
+        <span v-if="retentionMessage" class="retention-message">{{ retentionMessage }}</span>
+      </div>
+      <div class="retention-hint">{{ t("logs.retention.hint") }}</div>
+    </div>
+
     <div class="card">
       <div class="table-wrap">
         <table>
@@ -875,6 +897,7 @@ import {
   aiSuppliersApi,
   type Log,
   type Job,
+  type LogRetentionPolicy,
   type CheckinAttemptLog,
   type EmbywatchLog,
   type CustomStepLog,
@@ -891,6 +914,10 @@ const showDevLogs = usePersistedRef<boolean>("bemby:logs:showDevLogs", false);
 const showRetired = usePersistedRef<boolean>("bemby:logs:showRetired", false);
 const offset = ref(0);
 const hasMore = ref(false);
+const retentionDays = ref(30);
+const retentionMaxRows = ref(1000);
+const retentionSaving = ref(false);
+const retentionMessage = ref("");
 
 const filteredLogs = computed(() => {
   const q = filterText.value.trim().toLowerCase();
@@ -1009,7 +1036,7 @@ const retriedStepNums = computed(() => {
 
 onMounted(async () => {
   jobs.value = await jobsApi.list();
-  await load();
+  await Promise.all([load(), loadRetention()]);
   settingsApi
     .get()
     .then((s) => {
@@ -1023,6 +1050,57 @@ onMounted(async () => {
     })
     .catch(() => {});
 });
+
+async function loadRetention() {
+  try {
+    const policy = await logsApi.getRetention();
+    applyRetentionPolicy(policy);
+  } catch {
+    /* keep defaults */
+  }
+}
+
+function applyRetentionPolicy(policy: LogRetentionPolicy) {
+  retentionDays.value = policy.days;
+  retentionMaxRows.value = policy.maxRows;
+}
+
+function showRetentionMessage(msg: string) {
+  retentionMessage.value = msg;
+  setTimeout(() => {
+    if (retentionMessage.value === msg) retentionMessage.value = "";
+  }, 3000);
+}
+
+async function persistRetentionPolicy() {
+  const policy = await logsApi.updateRetention({
+    days: retentionDays.value,
+    maxRows: retentionMaxRows.value,
+  });
+  applyRetentionPolicy(policy);
+}
+
+async function saveRetention() {
+  retentionSaving.value = true;
+  try {
+    await persistRetentionPolicy();
+    showRetentionMessage(t("logs.retention.saved"));
+  } finally {
+    retentionSaving.value = false;
+  }
+}
+
+async function applyRetentionNow() {
+  retentionSaving.value = true;
+  try {
+    await persistRetentionPolicy();
+    const result = await logsApi.applyRetention();
+    showRetentionMessage(t("logs.retention.deleted").replace("{n}", String(result.deleted)));
+    await load();
+  } finally {
+    retentionSaving.value = false;
+  }
+}
 
 async function load() {
   offset.value = 0;
@@ -1207,6 +1285,49 @@ function fmtSeconds(s: number): string {
 
 .row-retired td {
   opacity: 0.45;
+}
+
+.retention-card {
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+
+.retention-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #555;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+.retention-controls {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.retention-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: #666;
+}
+
+.retention-field input {
+  width: 120px;
+}
+
+.retention-message {
+  font-size: 13px;
+  color: #065f46;
+}
+
+.retention-hint {
+  font-size: 11px;
+  color: #888;
+  margin-top: 8px;
 }
 
 /* Emby detail panel */

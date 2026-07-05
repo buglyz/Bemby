@@ -360,6 +360,22 @@ export type ScheduleStatus = {
   nextRun: string;
 };
 
+export type JobPreflightResult = {
+  ok: boolean;
+  message?: string;
+  error?: string;
+  details?: unknown;
+};
+
+export type LogRetentionPolicy = {
+  days: number;
+  maxRows: number;
+};
+
+export type LogRetentionResult = LogRetentionPolicy & {
+  deleted: number;
+};
+
 // ── Auth ─────────────────────────────────────────────────────────────────────
 
 export const authApi = {
@@ -537,6 +553,8 @@ export const jobsApi = {
   update: (id: number, data: Partial<Job>) =>
     api.put<Job>(`/jobs/${id}`, data).then((r) => r.data),
   delete: (id: number) => api.delete(`/jobs/${id}`),
+  preflight: (data: Partial<Job>) =>
+    api.post<JobPreflightResult>("/jobs/preflight", data).then((r) => r.data),
   run: (id: number) =>
     api
       .post<{ message: string; logId: number }>(`/jobs/${id}/run`)
@@ -608,6 +626,12 @@ export const logsApi = {
     api.post<{ message: string }>(`/logs/${id}/cancel`).then((r) => r.data),
   retire: (id: number) =>
     api.patch<{ retired: boolean }>(`/logs/${id}/retire`).then((r) => r.data),
+  getRetention: () =>
+    api.get<LogRetentionPolicy>("/logs/retention").then((r) => r.data),
+  updateRetention: (data: Partial<LogRetentionPolicy>) =>
+    api.put<LogRetentionPolicy>("/logs/retention", data).then((r) => r.data),
+  applyRetention: () =>
+    api.post<LogRetentionResult>("/logs/retention/apply").then((r) => r.data),
 };
 
 // ── Status ────────────────────────────────────────────────────────────────────
@@ -630,6 +654,8 @@ export type Settings = {
   default_ua: string;
   default_play_duration: string;
   default_device_name: string;
+  log_retention_days?: string;
+  log_retention_max_rows?: string;
   ai_api_key: string;
   ai_model: string;
   notify_tg_username: string;

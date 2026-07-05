@@ -10,6 +10,9 @@ import {
 import { refreshScheduler } from "../scheduler";
 import type { Job, TgAccount } from "../types";
 import { registerJob, unregisterJob, registerLiveDetail, clearLiveDetail } from "../jobs/cancellation";
+import { testEmbywatchConnection } from "../jobs/embywatch";
+import { getLiveClient, resolvePeer } from "../tg/liveClient";
+import { applyLogRetention } from "../logRetention";
 
 const router = Router();
 
@@ -73,6 +76,33 @@ function rowToJob(row: JobRow): Job & { accountName?: string } {
   };
 }
 
+function parseJsonConfig(raw: unknown): Record<string, any> {
+  if (raw == null || raw === "") return {};
+  if (typeof raw === "object") return raw as Record<string, any>;
+  try {
+    const parsed = JSON.parse(String(raw));
+    return typeof parsed === "string" ? parseJsonConfig(parsed) : (parsed ?? {});
+  } catch {
+    return {};
+  }
+}
+
+function templateConfig(templateId: unknown): Record<string, any> {
+  if (!templateId) return {};
+  const row = db
+    .prepare("SELECT config FROM job_templates WHERE id = ?")
+    .get(Number(templateId)) as { config: string | null } | undefined;
+  return parseJsonConfig(row?.config);
+}
+
+function resolveJobTypeFromBody(body: Record<string, any>): string {
+  if (!body.templateId) return body.jobType ?? "checkin";
+  const row = db
+    .prepare("SELECT job_type FROM job_templates WHERE id = ?")
+    .get(Number(body.templateId)) as { job_type: string } | undefined;
+  return row?.job_type ?? body.jobType ?? "checkin";
+}
+
 router.get("/", (_req, res) => {
   const rows = db
     .prepare(
@@ -86,6 +116,85 @@ router.get("/", (_req, res) => {
     )
     .all() as JobRow[];
   res.json(rows.map(rowToJob));
+});
+
+router.post("/preflight", async (req, res) => {
+  const body = req.body as Record<string, any>;
+  const jobType = resolveJobTypeFromBody(body);
+  const botUsername = String(body.botUsername ?? "").replace(/^@+/, "").trim();
+
+  try {
+    if (jobType === "embywatch") {
+      const config = {
+        ...templateConfig(body.templateId),
+        ...parseJsonConfig(body.config),
+      };
+      if (!body.botUsername) {
+        res.status(400).json({ ok: false, error: "Emby server URL is required" });
+        return;
+      }
+      if (!config.username || !config.password) {
+        res.status(400).json({ ok: false, error: "Emby username and password are required" });
+        return;
+      }
+      const result = await testEmbywatchConnection(String(body.botUsername), {
+        username: String(config.username),
+        password: String(config.password),
+        userAgent: config.userAgent,
+        proxyId: config.proxyId,
+      });
+      res.json({
+        ok: true,
+        message: `Connected to Emby as ${result.userName}; media items available: ${result.itemCount}`,
+        details: result,
+      });
+      return;
+    }
+
+    if (jobType === "checkin" || jobType === "custom") {
+      const accountId = Number(body.accountId);
+      if (!accountId) {
+        res.status(400).json({ ok: false, error: "Account is required" });
+        return;
+      }
+      if (!botUsername) {
+        res.status(400).json({ ok: false, error: "Bot username is required" });
+        return;
+      }
+
+      const account = db
+        .prepare("SELECT auth_status, session_string, disabled FROM tg_accounts WHERE id = ?")
+        .get(accountId) as
+        | { auth_status: string; session_string: string | null; disabled: number }
+        | undefined;
+      if (!account || account.disabled) {
+        res.status(400).json({ ok: false, error: "Account not found or disabled" });
+        return;
+      }
+      if (account.auth_status !== "authenticated" || !account.session_string) {
+        res.status(400).json({ ok: false, error: "Account is not authenticated" });
+        return;
+      }
+
+      const entry = await getLiveClient(accountId);
+      const target = await resolvePeer(entry, botUsername);
+      if (!target) {
+        res.status(400).json({ ok: false, error: `Cannot resolve Telegram target @${botUsername}` });
+        return;
+      }
+
+      res.json({
+        ok: true,
+        message: `Resolved ${target.type}: ${target.name}${target.username ? ` (@${target.username})` : ""}`,
+        details: target,
+      });
+      return;
+    }
+
+    res.status(400).json({ ok: false, error: `Unsupported job type: ${jobType}` });
+  } catch (err: any) {
+    res.status(400).json({ ok: false, error: err?.message ?? "Preflight failed" });
+  }
 });
 
 router.post("/", (req, res) => {
@@ -340,7 +449,11 @@ router.post("/:id/run", async (req, res) => {
         }
       }
     })
-    .finally(() => { unregisterJob(Number(logId)); clearLiveDetail(Number(logId)); });
+    .finally(() => {
+      unregisterJob(Number(logId));
+      clearLiveDetail(Number(logId));
+      try { applyLogRetention(); } catch (e) { console.warn("[logs] retention cleanup failed:", e); }
+    });
 });
 
 export default router;

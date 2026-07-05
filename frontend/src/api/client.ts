@@ -158,6 +158,8 @@ export type EmbywatchConfig = {
   username: string;
   password: string;
   playDuration?: number;
+  playDurationMin?: number;
+  playDurationMax?: number;
   userAgent?: string;
   markWatched?: boolean;
   verifyPlayable?: boolean;
@@ -572,6 +574,7 @@ export const templatesApi = {
       jobs: Array<{
         accountId: number;
         name: string;
+        botUsername?: string;
         config?: Record<string, unknown>;
       }>;
       scheduleWindowStart: number;

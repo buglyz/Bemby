@@ -186,6 +186,8 @@ router.put("/:id", (req, res) => {
     : existing.template_id;
 
   const updatedType = isLinked ? existing.job_type : (jobType ?? existing.job_type);
+  const updatedBotUsername =
+    (botUsername as string | undefined)?.replace(/^@+/, "") ?? existing.bot_username;
   db.prepare(
     `
     UPDATE jobs SET
@@ -199,7 +201,7 @@ router.put("/:id", (req, res) => {
     name ?? existing.name,
     accountId !== undefined ? (accountId ? Number(accountId) : null) : (existing.account_id ?? null),
     updatedType,
-    isLinked ? existing.bot_username : ((botUsername as string | undefined)?.replace(/^@+/, "") ?? existing.bot_username),
+    updatedBotUsername,
     Number(scheduleWindowStart ?? existing.schedule_window_start),
     Number(scheduleWindowEnd ?? existing.schedule_window_end),
     isLinked ? existing.timezone : (timezone ?? existing.timezone),

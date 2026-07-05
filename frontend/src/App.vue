@@ -78,15 +78,39 @@
       </button>
     </div>
   </div>
+
+  <div v-if="showTgApiSetup" class="force-pwd-overlay">
+    <div class="force-pwd-card">
+      <h2 class="force-pwd-title">{{ t('setupTgApi.title') }}</h2>
+      <p class="force-pwd-subtitle">{{ t('setupTgApi.subtitle') }}</p>
+      <div v-if="tgApiSetupError" class="error-msg">{{ tgApiSetupError }}</div>
+      <div class="form-group">
+        <label class="form-label">{{ t('settings.labelDefaultTgApiId') }}</label>
+        <input v-model.trim="tgApiSetupId" class="form-input" type="number" autocomplete="off" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">{{ t('settings.labelDefaultTgApiHash') }}</label>
+        <input v-model.trim="tgApiSetupHash" class="form-input" autocomplete="off" />
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost" style="flex:1;justify-content:center" @click="skipTgApiSetup">
+          {{ t('setupTgApi.skip') }}
+        </button>
+        <button class="btn btn-primary" style="flex:1;justify-content:center" :disabled="tgApiSetupSaving" @click="saveTgApiSetup">
+          {{ tgApiSetupSaving ? t('common.saving') : t('common.save') }}
+        </button>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch, type Component } from 'vue';
+import { computed, onMounted, ref, watch, type Component } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { version } from '../package.json';
 const APP_VERSION = version + (import.meta.env.DEV ? '-dev' : '');
 import { t, locale, setLocale } from './i18n';
-import { authApi, requirePasswordChangeSignal } from './api/client';
+import { authApi, requirePasswordChangeSignal, settingsApi } from './api/client';
 import AccountsView from './views/AccountsView.vue';
 import JobsView from './views/JobsView.vue';
 import TemplatesView from './views/TemplatesView.vue';
@@ -173,6 +197,57 @@ async function submitForcePwdChange() {
     forcePwdSaving.value = false;
   }
 }
+
+const TG_API_SETUP_DISMISSED_KEY = 'bemby:tgApiSetupDismissed';
+const showTgApiSetup = ref(false);
+const tgApiSetupId = ref('');
+const tgApiSetupHash = ref('');
+const tgApiSetupSaving = ref(false);
+const tgApiSetupError = ref('');
+
+async function maybeShowTgApiSetup() {
+  if (isPublicRoute.value || showForceChangePassword.value) return;
+  if (localStorage.getItem(TG_API_SETUP_DISMISSED_KEY) === '1') return;
+  try {
+    const settings = await settingsApi.get();
+    const hasDefaults = Boolean(Number(settings.default_tg_api_id)) && Boolean(settings.default_tg_api_hash);
+    if (!hasDefaults) showTgApiSetup.value = true;
+  } catch {
+    /* ignore */
+  }
+}
+
+function skipTgApiSetup() {
+  localStorage.setItem(TG_API_SETUP_DISMISSED_KEY, '1');
+  showTgApiSetup.value = false;
+}
+
+async function saveTgApiSetup() {
+  tgApiSetupError.value = '';
+  if (!tgApiSetupId.value || !tgApiSetupHash.value) {
+    tgApiSetupError.value = t('setupTgApi.required');
+    return;
+  }
+  tgApiSetupSaving.value = true;
+  try {
+    await settingsApi.update({
+      default_tg_api_id: tgApiSetupId.value,
+      default_tg_api_hash: tgApiSetupHash.value,
+    });
+    localStorage.setItem(TG_API_SETUP_DISMISSED_KEY, '1');
+    showTgApiSetup.value = false;
+  } catch (err: any) {
+    tgApiSetupError.value = err.response?.data?.error ?? t('common.saveFailed');
+  } finally {
+    tgApiSetupSaving.value = false;
+  }
+}
+
+onMounted(maybeShowTgApiSetup);
+watch(isPublicRoute, () => { maybeShowTgApiSetup(); });
+watch(showForceChangePassword, (val) => {
+  if (!val) maybeShowTgApiSetup();
+});
 </script>
 
 <style scoped>

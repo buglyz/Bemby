@@ -69,6 +69,12 @@ const zh = {
     sameAsDefault: "新密码不能与默认密码相同",
     failed: "密码修改失败",
   },
+  setupTgApi: {
+    title: "设置 Telegram API 凭据",
+    subtitle: "建议先配置全局 API ID 和 API Hash。之后新增账户可默认复用，无需每个账户重复填写。",
+    required: "请填写 API ID 和 API Hash",
+    skip: "稍后再说",
+  },
   accounts: {
     title: "Telegram 账户",
     addBtn: "添加账户",
@@ -266,7 +272,12 @@ const zh = {
     labelEmbyUser: "Emby 用户名",
     labelEmbyPass: "Emby 密码",
     labelRunEveryDays: "每隔多少天执行",
+    labelDurationMode: "时长模式",
+    durationModeFixed: "固定时长",
+    durationModeRandom: "随机区间",
     labelPlayDuration: "播放时长（秒）",
+    labelPlayDurationMin: "最短播放时长（秒）",
+    labelPlayDurationMax: "最长播放时长（秒）",
     labelUserAgent: "用户代理",
     uaDefault: "默认",
     uaCustom: "自定义...",
@@ -279,7 +290,7 @@ const zh = {
     labelProxy: "代理",
     proxyNone: "不使用代理",
     playbackRulesHint:
-      "播放从剧集的随机 5–10% 位置开始，时长为设定时间加上 0–10% 的随机延长。",
+      "播放从剧集的随机 5–10% 位置开始。固定时长会额外随机延长 0–10%；随机区间会在范围内取最终播放时长。",
     labelCheckinButton: "签到按钮文字",
     checkinButtonHint:
       "特殊选项：{anyBtn} 随机点击，{aiBtn} AI 智能选择（需配置 AI_API_KEY）",
@@ -408,6 +419,8 @@ const zh = {
     templateField: "由模板控制",
     labelTemplate: "模板",
     noTemplate: "无（不使用模板）",
+    optionalInTemplate: "可在任务中填写",
+    botSetOnJob: "在任务中填写",
     createFromTemplate: "从模板创建",
     shareBtn: "分享",
     shareSelectedBtn: "分享所选 ({n})",
@@ -726,6 +739,13 @@ const en: typeof zh = {
     sameAsDefault: "New password cannot be the same as the default",
     failed: "Failed to change password",
   },
+  setupTgApi: {
+    title: "Set Telegram API credentials",
+    subtitle:
+      "Configure a global API ID and API Hash first. New accounts can reuse them by default instead of filling credentials every time.",
+    required: "API ID and API Hash are required",
+    skip: "Later",
+  },
   accounts: {
     title: "Telegram Accounts",
     addBtn: "Add Account",
@@ -925,7 +945,12 @@ const en: typeof zh = {
     labelEmbyUser: "Emby Username",
     labelEmbyPass: "Emby Password",
     labelRunEveryDays: "Run every (days)",
+    labelDurationMode: "Duration Mode",
+    durationModeFixed: "Fixed",
+    durationModeRandom: "Random Range",
     labelPlayDuration: "Play Duration (s)",
+    labelPlayDurationMin: "Min Duration (s)",
+    labelPlayDurationMax: "Max Duration (s)",
     labelUserAgent: "User Agent",
     uaDefault: "Default",
     uaCustom: "Custom...",
@@ -941,7 +966,7 @@ const en: typeof zh = {
     labelProxy: "Proxy",
     proxyNone: "No proxy",
     playbackRulesHint:
-      "Playback starts at a random 5–10% into the episode. Duration is the set time plus 0–10% random extra.",
+      "Playback starts at a random 5–10% into the episode. Fixed duration adds 0-10% random extra; random range picks the final duration inside the range.",
     labelCheckinButton: "Check-in Button Text",
     checkinButtonHint:
       "Special: {anyBtn} picks random, {aiBtn} uses AI (requires AI_API_KEY)",
@@ -1077,6 +1102,8 @@ const en: typeof zh = {
     templateField: "Controlled by template",
     labelTemplate: "Template",
     noTemplate: "None (no template)",
+    optionalInTemplate: "can be set on each job",
+    botSetOnJob: "Set on job",
     createFromTemplate: "Create from template",
     shareBtn: "Share",
     shareSelectedBtn: "Share Selected ({n})",

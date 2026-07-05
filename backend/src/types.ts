@@ -181,7 +181,14 @@ export type CustomStepLog = {
 export type EmbywatchConfig = {
   username: string;
   password: string;
+  /**
+   * Fixed playback duration in seconds. Kept for backward compatibility with
+   * existing jobs and templates.
+   */
   playDuration?: number;
+  /** Optional random playback duration range in seconds. */
+  playDurationMin?: number;
+  playDurationMax?: number;
   userAgent?: string;
   /** Mark the episode as watched after playback completes. Defaults to true. */
   markWatched?: boolean;

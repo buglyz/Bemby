@@ -43,11 +43,12 @@ function rowToTemplate(row: TemplateRow): JobTemplate {
 function syncLinkedJobs(templateId: number, t: TemplateRow) {
   if (t.job_type === 'embywatch') {
     // Per-job credentials (username, password) must not be overwritten by the template config.
-    // Update all non-config fields in bulk, then merge config per-job.
+    // Bot username/server URL is job-specific when set on a job; only fill it
+    // from the template for jobs that do not have their own value yet.
     db.prepare(`
       UPDATE jobs SET
         job_type = ?,
-        bot_username = ?,
+        bot_username = CASE WHEN bot_username = '' THEN ? ELSE bot_username END,
         timezone = ?,
         reply_timeout_ms = ?,
         retry_max = ?,
@@ -79,7 +80,7 @@ function syncLinkedJobs(templateId: number, t: TemplateRow) {
     db.prepare(`
       UPDATE jobs SET
         job_type = ?,
-        bot_username = ?,
+        bot_username = CASE WHEN bot_username = '' THEN ? ELSE bot_username END,
         timezone = ?,
         reply_timeout_ms = ?,
         retry_max = ?,
@@ -269,6 +270,7 @@ router.get('/:id/available-accounts', (req, res) => {
 type CreateJobEntry = {
   accountId: number;
   name: string;
+  botUsername?: string;
   config?: Record<string, unknown>;
 };
 
@@ -289,6 +291,12 @@ router.post('/:id/create-jobs', (req, res) => {
   const createdIds: number[] = [];
 
   for (const j of jobs) {
+    const botUsername = (j.botUsername ?? template.bot_username ?? '').replace(/^@+/, '');
+    if ((template.job_type === 'checkin' || template.job_type === 'custom') && !botUsername) {
+      res.status(400).json({ error: 'botUsername is required for checkin and custom jobs' });
+      return;
+    }
+
     // For embywatch, merge per-job credentials into template config
     let jobConfig = template.config;
     if (j.config && template.job_type === 'embywatch') {
@@ -307,7 +315,7 @@ router.post('/:id/create-jobs', (req, res) => {
       j.name,
       j.accountId,
       template.job_type,
-      template.bot_username,
+      botUsername,
       Number(scheduleWindowStart),
       Number(scheduleWindowEnd),
       template.timezone,

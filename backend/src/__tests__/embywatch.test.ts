@@ -166,4 +166,25 @@ describe('embywatch playability verification', () => {
     );
     expect(probed).toBe(false);
   });
+
+  it('uses the configured random duration range as the final duration cap', async () => {
+    routeFetch(206);
+    const randomSpy = vi
+      .spyOn(Math, 'random')
+      .mockReturnValueOnce(0.99) // duration range: choose max
+      .mockReturnValueOnce(0); // start position
+
+    try {
+      const result = await runEmbywatch('https://emby.example.com', {
+        username: 'user',
+        password: 'pass',
+        playDurationMin: 1,
+        playDurationMax: 2,
+      });
+
+      expect(result.watchedSeconds).toBe(2);
+    } finally {
+      randomSpy.mockRestore();
+    }
+  });
 });

@@ -148,7 +148,8 @@
         <div v-if="form.templateId && linkedTemplate" class="template-summary-card">
           <div class="template-summary-row">
             <span :class="jobTypeBadge(linkedTemplate.jobType)">{{ t(`logs.jobType.${linkedTemplate.jobType}`) }}</span>
-            <span class="template-summary-detail">{{ linkedTemplate.jobType === 'embywatch' ? linkedTemplate.botUsername : '@' + linkedTemplate.botUsername }}</span>
+            <span v-if="linkedTemplate.botUsername" class="template-summary-detail">{{ linkedTemplate.jobType === 'embywatch' ? linkedTemplate.botUsername : '@' + linkedTemplate.botUsername }}</span>
+            <span v-else class="template-summary-detail">{{ t('templates.botSetOnJob') }}</span>
           </div>
         </div>
 
@@ -175,9 +176,9 @@
           </div>
         </div>
 
-        <!-- Check-in: Account + Bot (no template only — when template, account is in the row above) -->
-        <div v-if="form.jobType === 'checkin' && !form.templateId" class="form-row">
-          <div class="form-group">
+        <!-- Check-in: Account + Bot. Bot stays job-specific even when a template is selected. -->
+        <div v-if="form.jobType === 'checkin'" class="form-row">
+          <div v-if="!form.templateId" class="form-group">
             <label class="form-label">{{ t('jobs.labelAccount') }} <span style="color:#e63946">*</span></label>
             <select v-model="form.accountId" class="form-select">
               <option :value="null" disabled>{{ t('jobs.selectAccount') }}</option>
@@ -223,11 +224,28 @@
         <template v-if="form.jobType === 'embywatch' && !form.templateId">
           <div class="form-row">
             <div class="form-group">
+              <label class="form-label">{{ t('jobs.labelDurationMode') }}</label>
+              <select v-model="embyCfg.durationMode" class="form-select">
+                <option value="fixed">{{ t('jobs.durationModeFixed') }}</option>
+                <option value="random">{{ t('jobs.durationModeRandom') }}</option>
+              </select>
+            </div>
+            <div v-if="embyCfg.durationMode === 'fixed'" class="form-group">
               <label class="form-label">
                 {{ t('jobs.labelPlayDuration') }}
                 <span style="color:#aaa;font-weight:400"> — {{ t('common.blankForDefault') }}</span>
               </label>
               <input v-model.number="embyCfg.playDuration" class="form-input" type="number" min="30" placeholder="300" />
+            </div>
+          </div>
+          <div v-if="embyCfg.durationMode === 'random'" class="form-row">
+            <div class="form-group">
+              <label class="form-label">{{ t('jobs.labelPlayDurationMin') }}</label>
+              <input v-model.number="embyCfg.playDurationMin" class="form-input" type="number" min="30" placeholder="300" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">{{ t('jobs.labelPlayDurationMax') }}</label>
+              <input v-model.number="embyCfg.playDurationMax" class="form-input" type="number" min="30" placeholder="600" />
             </div>
           </div>
           <div class="form-group">
@@ -288,6 +306,10 @@
               <label class="form-label">{{ t('jobs.custom.labelTarget') }} <span style="color:#e63946">*</span></label>
               <input v-model.trim="form.botUsername" class="form-input" placeholder="BotUsername" />
             </div>
+          </div>
+          <div v-else class="form-group">
+            <label class="form-label">{{ t('jobs.custom.labelTarget') }} <span style="color:#e63946">*</span></label>
+            <input v-model.trim="form.botUsername" class="form-input" placeholder="BotUsername" />
           </div>
 
           <div v-if="!form.templateId" class="form-group">
@@ -942,10 +964,23 @@ const extractSource = ref<Job | null>(null);
 const extractName = ref('');
 const extractError = ref('');
 const extractSaving = ref(false);
-const embyCfg = reactive<{ username: string; password: string; playDuration: number | string; userAgent: string; markWatched: boolean; verifyPlayable: boolean }>({
+const embyCfg = reactive<{
+  username: string;
+  password: string;
+  durationMode: 'fixed' | 'random';
+  playDuration: number | string;
+  playDurationMin: number | string;
+  playDurationMax: number | string;
+  userAgent: string;
+  markWatched: boolean;
+  verifyPlayable: boolean;
+}>({
   username: '',
   password: '',
+  durationMode: 'fixed',
   playDuration: '',
+  playDurationMin: '',
+  playDurationMax: '',
   userAgent: '',
   markWatched: true,
   verifyPlayable: true,
@@ -1000,8 +1035,36 @@ function onUaDropdownChange() {
   if (preset) embyCfg.userAgent = preset.value;
 }
 
+function resetEmbyCfg() {
+  Object.assign(embyCfg, {
+    username: '',
+    password: '',
+    durationMode: 'fixed',
+    playDuration: '',
+    playDurationMin: '',
+    playDurationMax: '',
+    userAgent: '',
+    markWatched: true,
+    verifyPlayable: true,
+  });
+}
+
+function applyEmbyPlaybackConfig(c: Partial<EmbywatchConfig>) {
+  const hasRange = c.playDurationMin != null || c.playDurationMax != null;
+  Object.assign(embyCfg, {
+    durationMode: hasRange ? 'random' : 'fixed',
+    playDuration: c.playDuration ?? '',
+    playDurationMin: c.playDurationMin ?? '',
+    playDurationMax: c.playDurationMax ?? '',
+    userAgent: c.userAgent ?? '',
+    markWatched: c.markWatched !== false,
+    verifyPlayable: c.verifyPlayable !== false,
+  });
+  setUaState(c.userAgent ?? '');
+}
+
 function onJobTypeChange() {
-  Object.assign(embyCfg, { username: '', password: '', playDuration: '', userAgent: '', markWatched: true, verifyPlayable: true });
+  resetEmbyCfg();
   Object.assign(embyServer, { protocol: 'https', host: '', port: 443 });
   embyUaDropdown.value = '';
   form.accountId = (form.jobType === 'checkin' || form.jobType === 'custom')
@@ -1076,8 +1139,7 @@ function applyTemplate(tpl: JobTemplate) {
         let c = JSON.parse(tpl.config) as EmbywatchConfig | string;
         if (typeof c === 'string') c = JSON.parse(c) as EmbywatchConfig;
         // username/password are job-specific; only apply playback settings from template
-        Object.assign(embyCfg, { playDuration: c.playDuration ?? '', userAgent: c.userAgent ?? '', markWatched: c.markWatched !== false, verifyPlayable: c.verifyPlayable !== false });
-        setUaState(c.userAgent ?? '');
+        applyEmbyPlaybackConfig(c);
       } catch { /* ignore */ }
     }
   } else if (tpl.jobType === 'custom') {
@@ -1127,7 +1189,7 @@ function applyTemplate(tpl: JobTemplate) {
     }
   } else {
     Object.assign(embyServer, { protocol: 'https', host: '', port: 443 });
-    Object.assign(embyCfg, { username: '', password: '', playDuration: '', userAgent: '', markWatched: true, verifyPlayable: true });
+    resetEmbyCfg();
     customActions.value = [];
   }
 }
@@ -1174,7 +1236,7 @@ function openAdd() {
     templateId: null,
     runEveryDays: 1,
   });
-  Object.assign(embyCfg, { username: '', password: '', playDuration: '', userAgent: '', markWatched: true, verifyPlayable: true });
+  resetEmbyCfg();
   Object.assign(embyServer, { protocol: 'https', host: '', port: 443 });
   embyUaDropdown.value = '';
   customActions.value = [];
@@ -1220,25 +1282,19 @@ function openEdit(j: Job) {
         let c = JSON.parse(j.config) as EmbywatchConfig | string;
         // Migrate legacy double-encoded records
         if (typeof c === 'string') c = JSON.parse(c) as EmbywatchConfig;
-        Object.assign(embyCfg, {
-          username: c.username ?? '',
-          password: c.password ?? '',
-          playDuration: c.playDuration ?? '',
-          userAgent: c.userAgent ?? '',
-          markWatched: c.markWatched !== false,
-          verifyPlayable: c.verifyPlayable !== false,
-        });
-        setUaState(c.userAgent ?? '');
+        applyEmbyPlaybackConfig(c);
+        embyCfg.username = c.username ?? '';
+        embyCfg.password = c.password ?? '';
       } catch {
-        Object.assign(embyCfg, { username: '', password: '', playDuration: '', userAgent: '', markWatched: true, verifyPlayable: true });
+        resetEmbyCfg();
         embyUaDropdown.value = '';
       }
     } else {
-      Object.assign(embyCfg, { username: '', password: '', playDuration: '', userAgent: '', markWatched: true, verifyPlayable: true });
+      resetEmbyCfg();
       embyUaDropdown.value = '';
     }
   } else if (j.jobType === 'custom') {
-    Object.assign(embyCfg, { username: '', password: '', playDuration: '', userAgent: '', markWatched: true, verifyPlayable: true });
+    resetEmbyCfg();
     Object.assign(embyServer, { protocol: 'https', host: '', port: 443 });
     if (j.config) {
       try {
@@ -1299,7 +1355,7 @@ function openEdit(j: Job) {
       customJobMaxRetries.value = 1;
     }
   } else {
-    Object.assign(embyCfg, { username: '', password: '', playDuration: '', userAgent: '', markWatched: true, verifyPlayable: true });
+    resetEmbyCfg();
     Object.assign(embyServer, { protocol: 'https', host: '', port: 443 });
     customActions.value = [];
   }
@@ -1335,7 +1391,12 @@ function buildConfig(): EmbywatchConfig | CustomConfig | Record<string, string> 
       return { username: embyCfg.username, password: embyCfg.password } as EmbywatchConfig;
     }
     const cfg: EmbywatchConfig = { username: embyCfg.username, password: embyCfg.password };
-    if (embyCfg.playDuration !== '') cfg.playDuration = Number(embyCfg.playDuration as string | number);
+    if (embyCfg.durationMode === 'random') {
+      if (embyCfg.playDurationMin !== '') cfg.playDurationMin = Number(embyCfg.playDurationMin as string | number);
+      if (embyCfg.playDurationMax !== '') cfg.playDurationMax = Number(embyCfg.playDurationMax as string | number);
+    } else if (embyCfg.playDuration !== '') {
+      cfg.playDuration = Number(embyCfg.playDuration as string | number);
+    }
     if (embyCfg.userAgent) cfg.userAgent = embyCfg.userAgent;
     cfg.markWatched = embyCfg.markWatched;
     cfg.verifyPlayable = embyCfg.verifyPlayable;
@@ -1425,7 +1486,7 @@ async function saveJob() {
     if (!form.botUsername) { formError.value = t('jobs.errors.botRequired'); return; }
     if (customActions.value.length === 0) { formError.value = t('jobs.errors.customActionsRequired'); return; }
   }
-  if (form.jobType === 'embywatch') {
+  if (form.jobType === 'embywatch' && !form.templateId) {
     if (!embyServer.host) { formError.value = t('jobs.errors.hostRequired'); return; }
     const portPart = (embyServer.port as number | string) !== '' ? `:${embyServer.port}` : '';
     // Strip any accidental protocol prefix the user may have typed into the host field

@@ -9,7 +9,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "argon2": "^0.31.2",
+    "argon2": "^0.44.0",
     "better-sqlite3": "^9.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
@@ -19,7 +19,7 @@
     "luxon": "^3.4.4",
     "svg-captcha": "^1.4.0",
     "telegram": "^2.26.22",
-    "undici": "^8.5.0",
+    "undici": "^8.7.0",
     "ws": "^8.21.0"
   },
   "devDependencies": {
@@ -31,9 +31,9 @@
     "@types/node": "^22.0.0",
     "@types/ws": "^8.18.1",
     "ts-node": "^10.9.2",
-    "tsx": "^4.7.0",
+    "tsx": "^4.23.0",
     "typescript": "^5.3.3",
-    "vitest": "^2.0.0"
+    "vitest": "^4.1.9"
   },
   "allowScripts": {
     "argon2": true,

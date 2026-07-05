@@ -6,11 +6,13 @@ const { mockConnect, mockSendCode, mockDisconnect, MockTelegramClient } = vi.hoi
   const mockConnect    = vi.fn().mockResolvedValue(undefined);
   const mockSendCode   = vi.fn().mockResolvedValue({ phoneCodeHash: 'hash123' });
   const mockDisconnect = vi.fn().mockResolvedValue(undefined);
-  const MockTelegramClient = vi.fn().mockReturnValue({
-    connect: mockConnect,
-    sendCode: mockSendCode,
-    disconnect: mockDisconnect,
-    session: { save: vi.fn().mockReturnValue('') },
+  const MockTelegramClient = vi.fn().mockImplementation(function () {
+    return {
+      connect: mockConnect,
+      sendCode: mockSendCode,
+      disconnect: mockDisconnect,
+      session: { save: vi.fn().mockReturnValue('') },
+    };
   });
   return { mockConnect, mockSendCode, mockDisconnect, MockTelegramClient };
 });
@@ -18,11 +20,11 @@ const { mockConnect, mockSendCode, mockDisconnect, MockTelegramClient } = vi.hoi
 vi.mock('telegram', () => ({
   TelegramClient: MockTelegramClient,
   Api: {},
-  Logger: vi.fn().mockReturnValue({}),
+  Logger: class {},
 }));
 
 vi.mock('telegram/sessions', () => ({
-  StringSession: vi.fn().mockReturnValue({}),
+  StringSession: class {},
 }));
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';

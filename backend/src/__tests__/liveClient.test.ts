@@ -40,7 +40,9 @@ const {
     downloadMedia:   vi.fn(),
   };
 
-  const MockTelegramClient = vi.fn().mockReturnValue(mockClientInstance);
+  const MockTelegramClient = vi.fn().mockImplementation(function () {
+    return mockClientInstance;
+  });
 
   return {
     MockUser, MockChat, MockChannel,
@@ -65,16 +67,16 @@ vi.mock('telegram', () => ({
     MessageMediaDocument: MockMessageMediaDocument,
     ReplyInlineMarkup:   MockReplyInlineMarkup,
     contacts: {
-      GetContacts:    vi.fn().mockImplementation((d: any) => d),
-      ImportContacts: vi.fn().mockImplementation((d: any) => d),
-      Search:         vi.fn().mockImplementation((d: any) => d),
+      GetContacts:    class { constructor(d: any) { Object.assign(this, d); } },
+      ImportContacts: class { constructor(d: any) { Object.assign(this, d); } },
+      Search:         class { constructor(d: any) { Object.assign(this, d); } },
     },
-    InputPhoneContact: vi.fn().mockImplementation((d: any) => d),
+    InputPhoneContact: class { constructor(d: any) { Object.assign(this, d); } },
     updates: {
-      GetState: vi.fn().mockImplementation((d: any) => d),
+      GetState: class { constructor(d: any) { Object.assign(this, d); } },
     },
   },
-  Logger: vi.fn().mockReturnValue({}),
+  Logger: class {},
 }));
 
 vi.mock('telegram/extensions/Logger', () => ({
@@ -82,12 +84,12 @@ vi.mock('telegram/extensions/Logger', () => ({
 }));
 
 vi.mock('telegram/sessions', () => ({
-  StringSession: vi.fn().mockReturnValue({}),
+  StringSession: class {},
 }));
 
 vi.mock('telegram/events', () => ({
-  NewMessage: vi.fn().mockReturnValue({}),
-  Raw:        vi.fn().mockReturnValue({}),
+  NewMessage: class {},
+  Raw:        class {},
 }));
 
 vi.mock('../db/database', () => ({

@@ -23,11 +23,22 @@ jobs:
     steps:
       - name: Resolve image tag
         id: resolve
+        env:
+          # release events don't populate GITHUB_REF_NAME with the tag reliably,
+          # so read the tag straight from the release payload when present
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
-          if [ -n "${{ github.event.inputs.tag }}" ]; then
-            TAG="${{ github.event.inputs.tag }}"
+          if [ -n "${INPUT_TAG}" ]; then
+            TAG="${INPUT_TAG}"
+          elif [ -n "${RELEASE_TAG}" ]; then
+            TAG="${RELEASE_TAG}"
           else
             TAG="${GITHUB_REF_NAME}"
+          fi
+          if [ -z "${TAG}" ]; then
+            echo "::error::Could not resolve an image tag" >&2
+            exit 1
           fi
           # dev-*   → dev channel, keep tag as-is (no v-strip)
           # *beta*  → beta channel, strip v prefix

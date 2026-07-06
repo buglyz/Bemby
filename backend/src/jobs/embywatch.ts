@@ -20,10 +20,13 @@ function getSetting(key: string): string | undefined {
 }
 
 function buildAuthHeader(deviceName: string, token?: string): string {
+  // DeviceId must stay URL-safe: some stream proxies embed it in signed
+  // redirect URLs and break on whitespace (the display name can keep spaces)
+  const deviceId = `${deviceName.replace(/\s+/g, '-')}-001`;
   const parts = [
     'MediaBrowser Client="SenPlayer"',
     `Device="${deviceName}"`,
-    `DeviceId="${deviceName}-001"`,
+    `DeviceId="${deviceId}"`,
     'Version="6.1.0"',
   ];
   if (token) parts.push(`Token="${token}"`);
@@ -79,24 +82,10 @@ const MAX_PICK_ATTEMPTS = 5;
 const PROBE_RANGE_BYTES = 65_535;
 
 /**
- * Confirm the media file is actually streamable, mimicking what a real player
- * does: fetch the first bytes of the stream. If the disk/mount is down, Emby
- * can't read the file and returns a non-2xx (or an empty body), so we treat the
- * item as unavailable and avoid reporting a fake watch.
+ * Fetch the first bytes of a stream URL, as a real player would.
+ * A readable file yields 206 (partial) or 200 with body bytes.
  */
-async function isMediaAvailable(
-  baseUrl: string,
-  itemId: string,
-  mediaSourceId: string,
-  opts: { token: string; ua: string; proxyUrl?: string }
-): Promise<boolean> {
-  const params = new URLSearchParams({
-    static: 'true',
-    mediaSourceId,
-    api_key: opts.token,
-  });
-  const url = `${baseUrl.replace(/\/$/, '')}/Videos/${itemId}/stream?${params.toString()}`;
-
+async function probeStream(url: string, opts: { ua: string; proxyUrl?: string }): Promise<boolean> {
   try {
     const res = (await undiciFetch(url, {
       method: 'GET',
@@ -107,7 +96,6 @@ async function isMediaAvailable(
       dispatcher: opts.proxyUrl ? new ProxyAgent(opts.proxyUrl) : ipv4Agent,
     } as Parameters<typeof undiciFetch>[1])) as unknown as Response;
 
-    // A readable file yields 206 (partial) or 200 with body bytes.
     if (res.status !== 200 && res.status !== 206) {
       await res.body?.cancel?.();
       return false;
@@ -115,9 +103,69 @@ async function isMediaAvailable(
     const buf = await res.arrayBuffer();
     return buf.byteLength > 0;
   } catch {
-    // Network-level failure reaching the stream — treat as unavailable.
+    // Network-level failure reaching the stream, treat as unavailable
     return false;
   }
+}
+
+/**
+ * Ask PlaybackInfo for the stream URL a real client would play. Some servers
+ * front Emby with a proxy that only routes this form (e.g. redirecting
+ * /videos/{id}/original.{container} to a dedicated stream host) and return
+ * errors for the generic /Videos/{id}/stream path.
+ */
+async function getClientStreamUrl(
+  baseUrl: string,
+  itemId: string,
+  mediaSourceId: string,
+  opts: { token: string; ua: string; userId: string; deviceName: string; proxyUrl?: string }
+): Promise<string | undefined> {
+  try {
+    const info = await embyRequest<any>(baseUrl, `/Items/${itemId}/PlaybackInfo?UserId=${opts.userId}`, {
+      method: 'POST',
+      ua: opts.ua,
+      token: opts.token,
+      deviceName: opts.deviceName,
+      proxyUrl: opts.proxyUrl,
+      body: { DeviceProfile: { MaxStreamingBitrate: 140_000_000 } },
+    });
+    const sources: any[] = info?.MediaSources ?? [];
+    const source = sources.find(s => s.Id === mediaSourceId) ?? sources[0];
+    const path: string | undefined = source?.DirectStreamUrl ?? source?.TranscodingUrl ?? undefined;
+    if (!path) return undefined;
+    if (/^https?:\/\//i.test(path)) return path;
+    return `${baseUrl.replace(/\/$/, '')}${path.startsWith('/') ? '' : '/'}${path}`;
+  } catch {
+    // PlaybackInfo unsupported or failed, caller falls back to the static URL
+    return undefined;
+  }
+}
+
+/**
+ * Confirm the media file is actually streamable, mimicking what a real player
+ * does: fetch the first bytes of the stream. If the disk/mount is down, Emby
+ * can't read the file and returns a non-2xx (or an empty body), so we treat the
+ * item as unavailable and avoid reporting a fake watch.
+ */
+async function isMediaAvailable(
+  baseUrl: string,
+  itemId: string,
+  mediaSourceId: string,
+  opts: { token: string; ua: string; userId: string; deviceName: string; proxyUrl?: string }
+): Promise<boolean> {
+  // Prefer the URL a real client would play; proxies that offload streaming
+  // to another host often only route this form
+  const clientUrl = await getClientStreamUrl(baseUrl, itemId, mediaSourceId, opts);
+  if (clientUrl && (await probeStream(clientUrl, opts))) return true;
+
+  // Fall back to the generic static stream URL
+  const params = new URLSearchParams({
+    static: 'true',
+    mediaSourceId,
+    api_key: opts.token,
+  });
+  const staticUrl = `${baseUrl.replace(/\/$/, '')}/Videos/${itemId}/stream?${params.toString()}`;
+  return probeStream(staticUrl, opts);
 }
 
 export async function runEmbywatch(serverUrl: string, config: EmbywatchConfig): Promise<EmbywatchLog> {
@@ -172,7 +220,7 @@ export async function runEmbywatch(serverUrl: string, config: EmbywatchConfig): 
     const candidateId: string = candidate.Id;
     const candidateSourceId: string = candidate.MediaSources?.[0]?.Id ?? candidateId;
 
-    if (!verifyPlayable || (await isMediaAvailable(serverUrl, candidateId, candidateSourceId, { token, ua, proxyUrl }))) {
+    if (!verifyPlayable || (await isMediaAvailable(serverUrl, candidateId, candidateSourceId, { token, ua, userId, deviceName, proxyUrl }))) {
       item = candidate;
       itemId = candidateId;
       mediaSourceId = candidateSourceId;

@@ -86,6 +86,18 @@ describe('embywatch fetch routing', () => {
       .rejects.toThrow('Cannot reach Emby server at https://emby.example.com/Users/AuthenticateByName — ECONNREFUSED');
   });
 
+  it('sanitises whitespace in DeviceId but keeps the display device name', async () => {
+    vi.mocked(db.prepare).mockReturnValue({
+      get: vi.fn().mockReturnValue({ value: 'Macbook Pro' }),
+    } as any);
+
+    await expect(runEmbywatch('https://emby.example.com', baseConfig)).rejects.toThrow();
+
+    const headers = (mockUndiciFetch.mock.calls[0][1] as any)?.headers;
+    expect(headers['X-Emby-Authorization']).toContain('DeviceId="Macbook-Pro-001"');
+    expect(headers['X-Emby-Authorization']).toContain('Device="Macbook Pro"');
+  });
+
   it('surfaces HTTP error status and Emby JSON message on non-2xx response', async () => {
     mockUndiciFetch.mockResolvedValue({
       ok: false,
@@ -101,23 +113,36 @@ describe('embywatch fetch routing', () => {
 
 // Routes mock responses by request URL so we can simulate auth + item pick +
 // stream probe independently.
-function routeFetch(streamStatus: number) {
+function routeFetch(
+  streamStatus: number,
+  opts: { directStreamUrl?: string; directStatus?: number } = {},
+) {
   const jsonRes = (body: unknown) => ({
     ok: true,
     status: 200,
     statusText: 'OK',
     text: vi.fn().mockResolvedValue(JSON.stringify(body)),
   });
+  const probeRes = (status: number) => ({
+    status,
+    body: { cancel: vi.fn() },
+    arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(status === 200 || status === 206 ? 1024 : 0)),
+  });
   mockUndiciFetch.mockImplementation((url: string) => {
     if (url.includes('/Users/AuthenticateByName')) {
       return Promise.resolve(jsonRes({ AccessToken: 'tok', User: { Id: 'u1', Name: 'Tester' } }));
     }
+    if (url.includes('/PlaybackInfo')) {
+      return Promise.resolve(jsonRes({
+        MediaSources: [{ Id: 's1', DirectStreamUrl: opts.directStreamUrl }],
+      }));
+    }
+    // DirectStreamUrl probe (the /videos/{id}/original.{container} form)
+    if (url.includes('/original.')) {
+      return Promise.resolve(probeRes(opts.directStatus ?? 404));
+    }
     if (url.includes('/Videos/') && url.includes('/stream')) {
-      return Promise.resolve({
-        status: streamStatus,
-        body: { cancel: vi.fn() },
-        arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(streamStatus === 206 ? 1024 : 0)),
-      });
+      return Promise.resolve(probeRes(streamStatus));
     }
     if (url.includes('/Items')) {
       return Promise.resolve(jsonRes({
@@ -153,6 +178,27 @@ describe('embywatch playability verification', () => {
       c => typeof c[0] === 'string' && c[0].endsWith('/Sessions/Playing'),
     );
     expect(reported).toBe(true);
+  });
+
+  it('accepts an item when the static probe fails but the PlaybackInfo DirectStreamUrl works', async () => {
+    // Mirrors proxies that only route the DirectStreamUrl form and reject /stream
+    routeFetch(500, { directStreamUrl: '/videos/i1/original.mkv?api_key=tok', directStatus: 206 });
+
+    const result = await runEmbywatch('https://emby.example.com', baseConfig);
+    expect(result.title).toBe('Ep');
+
+    // The DirectStreamUrl succeeded, so the static /stream fallback is never probed
+    const staticProbed = mockUndiciFetch.mock.calls.some(
+      c => typeof c[0] === 'string' && c[0].includes('/stream?'),
+    );
+    expect(staticProbed).toBe(false);
+  });
+
+  it('skips reporting when both the DirectStreamUrl and static probes fail', async () => {
+    routeFetch(500, { directStreamUrl: '/videos/i1/original.mkv?api_key=tok', directStatus: 500 });
+
+    await expect(runEmbywatch('https://emby.example.com', baseConfig))
+      .rejects.toThrow('No streamable items found');
   });
 
   it('does not probe the stream when verifyPlayable is false', async () => {

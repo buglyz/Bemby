@@ -4,6 +4,20 @@ All notable changes to Bemby are documented here.
 
 ---
 
+## v0.9.28-patch-1
+
+### 中文
+
+- **修复 Emby 观看任务「上报前校验可播放」误判媒体离线** -- 部分服务器以反向代理分流媒体流量，仅支持 PlaybackInfo 返回的 `DirectStreamUrl` 形式（重定向至专用流媒体主机），对通用 `/Videos/{id}/stream` 探测请求直接返回错误，导致校验误判媒体离线、任务失败；现改为与真实播放器行为一致：先调用 PlaybackInfo 并探测其返回的 `DirectStreamUrl`（或 `TranscodingUrl`），失败时再回退到原有静态流地址，磁盘离线检测能力保持不变
+- **清理 DeviceId 中的空格** -- 设备名称含空格（如 `Macbook Pro`）时，部分流媒体代理在生成签名重定向地址时会因空格解析失败，导致播放请求出错；现 DeviceId 中的空白字符统一替换为连字符（显示用的设备名称保持原样）
+
+### English
+
+- **Fix Emby watch "verify playable" wrongly reporting media offline** -- servers that front Emby with a stream-offloading reverse proxy only route the `DirectStreamUrl` form returned by PlaybackInfo (redirecting to a dedicated stream host) and reject the generic `/Videos/{id}/stream` probe, so verification wrongly reported media as offline and the job failed; the probe now matches real player behaviour by calling PlaybackInfo and fetching the returned `DirectStreamUrl` (or `TranscodingUrl`) first, falling back to the static stream URL, with disk-offline detection unchanged
+- **Sanitise whitespace in DeviceId** -- device names containing spaces (e.g. `Macbook Pro`) broke signed stream redirects on some proxies, failing playback requests; whitespace in the DeviceId is now replaced with hyphens (the display device name is unchanged)
+
+---
+
 ## v0.9.28
 
 ### 中文

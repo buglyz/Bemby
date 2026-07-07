@@ -1076,7 +1076,16 @@ function applyEmbyPlaybackConfig(c: Partial<EmbywatchConfig>) {
 
 function validateEmbyDurationConfig(): boolean {
   if (embyCfg.durationMode !== 'random') return true;
-  if (embyCfg.playDurationMin === '' || embyCfg.playDurationMax === '') {
+  const min = Number(embyCfg.playDurationMin);
+  const max = Number(embyCfg.playDurationMax);
+  if (
+    embyCfg.playDurationMin === '' ||
+    embyCfg.playDurationMax === '' ||
+    !Number.isFinite(min) ||
+    !Number.isFinite(max) ||
+    min <= 0 ||
+    max <= 0
+  ) {
     formError.value = t('jobs.errors.embyRandomDurationRequired');
     return false;
   }

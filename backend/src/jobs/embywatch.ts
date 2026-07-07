@@ -36,7 +36,7 @@ function buildAuthHeader(deviceName: string, token?: string): string {
 function hasPlayDurationRange(config: EmbywatchConfig): boolean {
   const min = Number(config.playDurationMin);
   const max = Number(config.playDurationMax);
-  return Number.isFinite(min) && Number.isFinite(max);
+  return Number.isFinite(min) && min > 0 && Number.isFinite(max) && max > 0;
 }
 
 function resolvePlayDuration(config: EmbywatchConfig): number {

@@ -992,6 +992,15 @@ function applyEmbyPlaybackConfig(c: Partial<EmbywatchConfig>) {
   setUaState(c.userAgent ?? '');
 }
 
+function validateEmbyDurationConfig(): boolean {
+  if (embyCfg.durationMode !== 'random') return true;
+  if (embyCfg.playDurationMin === '' || embyCfg.playDurationMax === '') {
+    formError.value = t('jobs.errors.embyRandomDurationRequired');
+    return false;
+  }
+  return true;
+}
+
 function onJobTypeChange() {
   resetEmbyCfg();
   Object.assign(embyServer, { protocol: 'https', host: '', port: 443 });
@@ -1311,6 +1320,7 @@ async function saveTemplate() {
   }
   if (form.jobType === 'embywatch') {
     if (!embyServer.host) { formError.value = t('jobs.errors.hostRequired'); return; }
+    if (!validateEmbyDurationConfig()) return;
     const portPart = (embyServer.port as number | string) !== '' ? `:${embyServer.port}` : '';
     form.botUsername = `${embyServer.protocol}://${embyServer.host.replace(/^https?:\/\//, '')}${portPart}`;
     // Credentials are set per-job, not in the template

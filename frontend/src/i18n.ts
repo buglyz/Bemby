@@ -345,6 +345,7 @@ const zh = {
       hostRequired: "服务器主机为必填项",
       botRequired: "机器人用户名为必填项",
       embyCredRequired: "Emby 用户名和密码为必填项",
+      embyRandomDurationRequired: "随机播放时长需要同时填写最小值和最大值",
       customActionsRequired: "请至少添加一个动作",
     },
     custom: {
@@ -1038,6 +1039,7 @@ const en: typeof zh = {
       hostRequired: "Server host is required",
       botRequired: "Bot username is required",
       embyCredRequired: "Emby username and password are required",
+      embyRandomDurationRequired: "Random playback duration requires both minimum and maximum values",
       customActionsRequired: "Add at least one action",
     },
     custom: {

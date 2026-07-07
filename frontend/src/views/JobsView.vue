@@ -1074,6 +1074,15 @@ function applyEmbyPlaybackConfig(c: Partial<EmbywatchConfig>) {
   setUaState(c.userAgent ?? '');
 }
 
+function validateEmbyDurationConfig(): boolean {
+  if (embyCfg.durationMode !== 'random') return true;
+  if (embyCfg.playDurationMin === '' || embyCfg.playDurationMax === '') {
+    formError.value = t('jobs.errors.embyRandomDurationRequired');
+    return false;
+  }
+  return true;
+}
+
 function onJobTypeChange() {
   resetEmbyCfg();
   Object.assign(embyServer, { protocol: 'https', host: '', port: 443 });
@@ -1512,6 +1521,7 @@ function buildJobPayload() {
     formError.value = t('jobs.errors.embyCredRequired');
     return;
   }
+  if (form.jobType === 'embywatch' && !form.templateId && !validateEmbyDurationConfig()) return;
   const rawCfg = buildConfig();
   const startCommand = (cmdDropdown.value === 'custom' ? cmdCustom.value : cmdDropdown.value) || undefined;
   const resolvedAiBtn = btnAiHint.value.trim() ? `{aiBtn:${btnAiHint.value.trim()}}` : '{aiBtn}';

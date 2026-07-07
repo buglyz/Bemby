@@ -233,4 +233,48 @@ describe('embywatch playability verification', () => {
       randomSpy.mockRestore();
     }
   });
+
+  it('ignores incomplete random duration ranges and falls back to the fixed duration', async () => {
+    routeFetch(206);
+    const randomSpy = vi
+      .spyOn(Math, 'random')
+      .mockReturnValueOnce(0.99) // would choose max if the range were valid
+      .mockReturnValueOnce(0) // start position
+      .mockReturnValueOnce(0); // fixed-duration legacy extension
+
+    try {
+      const result = await runEmbywatch('https://emby.example.com', {
+        username: 'user',
+        password: 'pass',
+        playDuration: 3,
+        playDurationMin: 1,
+      });
+
+      expect(result.watchedSeconds).toBe(3);
+    } finally {
+      randomSpy.mockRestore();
+    }
+  });
+
+  it('does not treat null random duration values as a valid range', async () => {
+    routeFetch(206);
+    const randomSpy = vi
+      .spyOn(Math, 'random')
+      .mockReturnValueOnce(0)
+      .mockReturnValueOnce(0);
+
+    try {
+      const result = await runEmbywatch('https://emby.example.com', {
+        username: 'user',
+        password: 'pass',
+        playDuration: 4,
+        playDurationMin: null as unknown as number,
+        playDurationMax: null as unknown as number,
+      });
+
+      expect(result.watchedSeconds).toBe(4);
+    } finally {
+      randomSpy.mockRestore();
+    }
+  });
 });
